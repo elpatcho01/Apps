@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /spaces/{familyCode} {
+      allow read, write: if familyCode.size() == 6;
+      match /notes/{noteId} {
+        allow read, write: if familyCode.size() == 6;
+      }
+    }
+  }
+}

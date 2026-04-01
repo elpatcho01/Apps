@@ -1,0 +1,43 @@
+name: SharedNotes
+options:
+  bundleIdPrefix: com.yourname
+  deploymentTarget:
+    iOS: "16.0"
+
+settings:
+  SWIFT_VERSION: "5.9"
+
+packages:
+  FirebaseIOS:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: "11.0.0"
+
+targets:
+  SharedNotes:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: SharedNotes
+    info:
+      path: SharedNotes/Resources/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourname.SharedNotes
+      DEVELOPMENT_TEAM: ""
+    dependencies:
+      - package: FirebaseIOS
+        product: FirebaseFirestore
+      - package: FirebaseIOS
+        product: FirebaseFirestoreSwift
+    scheme:
+      testTargets: []
