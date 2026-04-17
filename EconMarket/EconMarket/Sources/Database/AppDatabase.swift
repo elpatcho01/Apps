@@ -97,6 +97,21 @@ final class AppDatabase {
             }
         }
 
+        m.registerMigration("v2_uk_pmi") { db in
+            try db.create(table: "uk_pmi_readings") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("type", .text).notNull()
+                t.column("date", .date).notNull()
+                t.column("actual", .double)
+                t.column("consensus", .double)
+                t.column("previous", .double)
+                t.column("isPreliminary", .boolean).notNull().defaults(to: false)
+                t.column("fetchedAt", .datetime).notNull()
+                // One row per (series, reference-month, flash/final)
+                t.uniqueKey(["type", "date", "isPreliminary"])
+            }
+        }
+
         m.registerMigration("v1_seed_indicators") { db in
             let indicators: [(String, String, String, String, String, String)] = [
                 ("GDP",         "Gross Domestic Product",          "gdp",        "Billions USD", "quarterly", "FRED"),
@@ -197,6 +212,39 @@ final class AppDatabase {
         try dbWriter.write { db in
             for var point in points {
                 try point.upsert(db)
+            }
+        }
+    }
+
+    // MARK: - UK PMI
+
+    /// All readings for one series, newest first.
+    func ukPMIReadings(type: UKPMIReading.PMIType, limit: Int = 60) throws -> [UKPMIReading] {
+        try dbWriter.read { db in
+            try UKPMIReading
+                .filter(Column("type") == type.rawValue)
+                .order(Column("date").desc, Column("isPreliminary"))
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
+    /// The most recent reference-month date stored for each PMI type.
+    /// Returns nil for types that have no rows yet.
+    func latestUKPMIDate(type: UKPMIReading.PMIType) throws -> Date? {
+        try dbWriter.read { db in
+            try UKPMIReading
+                .filter(Column("type") == type.rawValue)
+                .order(Column("date").desc)
+                .fetchOne(db)?
+                .date
+        }
+    }
+
+    func saveUKPMIReadings(_ readings: [UKPMIReading]) throws {
+        try dbWriter.write { db in
+            for var reading in readings {
+                try reading.upsert(db)
             }
         }
     }

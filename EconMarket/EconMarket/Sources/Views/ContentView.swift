@@ -10,6 +10,9 @@ struct ContentView: View {
             IndicatorsListView()
                 .tabItem { Label("Economy", systemImage: "chart.line.uptrend.xyaxis") }
 
+            UKPMIView()
+                .tabItem { Label("UK PMI", systemImage: "uk") }
+
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }
         }
@@ -218,11 +221,174 @@ struct IndicatorDetailView: View {
     }
 }
 
+// MARK: - UK PMI
+
+struct UKPMIView: View {
+    @State private var selectedType: UKPMIReading.PMIType = .composite
+    @State private var readings: [UKPMIReading] = []
+    @State private var isSyncing = false
+    @State private var syncError: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Picker("Series", selection: $selectedType) {
+                    ForEach(UKPMIReading.PMIType.allCases, id: \.self) { type in
+                        Text(seriesShortName(type)).tag(type)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding()
+
+                List {
+                    if readings.isEmpty {
+                        ContentUnavailableView(
+                            "No Data",
+                            systemImage: "arrow.clockwise",
+                            description: Text("Tap the sync button to download PMI data.")
+                        )
+                    } else {
+                        Section {
+                            PMIHeaderRow()
+                        }
+                        ForEach(readings, id: \.id) { reading in
+                            PMIReadingRow(reading: reading)
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+            }
+            .navigationTitle(selectedType.displayName)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        Task { await sync() }
+                    } label: {
+                        if isSyncing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(isSyncing)
+                }
+            }
+            .alert("Sync Error", isPresented: .constant(syncError != nil), actions: {
+                Button("OK") { syncError = nil }
+            }, message: {
+                Text(syncError ?? "")
+            })
+            .onChange(of: selectedType) { _, _ in loadLocal() }
+            .task { loadLocal() }
+        }
+    }
+
+    private func seriesShortName(_ type: UKPMIReading.PMIType) -> String {
+        switch type {
+        case .composite:    return "Composite"
+        case .services:     return "Services"
+        case .manufacturing: return "Manuf."
+        case .construction: return "Constr."
+        }
+    }
+
+    private func loadLocal() {
+        readings = (try? AppDatabase.shared.ukPMIReadings(type: selectedType, limit: 60)) ?? []
+    }
+
+    private func sync() async {
+        isSyncing = true
+        do {
+            try await UKPMIService.shared.syncMissingData()
+            loadLocal()
+        } catch {
+            syncError = error.localizedDescription
+        }
+        isSyncing = false
+    }
+}
+
+struct PMIHeaderRow: View {
+    var body: some View {
+        HStack {
+            Text("Month").font(.caption).foregroundStyle(.secondary).frame(width: 80, alignment: .leading)
+            Spacer()
+            Text("Consensus").font(.caption).foregroundStyle(.secondary).frame(width: 72, alignment: .trailing)
+            Text("Actual").font(.caption).foregroundStyle(.secondary).frame(width: 60, alignment: .trailing)
+            Text("Type").font(.caption).foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+struct PMIReadingRow: View {
+    let reading: UKPMIReading
+
+    private var monthLabel: String {
+        let f = DateFormatter()
+        f.dateFormat = "MMM yyyy"
+        f.locale = Locale(identifier: "en_GB")
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f.string(from: reading.date)
+    }
+
+    private var beatConsensus: Bool? {
+        guard let actual = reading.actual, let consensus = reading.consensus else { return nil }
+        return actual > consensus
+    }
+
+    var body: some View {
+        HStack {
+            Text(monthLabel)
+                .font(.subheadline)
+                .frame(width: 80, alignment: .leading)
+
+            Spacer()
+
+            // Consensus
+            Group {
+                if let c = reading.consensus {
+                    Text(c, format: .number.precision(.fractionLength(1)))
+                } else {
+                    Text("—")
+                }
+            }
+            .font(.subheadline.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .frame(width: 72, alignment: .trailing)
+
+            // Actual — coloured by beat/miss vs consensus
+            Group {
+                if let a = reading.actual {
+                    Text(a, format: .number.precision(.fractionLength(1)))
+                        .foregroundStyle(beatColor)
+                } else {
+                    Text("—").foregroundStyle(.secondary)
+                }
+            }
+            .font(.subheadline.bold().monospacedDigit())
+            .frame(width: 60, alignment: .trailing)
+
+            // Flash / Final badge
+            Text(reading.isPreliminary ? "Flash" : "Final")
+                .font(.caption2)
+                .foregroundStyle(reading.isPreliminary ? Color.orange : Color.secondary)
+                .frame(width: 40, alignment: .trailing)
+        }
+    }
+
+    private var beatColor: Color {
+        guard let beat = beatConsensus else { return .primary }
+        return beat ? .green : .red
+    }
+}
+
 // MARK: - Settings
 
 struct SettingsView: View {
     @AppStorage("alphaVantageKey") private var alphaVantageKey = ""
-    @AppStorage("fredApiKey") private var fredApiKey = ""
+    @AppStorage("fredApiKey")      private var fredApiKey = ""
+    @AppStorage("finnhubKey")      private var finnhubKey = ""
 
     var body: some View {
         NavigationStack {
@@ -236,18 +402,28 @@ struct SettingsView: View {
                         SecureField("API Key", text: $fredApiKey)
                             .multilineTextAlignment(.trailing)
                     }
+                    LabeledContent("Finnhub") {
+                        SecureField("API Key", text: $finnhubKey)
+                            .multilineTextAlignment(.trailing)
+                    }
                 } header: {
                     Text("API Keys")
                 } footer: {
-                    Text("Alpha Vantage: alphavantage.co (free, 25 req/day)\nFRED: fred.stlouisfed.org (free)")
+                    Text(
+                        "Alpha Vantage: alphavantage.co — free, 25 req/day\n" +
+                        "FRED: fred.stlouisfed.org — free\n" +
+                        "Finnhub: finnhub.io — free, 60 req/min (used for UK PMI)"
+                    )
                 }
             }
             .navigationTitle("Settings")
             .onChange(of: alphaVantageKey) { _, v in DataFetchService.shared.alphaVantageKey = v }
             .onChange(of: fredApiKey)      { _, v in DataFetchService.shared.fredApiKey = v }
+            .onChange(of: finnhubKey)      { _, v in UKPMIService.shared.finnhubKey = v }
             .onAppear {
                 DataFetchService.shared.alphaVantageKey = alphaVantageKey
-                DataFetchService.shared.fredApiKey = fredApiKey
+                DataFetchService.shared.fredApiKey      = fredApiKey
+                UKPMIService.shared.finnhubKey          = finnhubKey
             }
         }
     }
