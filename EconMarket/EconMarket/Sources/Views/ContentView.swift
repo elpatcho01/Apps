@@ -11,7 +11,10 @@ struct ContentView: View {
                 .tabItem { Label("Economy", systemImage: "chart.line.uptrend.xyaxis") }
 
             UKPMIView()
-                .tabItem { Label("UK PMI", systemImage: "uk") }
+                .tabItem { Label("UK PMI", systemImage: "flag") }
+
+            ONSDataView()
+                .tabItem { Label("ONS", systemImage: "building.columns.fill") }
 
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }
@@ -217,6 +220,184 @@ struct IndicatorDetailView: View {
             if let id = indicator.id {
                 points = (try? AppDatabase.shared.dataPoints(for: id, limit: 60)) ?? []
             }
+        }
+    }
+}
+
+// MARK: - ONS Data
+
+struct ONSDataView: View {
+    @State private var allSeries: [ONSSeries] = []
+    @State private var isSyncing = false
+    @State private var syncError: String?
+    @State private var syncProgress: String?
+
+    var grouped: [String: [ONSSeries]] {
+        Dictionary(grouping: allSeries, by: { $0.category.displayName })
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if allSeries.isEmpty {
+                    ContentUnavailableView(
+                        "No Data",
+                        systemImage: "building.columns",
+                        description: Text("Tap Sync to download ONS data. No API key needed.")
+                    )
+                } else {
+                    ForEach(grouped.keys.sorted(), id: \.self) { category in
+                        Section(category) {
+                            ForEach(grouped[category]!, id: \.id) { series in
+                                NavigationLink(destination: ONSSeriesDetailView(series: series)) {
+                                    ONSSeriesRow(series: series)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("ONS UK Data")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        Task { await sync() }
+                    } label: {
+                        if isSyncing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(isSyncing)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if let progress = syncProgress {
+                    Text(progress)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(8)
+                        .frame(maxWidth: .infinity)
+                        .background(.ultraThinMaterial)
+                }
+            }
+            .alert("Sync Error", isPresented: .constant(syncError != nil), actions: {
+                Button("OK") { syncError = nil }
+            }, message: {
+                Text(syncError ?? "")
+            })
+            .task { loadLocal() }
+        }
+    }
+
+    private func loadLocal() {
+        allSeries = (try? AppDatabase.shared.allONSSeries()) ?? []
+    }
+
+    private func sync() async {
+        isSyncing = true
+        syncProgress = "Downloading ONS series…"
+        do {
+            try await ONSService.shared.syncAllSeries()
+            loadLocal()
+            syncProgress = nil
+        } catch {
+            syncError = error.localizedDescription
+            syncProgress = nil
+        }
+        isSyncing = false
+    }
+}
+
+struct ONSSeriesRow: View {
+    let series: ONSSeries
+    @State private var latest: ONSDataPoint?
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(series.title).font(.subheadline)
+                Text("\(series.seriesId) · \(series.frequency.rawValue.capitalized)")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let pt = latest {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(pt.value, format: .number.precision(.fractionLength(1)))
+                        .font(.subheadline.bold().monospacedDigit())
+                    Text(series.unit).font(.caption2).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("—").foregroundStyle(.tertiary)
+            }
+        }
+        .task {
+            latest = try? AppDatabase.shared.latestONSDataPoint(seriesId: series.seriesId)
+        }
+    }
+}
+
+struct ONSSeriesDetailView: View {
+    let series: ONSSeries
+    @State private var points: [ONSDataPoint] = []
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent("Series ID",  value: series.seriesId)
+                LabeledContent("Dataset",    value: series.datasetId)
+                LabeledContent("Unit",       value: series.unit)
+                LabeledContent("Frequency",  value: series.frequency.rawValue.capitalized)
+                if let fetched = series.lastFetchedAt {
+                    LabeledContent("Last synced") {
+                        Text(fetched, style: .relative)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Section("History (\(series.unit))") {
+                if points.isEmpty {
+                    Text("No data — tap the sync button on the ONS tab.")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                } else {
+                    ForEach(points, id: \.id) { pt in
+                        HStack {
+                            Text(periodLabel(pt.date, frequency: series.frequency))
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                            Spacer()
+                            Text(pt.value, format: .number.precision(.fractionLength(2)))
+                                .font(.subheadline.monospacedDigit())
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(series.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            points = (try? AppDatabase.shared.onsDataPoints(seriesId: series.seriesId, limit: 120)) ?? []
+        }
+    }
+
+    private func periodLabel(_ date: Date, frequency: ONSSeries.Frequency) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let year  = cal.component(.year,  from: date)
+        let month = cal.component(.month, from: date)
+        switch frequency {
+        case .monthly:
+            let abbr = ["Jan","Feb","Mar","Apr","May","Jun",
+                        "Jul","Aug","Sep","Oct","Nov","Dec"][month - 1]
+            return "\(abbr) \(year)"
+        case .quarterly:
+            let q = (month - 1) / 3 + 1
+            return "\(year) Q\(q)"
+        case .annual:
+            return "\(year)"
         }
     }
 }

@@ -142,6 +142,73 @@ final class AppDatabase {
             }
         }
 
+        m.registerMigration("v3_ons_tables") { db in
+            try db.create(table: "ons_series") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("seriesId",      .text).notNull()
+                t.column("datasetId",     .text).notNull()
+                t.column("title",         .text).notNull()
+                t.column("unit",          .text).notNull()
+                t.column("category",      .text).notNull()
+                t.column("frequency",     .text).notNull()
+                t.column("lastFetchedAt", .datetime)
+                t.uniqueKey(["seriesId", "datasetId"])
+            }
+
+            try db.create(table: "ons_data_points") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("seriesId",  .text).notNull().indexed()
+                t.column("date",      .date).notNull()
+                t.column("value",     .double).notNull()
+                t.column("fetchedAt", .datetime).notNull()
+                t.uniqueKey(["seriesId", "date"])
+            }
+        }
+
+        m.registerMigration("v3_seed_ons_series") { db in
+            // Series IDs verified at https://www.ons.gov.uk/timeseries/{seriesId}
+            // (seriesId, datasetId, title, unit, category, frequency)
+            let series: [(String, String, String, String, String, String)] = [
+                // Inflation — MM23 (Consumer Price Inflation)
+                ("D7G7",  "MM23", "CPI All Items Index (2015=100)",   "Index",     "inflation",  "monthly"),
+                ("L55O",  "MM23", "CPI 12-Month Rate",                "%",         "inflation",  "monthly"),
+                ("L55P",  "MM23", "Core CPI 12-Month Rate",           "%",         "inflation",  "monthly"),
+                ("CHAW",  "MM23", "RPI All Items Index",              "Index",     "inflation",  "monthly"),
+                ("CZBH",  "MM23", "RPI 12-Month Rate",                "%",         "inflation",  "monthly"),
+
+                // GDP — QNA (Quarterly National Accounts)
+                ("ABMI",  "QNA",  "GDP Chained Volume Measures SA",   "£m",        "gdp",        "quarterly"),
+                ("ABMG",  "QNA",  "GDP Quarter-on-Quarter Growth",    "%",         "gdp",        "quarterly"),
+
+                // Employment — LMS (Labour Market Statistics)
+                ("MGSX",  "LMS",  "Unemployment Rate 16+ SA",         "%",         "employment", "monthly"),
+                ("LF24",  "LMS",  "Employment Rate 16–64 SA",         "%",         "employment", "monthly"),
+                ("BCJD",  "LMS",  "Claimant Count SA",                "Thousands", "employment", "monthly"),
+
+                // Trade — MRET (UK Trade in Goods and Services)
+                ("BGNZ",  "MRET", "Total Trade Balance",              "£m",        "trade",      "monthly"),
+
+                // Retail — DRSI (Retail Sales Index)
+                ("J5DU",  "DRSI", "Retail Sales Volume Index SA",     "Index",     "retail",     "monthly"),
+
+                // Production — DIOP (Index of Production)
+                ("K222",  "DIOP", "Index of Production SA",           "Index",     "production", "monthly"),
+
+                // Housing — HPI (UK House Price Index)
+                ("ACZX",  "HPI",  "Average UK House Price",           "£",         "housing",    "monthly"),
+            ]
+            for (sid, did, title, unit, cat, freq) in series {
+                try db.execute(
+                    sql: """
+                        INSERT OR IGNORE INTO ons_series
+                            (seriesId, datasetId, title, unit, category, frequency)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    arguments: [sid, did, title, unit, cat, freq]
+                )
+            }
+        }
+
         return m
     }
 
@@ -246,6 +313,52 @@ final class AppDatabase {
             for var reading in readings {
                 try reading.upsert(db)
             }
+        }
+    }
+
+    // MARK: - ONS
+
+    func allONSSeries() throws -> [ONSSeries] {
+        try dbWriter.read { db in
+            try ONSSeries.order(Column("category"), Column("title")).fetchAll(db)
+        }
+    }
+
+    func onsDataPoints(seriesId: String, limit: Int = 120) throws -> [ONSDataPoint] {
+        try dbWriter.read { db in
+            try ONSDataPoint
+                .filter(Column("seriesId") == seriesId)
+                .order(Column("date").desc)
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
+    func latestONSDataPoint(seriesId: String) throws -> ONSDataPoint? {
+        try dbWriter.read { db in
+            try ONSDataPoint
+                .filter(Column("seriesId") == seriesId)
+                .order(Column("date").desc)
+                .fetchOne(db)
+        }
+    }
+
+    func saveONSDataPoints(_ points: [ONSDataPoint]) throws {
+        try dbWriter.write { db in
+            for var point in points {
+                try point.upsert(db)
+            }
+        }
+    }
+
+    func markONSSeriesFetched(seriesId: String, datasetId: String) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE ons_series SET lastFetchedAt = ? WHERE seriesId = ? AND datasetId = ?
+                """,
+                arguments: [Date(), seriesId, datasetId]
+            )
         }
     }
 }
