@@ -4,11 +4,9 @@ import SwiftUI
 struct EconMarketApp: App {
     init() {
         _ = AppDatabase.shared
-        // Push persisted API keys into services before any view loads.
-        let defaults = UserDefaults.standard
-        DataFetchService.shared.alphaVantageKey = defaults.string(forKey: "alphaVantageKey") ?? ""
-        DataFetchService.shared.fredApiKey      = defaults.string(forKey: "fredApiKey") ?? ""
-        UKPMIService.shared.finnhubKey          = defaults.string(forKey: "finnhubKey") ?? ""
+        DataFetchService.shared.alphaVantageKey = Secrets.alphaVantageKey
+        DataFetchService.shared.fredApiKey      = Secrets.fredApiKey
+        UKPMIService.shared.finnhubKey          = Secrets.finnhubKey
     }
 
     var body: some Scene {

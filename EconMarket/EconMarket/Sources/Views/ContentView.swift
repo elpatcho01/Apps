@@ -567,45 +567,21 @@ struct PMIReadingRow: View {
 // MARK: - Settings
 
 struct SettingsView: View {
-    @AppStorage("alphaVantageKey") private var alphaVantageKey = ""
-    @AppStorage("fredApiKey")      private var fredApiKey = ""
-    @AppStorage("finnhubKey")      private var finnhubKey = ""
-
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("Alpha Vantage") {
-                        SecureField("API Key", text: $alphaVantageKey)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    LabeledContent("FRED") {
-                        SecureField("API Key", text: $fredApiKey)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    LabeledContent("Finnhub") {
-                        SecureField("API Key", text: $finnhubKey)
-                            .multilineTextAlignment(.trailing)
-                    }
+                    LabeledContent("Commodities",   value: "Alpha Vantage")
+                    LabeledContent("US Indicators", value: "FRED")
+                    LabeledContent("UK PMI",        value: "Finnhub")
+                    LabeledContent("ONS UK Data",   value: "No key needed")
                 } header: {
-                    Text("API Keys")
+                    Text("Data Sources")
                 } footer: {
-                    Text(
-                        "Alpha Vantage: alphavantage.co — free, 25 req/day\n" +
-                        "FRED: fred.stlouisfed.org — free\n" +
-                        "Finnhub: finnhub.io — free, 60 req/min (used for UK PMI)"
-                    )
+                    Text("API keys are built into the app via Secrets.swift.")
                 }
             }
             .navigationTitle("Settings")
-            .onChange(of: alphaVantageKey) { _, v in DataFetchService.shared.alphaVantageKey = v }
-            .onChange(of: fredApiKey)      { _, v in DataFetchService.shared.fredApiKey = v }
-            .onChange(of: finnhubKey)      { _, v in UKPMIService.shared.finnhubKey = v }
-            .onAppear {
-                DataFetchService.shared.alphaVantageKey = alphaVantageKey
-                DataFetchService.shared.fredApiKey      = fredApiKey
-                UKPMIService.shared.finnhubKey          = finnhubKey
-            }
         }
     }
 }
