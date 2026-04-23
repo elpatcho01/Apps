@@ -1,0 +1,43 @@
+name: EconMarket
+options:
+  bundleIdPrefix: com.yourname
+  deploymentTarget:
+    iOS: "17.0"
+
+settings:
+  SWIFT_VERSION: "5.9"
+
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: "6.0.0"
+
+targets:
+  EconMarket:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: EconMarket
+    info:
+      path: EconMarket/Resources/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.yourname.EconMarket
+      DEVELOPMENT_TEAM: ""
+    dependencies:
+      - package: GRDB
+        product: GRDB
+    scheme:
+      testTargets: []

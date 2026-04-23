@@ -1,0 +1,17 @@
+# API keys — never commit the real file
+EconMarket/EconMarket/Sources/Secrets.swift
+
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
