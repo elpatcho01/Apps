@@ -38,7 +38,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
     # -----------------------------------------------------------------------
     # Build full forecast (cached inside the page session)
     # -----------------------------------------------------------------------
-    @st.cache_data(ttl=3600, show_spinner="Running forecasting models…")
+    @st.cache_resource
     def _run_forecast(_annual, _psnd, _quarterly):
         return build_full_forecast(_annual, _psnd, _quarterly, horizon=5)
 
