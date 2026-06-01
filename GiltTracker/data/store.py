@@ -24,8 +24,8 @@ from data.historical import (
 from data.live_fetcher import refresh_all_live_data
 
 
-CURRENT_FY = "2025-26"
-NEXT_FY = "2026-27"
+CURRENT_FY = "2026-27"
+NEXT_FY = "2027-28"
 
 
 class GiltDataStore:
@@ -185,6 +185,12 @@ class GiltDataStore:
 
     def get_portfolio(self, bond_type: Optional[str] = None) -> pd.DataFrame:
         df = self.gilt_portfolio.copy()
+        # Recompute years_to_maturity at call time so bonds auto-expire after redemption
+        df["years_to_maturity"] = (
+            (df["maturity"] - pd.Timestamp.today()).dt.days / 365.25
+        ).round(1)
+        # Remove bonds that have already matured
+        df = df[df["maturity"] >= pd.Timestamp.today()]
         if bond_type:
             df = df[df["type"] == bond_type]
         return df.sort_values(["type", "maturity"])
@@ -297,12 +303,20 @@ class GiltDataStore:
     # ------------------------------------------------------------------
 
     def get_calendar_for_fy(self, fy: str) -> pd.DataFrame:
+        fy_year = int(fy[:4])
+        fy_start = pd.Timestamp(fy_year, 4, 1)
+        fy_end = pd.Timestamp(fy_year + 1, 3, 31)
+
         # Auctions
         past = self.auction_results[self.auction_results["fy"] == fy].copy()
         past["status"] = "Completed"
         past["method"] = "Auction"
 
+        # Only include upcoming auctions whose date falls within this FY
         future_a = self.upcoming_auctions.copy()
+        future_a = future_a[
+            (future_a["date"] >= fy_start) & (future_a["date"] <= fy_end)
+        ]
         future_a["status"] = future_a["confirmed"].map(
             {True: "Confirmed", False: "Indicative"}
         )

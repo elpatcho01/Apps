@@ -17,6 +17,7 @@ from config import SECTOR_COLOURS, CHART_HEIGHT, PLOTLY_TEMPLATE
 _SECTOR_META = {
     "short": {
         "label": "Short Gilts (<7yr)",
+        "bond_type": "Short",
         "colour": SECTOR_COLOURS["short"],
         "description": (
             "Conventional gilts with residual maturity below 7 years at issuance. "
@@ -26,6 +27,7 @@ _SECTOR_META = {
     },
     "medium": {
         "label": "Medium Gilts (7–15yr)",
+        "bond_type": "Medium",
         "colour": SECTOR_COLOURS["medium"],
         "description": (
             "Conventional gilts with residual maturity between 7 and 15 years. "
@@ -35,6 +37,7 @@ _SECTOR_META = {
     },
     "long": {
         "label": "Long Gilts (>15yr)",
+        "bond_type": "Long",
         "colour": SECTOR_COLOURS["long"],
         "description": (
             "Conventional gilts with residual maturity above 15 years. "
@@ -44,6 +47,7 @@ _SECTOR_META = {
     },
     "linkers": {
         "label": "Index-Linked Gilts",
+        "bond_type": "Linker",
         "colour": SECTOR_COLOURS["linkers"],
         "description": (
             "Gilts where principal and coupons are indexed to RPI (pre-2012 issuance) "
@@ -115,10 +119,7 @@ def _sector_tab(store: GiltDataStore, sector: str, selected_fy: str) -> None:
 
     # --- Auction results for this sector
     st.subheader("Recent Auctions")
-    auctions = store.get_auction_results(bond_type=meta["label"].split()[0])
-    if auctions.empty:
-        auctions = store.get_auction_results()
-        auctions = auctions[auctions["type"].str.lower() == sector.replace("linkers", "linker")]
+    auctions = store.get_auction_results(bond_type=meta["bond_type"])
 
     if not auctions.empty:
         recent = auctions.head(15)[["date", "gilt", "size_bn", "yield_pct", "cover_ratio"]].copy()

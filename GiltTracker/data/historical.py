@@ -123,6 +123,8 @@ GILT_PORTFOLIO = pd.DataFrame([
     ("4.250% Treasury Gilt 2034",   "GB00BMBL1H94", 4.250, "2034-12-07",  "Medium",   31.4),
     # 4½% 2035 confirmed: ISIN GB00BT7J0027; new benchmark launched Feb 2025 (DMO pr040225)
     ("4.500% Treasury Gilt 2035",   "GB00BT7J0027", 4.500, "2035-03-22",  "Medium",   38.0),
+    # 4¾% 2035 confirmed: ISIN GB00BVYPQY09; new benchmark launched Sep 2025 (DMO pr020925_2)
+    ("4.750% Treasury Gilt 2035",   "GB00BVYPQY09", 4.750, "2035-07-22",  "Medium",   24.0),
     # 4⅞% 2036 confirmed: ISIN GB00BWBR1N39; new benchmark launched Apr 2026 (DMO pr070426)
     ("4.875% Treasury Gilt 2036",   "GB00BWBR1N39", 4.875, "2036-07-31",  "Medium",   15.0),
     # Long (> 15yr)
@@ -139,6 +141,8 @@ GILT_PORTFOLIO = pd.DataFrame([
     ("0.250% IL Treasury Gilt 2035","GB00BMBL1K21", 0.250, "2035-03-22",  "Linker",   15.9),
     ("0.125% IL Treasury Gilt 2039","GB00BLD5G115", 0.125, "2039-11-22",  "Linker",   13.7),
     ("0.500% IL Treasury Gilt 2050","GB00BFWFPS03", 0.500, "2050-03-22",  "Linker",   12.5),
+    # 1¾% IL 2046 confirmed: ISIN GB00BQRTLX65 (placeholder); new benchmark launched Jun 2025
+    ("1.750% IL Treasury Gilt 2046","GB00BQRTLX65", 1.750, "2046-09-22",  "Linker",    7.0),
     ("0.125% IL Treasury Gilt 2073","GB00BN65R751", 0.125, "2073-11-22",  "Linker",   10.3),
 ], columns=["name", "isin", "coupon", "maturity", "type", "outstanding_bn"])
 
@@ -294,14 +298,24 @@ def _make_auction_results():
 
 
 def _infer_type(gilt_name: str) -> str:
+    """Classify gilt sector using fixed maturity-year bands consistent with DMO definitions.
+
+    Uses static year ranges rather than years-from-today so that, e.g., a 10yr
+    gilt auctioned in 2022 remains "Medium" even when it has <7yr left in 2026.
+    Bands calibrated to match GILT_PORTFOLIO assignments.
+    """
     if "IL" in gilt_name:
         return "Linker"
-    year = int(gilt_name[-4:])
-    today_year = datetime.today().year
-    yrs = year - today_year
-    if yrs < 7:
+    try:
+        year = int(gilt_name[-4:])
+    except ValueError:
+        return "Medium"
+    # ≤2030 → Short (<7yr at issuance from the 2023–2030 era)
+    # 2031–2038 → Medium (7–15yr at issuance)
+    # ≥2039 → Long (>15yr at issuance)
+    if year <= 2030:
         return "Short"
-    elif yrs <= 15:
+    elif year <= 2038:
         return "Medium"
     return "Long"
 
