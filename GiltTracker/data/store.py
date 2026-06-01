@@ -265,12 +265,25 @@ class GiltDataStore:
         )
 
     def get_method_split(self, fy: str) -> dict:
-        """Return auction vs syndication issuance split for a given FY."""
-        auctions = self.get_auction_results(fy=fy)
+        """Return auction vs syndication issuance split for a given FY.
+
+        For completed FYs the quarterly aggregate is authoritative (matches
+        the published DMO remit outturn), so auction = quarterly_total - synds.
+        For the current / future FY we fall back to summing individual records.
+        """
         synd = self.get_syndications(fy=fy, completed_only=True)
-        auction_total = auctions["size_bn"].sum()
-        synd_total = synd["size_bn"].sum()
-        grand = auction_total + synd_total
+        synd_total = float(synd["size_bn"].sum())
+
+        quarterly = self.quarterly_issuance[self.quarterly_issuance["fy"] == fy]
+        if not quarterly.empty:
+            grand = float(quarterly["total"].sum())
+            auction_total = max(grand - synd_total, 0.0)
+        else:
+            # Current / future FY: sum confirmed upcoming + auction results
+            auctions = self.get_auction_results(fy=fy)
+            auction_total = float(auctions["size_bn"].sum())
+            grand = auction_total + synd_total
+
         return {
             "auction_bn": auction_total,
             "syndication_bn": synd_total,
