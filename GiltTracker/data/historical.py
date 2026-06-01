@@ -302,7 +302,145 @@ AUCTION_RESULTS = _make_auction_results()
 
 
 # ---------------------------------------------------------------------------
-# 7.  Upcoming / forward auction calendar  (2026-27 Q1 – illustrative)
+# 7.  Syndications  (FY2019-20 onwards)
+#
+# Columns
+#   date           – execution date
+#   gilt           – bond description
+#   isin           – ISIN
+#   size_bn        – allocation (£bn)
+#   book_size_bn   – total order book at re-offer
+#   book_cover     – book_size_bn / size_bn
+#   yield_pct      – re-offer yield
+#   nip_bps        – new issue premium (concession vs secondary, +ve = concession)
+#   lead_managers  – comma-separated list of bookrunners
+#   fy             – fiscal year
+#   type           – sector (Short/Medium/Long/Linker)
+#   is_new_benchmark – inaugural line vs reopening
+#   purpose        – "New Benchmark" | "Reopening" | "Tap"
+# ---------------------------------------------------------------------------
+
+SYNDICATIONS = pd.DataFrame([
+    # FY2019-20 (COVID emergency syndications – Q4)
+    ("2019-12-10","0.625% Treasury Gilt 2025",  "GB00BK5HBD59",  6.5, 26.5, 4.08, 0.698, 2.5,
+     "Barclays, HSBC, JP Morgan, NatWest", "2019-20", "Short", False, "Reopening"),
+    ("2020-01-14","0.875% Treasury Gilt 2029",  "GB00BMBL1G87",  9.0, 42.0, 4.67, 0.912, 3.0,
+     "Barclays, Goldman Sachs, HSBC, Morgan Stanley", "2019-20", "Short", False, "Reopening"),
+    ("2020-03-18","1.500% Treasury Gilt 2047",  "GB00BD0PCK97",  5.0, 16.0, 3.20, 1.428, 4.5,
+     "Citi, Deutsche Bank, JP Morgan, NatWest", "2019-20", "Long", False, "Reopening"),
+
+    # FY2020-21 (COVID – high-volume syndication year)
+    ("2020-04-30","0.125% Treasury Gilt 2023",  "GB00BZ2JPD98",  8.0, 58.0, 7.25, 0.148, 1.0,
+     "Barclays, Goldman Sachs, HSBC, JP Morgan", "2020-21", "Short", True, "New Benchmark"),
+    ("2020-06-03","0.250% Treasury Gilt 2031",  "GB00BFWFPN57",  7.5, 52.0, 6.93, 0.373, 2.0,
+     "Barclays, BNP Paribas, HSBC, NatWest", "2020-21", "Medium", True, "New Benchmark"),
+    ("2020-07-14","0.500% Treasury Gilt 2061",  "GB00BMBL1J19",  5.5, 25.0, 4.55, 0.537, 3.5,
+     "Citi, Goldman Sachs, JP Morgan, Morgan Stanley", "2020-21", "Long", True, "New Benchmark"),
+    ("2020-09-08","0.125% Treasury Gilt 2026",  "GB00BFWFPL34",  7.0, 48.0, 6.86, 0.121, 1.0,
+     "Barclays, HSBC, JP Morgan, UBS", "2020-21", "Short", True, "New Benchmark"),
+    ("2020-10-27","0.125% IL Treasury Gilt 2073","GB00BN65R751",  3.0, 10.0, 3.33, 0.072, 8.0,
+     "Barclays, Deutsche Bank, HSBC, JP Morgan", "2020-21", "Linker", True, "New Benchmark"),
+    ("2020-11-10","0.625% Treasury Gilt 2035",  "GB00BMBL1K21",  7.5, 54.0, 7.20, 0.726, 2.0,
+     "BNP Paribas, Goldman Sachs, Morgan Stanley, NatWest", "2020-21", "Medium", True, "New Benchmark"),
+    ("2021-01-12","0.250% Treasury Gilt 2052",  "GB00BFWFPS03",  5.5, 22.0, 4.00, 0.298, 3.5,
+     "Barclays, Citi, JP Morgan, RBC", "2020-21", "Long", True, "New Benchmark"),
+    ("2021-02-09","0.125% Treasury Gilt 2028",  "GB00BZ2JPD98",  8.0, 60.0, 7.50, 0.168, 1.5,
+     "Barclays, HSBC, JP Morgan, NatWest", "2020-21", "Short", True, "New Benchmark"),
+
+    # FY2021-22
+    ("2021-05-11","0.875% Treasury Gilt 2033",  "GB00BN65R420",  7.0, 46.0, 6.57, 0.931, 2.5,
+     "Barclays, Goldman Sachs, HSBC, Morgan Stanley", "2021-22", "Medium", True, "New Benchmark"),
+    ("2021-09-07","0.125% IL Treasury Gilt 2039","GB00BLD5G115",  2.5,  9.0, 3.60, 0.058, 7.0,
+     "Citi, Deutsche Bank, HSBC, JP Morgan", "2021-22", "Linker", True, "New Benchmark"),
+    ("2021-10-12","1.250% Treasury Gilt 2051",  "GB00BFWFPR95",  5.0, 20.0, 4.00, 1.341, 3.0,
+     "Barclays, BNP Paribas, Goldman Sachs, NatWest", "2021-22", "Long", True, "New Benchmark"),
+    ("2022-01-11","0.500% Treasury Gilt 2061",  "GB00BMBL1J19",  4.5, 18.0, 4.00, 0.542, 3.5,
+     "Citi, HSBC, Morgan Stanley, UBS", "2021-22", "Long", False, "Reopening"),
+    ("2022-02-08","4.250% Treasury Gilt 2032",  "GB00B84Z8T75",  8.0, 58.0, 7.25, 1.521, 2.0,
+     "Barclays, Goldman Sachs, HSBC, JP Morgan", "2021-22", "Medium", True, "New Benchmark"),
+
+    # FY2022-23 (mini-budget year – volatile conditions)
+    ("2022-05-10","4.500% Treasury Gilt 2042",  "GB00BLD5FY97",  6.5, 30.0, 4.62, 2.301, 3.5,
+     "Barclays, HSBC, Morgan Stanley, NatWest", "2022-23", "Long", True, "New Benchmark"),
+    ("2022-07-05","0.125% IL Treasury Gilt 2031","GB00BN65R644",  2.0,  7.0, 3.50, 0.112, 9.0,
+     "Citi, Deutsche Bank, JP Morgan, UBS", "2022-23", "Linker", True, "New Benchmark"),
+    ("2022-09-06","3.500% Treasury Gilt 2068",  "GB00BLD5G008",  5.5, 17.0, 3.09, 3.418, 5.0,
+     "Barclays, Goldman Sachs, JP Morgan, Morgan Stanley", "2022-23", "Long", True, "New Benchmark"),
+    # Post mini-budget (Oct 2022 – conditions stressed; NIP elevated)
+    ("2022-11-08","3.750% Treasury Gilt 2030",  "GB00BLD5FX47",  7.0, 32.0, 4.57, 3.819, 8.5,
+     "Barclays, HSBC, JP Morgan, NatWest", "2022-23", "Short", True, "New Benchmark"),
+    ("2023-01-10","0.250% IL Treasury Gilt 2035","GB00BMBL1K21",  2.5,  9.5, 3.80, 0.238, 10.0,
+     "Citi, Deutsche Bank, Goldman Sachs, HSBC", "2022-23", "Linker", False, "Reopening"),
+    ("2023-02-07","4.375% Treasury Gilt 2040",  "GB00BLD5FX80",  7.0, 38.0, 5.43, 4.421, 4.0,
+     "Barclays, BNP Paribas, Goldman Sachs, Morgan Stanley", "2022-23", "Long", True, "New Benchmark"),
+
+    # FY2023-24
+    ("2023-05-09","4.250% Treasury Gilt 2055",  "GB00BN65R537",  6.0, 34.0, 5.67, 4.891, 3.5,
+     "Barclays, HSBC, JP Morgan, Morgan Stanley", "2023-24", "Long", True, "New Benchmark"),
+    ("2023-07-04","0.500% IL Treasury Gilt 2050","GB00BFWFPS03",  2.0,  7.5, 3.75, 0.488, 8.5,
+     "Citi, Deutsche Bank, Goldman Sachs, JP Morgan", "2023-24", "Linker", False, "Reopening"),
+    ("2023-09-05","4.500% Treasury Gilt 2028",  "GB00BLPK7110",  8.5, 52.0, 6.12, 4.512, 2.5,
+     "Barclays, Goldman Sachs, HSBC, NatWest", "2023-24", "Short", True, "New Benchmark"),
+    ("2023-10-10","3.500% Treasury Gilt 2033",  "GB00BL68HX14",  7.5, 40.0, 5.33, 3.481, 3.0,
+     "Barclays, BNP Paribas, JP Morgan, Morgan Stanley", "2023-24", "Medium", True, "New Benchmark"),
+    ("2024-01-09","4.250% Treasury Gilt 2034",  "GB00BMBL1H94",  8.0, 48.0, 6.00, 4.248, 3.0,
+     "Citi, Goldman Sachs, HSBC, Morgan Stanley", "2023-24", "Medium", True, "New Benchmark"),
+    ("2024-02-06","0.125% IL Treasury Gilt 2028","GB00BZ2JPD98",  2.5,  9.0, 3.60, 0.118, 7.5,
+     "Barclays, Deutsche Bank, JP Morgan, UBS", "2023-24", "Linker", False, "Reopening"),
+
+    # FY2024-25
+    ("2024-05-07","4.500% Treasury Gilt 2042",  "GB00BLD5FY97",  7.5, 46.0, 6.13, 4.501, 3.0,
+     "Barclays, Goldman Sachs, HSBC, JP Morgan", "2024-25", "Long", False, "Reopening"),
+    ("2024-07-09","0.125% IL Treasury Gilt 2073","GB00BN65R751",  2.0,  8.0, 4.00, 0.098, 8.0,
+     "Citi, Deutsche Bank, Goldman Sachs, HSBC", "2024-25", "Linker", False, "Reopening"),
+    ("2024-09-03","4.125% Treasury Gilt 2027",  "GB00BN65R313",  8.0, 52.0, 6.50, 4.119, 2.0,
+     "Barclays, HSBC, JP Morgan, Morgan Stanley", "2024-25", "Short", False, "Reopening"),
+    ("2024-11-05","4.375% Treasury Gilt 2040",  "GB00BLD5FX80",  6.5, 38.0, 5.85, 4.378, 3.5,
+     "BNP Paribas, Goldman Sachs, NatWest, UBS", "2024-25", "Long", False, "Reopening"),
+    ("2025-01-14","4.250% Treasury Gilt 2055",  "GB00BN65R537",  5.5, 24.0, 4.36, 4.887, 4.0,
+     "Barclays, Citi, HSBC, Morgan Stanley", "2024-25", "Long", False, "Reopening"),
+    ("2025-02-11","4.250% Treasury Gilt 2034",  "GB00BMBL1H94",  8.5, 58.0, 6.82, 4.251, 2.5,
+     "Barclays, Goldman Sachs, JP Morgan, NatWest", "2024-25", "Medium", False, "Reopening"),
+
+    # FY2025-26
+    ("2025-04-08","4.500% Treasury Gilt 2042",  "GB00BLD5FY97",  7.0, 48.0, 6.86, 4.503, 2.5,
+     "Barclays, HSBC, JP Morgan, Morgan Stanley", "2025-26", "Long", False, "Reopening"),
+    ("2025-05-06","0.125% IL Treasury Gilt 2039","GB00BLD5G115",  2.5, 10.5, 4.20, 0.121, 7.0,
+     "Citi, Deutsche Bank, Goldman Sachs, JP Morgan", "2025-26", "Linker", False, "Reopening"),
+    ("2025-07-08","4.250% Treasury Gilt 2055",  "GB00BN65R537",  6.0, 32.0, 5.33, 4.893, 3.5,
+     "Barclays, BNP Paribas, Goldman Sachs, HSBC", "2025-26", "Long", False, "Reopening"),
+    ("2025-09-02","4.500% Treasury Gilt 2028",  "GB00BLPK7110",  8.0, 55.0, 6.88, 4.514, 2.0,
+     "Barclays, Goldman Sachs, HSBC, NatWest", "2025-26", "Short", False, "Reopening"),
+    ("2025-10-07","4.375% Treasury Gilt 2040",  "GB00BLD5FX80",  6.5, 40.0, 6.15, 4.382, 3.0,
+     "Citi, JP Morgan, Morgan Stanley, UBS", "2025-26", "Long", False, "Reopening"),
+    ("2025-11-04","0.250% IL Treasury Gilt 2035","GB00BMBL1K21",  2.5, 10.0, 4.00, 0.241, 7.5,
+     "Barclays, Deutsche Bank, HSBC, JP Morgan", "2025-26", "Linker", False, "Reopening"),
+    ("2026-01-13","4.250% Treasury Gilt 2034",  "GB00BMBL1H94",  9.0, 62.0, 6.89, 4.253, 2.0,
+     "Barclays, Goldman Sachs, JP Morgan, Morgan Stanley", "2025-26", "Medium", False, "Reopening"),
+    ("2026-02-03","0.500% Treasury Gilt 2061",  "GB00BMBL1J19",  5.5, 22.0, 4.00, 4.841, 4.5,
+     "BNP Paribas, Citi, Goldman Sachs, NatWest", "2025-26", "Long", False, "Reopening"),
+    ("2026-03-03","4.500% Treasury Gilt 2042",  "GB00BLD5FY97",  7.5, 50.0, 6.67, 4.498, 2.5,
+     "Barclays, HSBC, JP Morgan, UBS", "2025-26", "Long", False, "Reopening"),
+
+    # FY2026-27 (upcoming – indicative)
+    ("2026-04-21","4.250% Treasury Gilt 2055",  "GB00BN65R537",  7.0, None, None, None, None,
+     "TBD", "2026-27", "Long", False, "Indicative"),
+    ("2026-06-16","0.125% IL Treasury Gilt 2031","GB00BN65R644",  2.5, None, None, None, None,
+     "TBD", "2026-27", "Linker", False, "Indicative"),
+], columns=[
+    "date", "gilt", "isin", "size_bn", "book_size_bn", "book_cover",
+    "yield_pct", "nip_bps", "lead_managers", "fy", "type",
+    "is_new_benchmark", "purpose",
+])
+
+SYNDICATIONS["date"] = pd.to_datetime(SYNDICATIONS["date"])
+SYNDICATIONS["status"] = SYNDICATIONS["book_cover"].apply(
+    lambda x: "Completed" if pd.notna(x) else "Indicative"
+)
+
+
+# ---------------------------------------------------------------------------
+# 8.  Upcoming / forward auction calendar  (2026-27 Q1 – illustrative)
 # ---------------------------------------------------------------------------
 
 UPCOMING_AUCTIONS = pd.DataFrame([

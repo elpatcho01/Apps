@@ -143,6 +143,41 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
     st.divider()
 
     # -----------------------------------------------------------------------
+    # Issuance method split — auction vs syndication
+    # -----------------------------------------------------------------------
+    st.subheader("Issuance Method: Auction vs Syndication")
+    method_split = store.get_method_split(selected_fy)
+    synd_fy_df = store.get_syndications(fy=selected_fy, completed_only=True)
+
+    ms_cols = st.columns([1, 1, 2])
+    with ms_cols[0]:
+        st.metric("Via Auction",
+                  fmt_bn(method_split["auction_bn"]),
+                  delta=fmt_pct(method_split["auction_pct"]) + " of total",
+                  delta_color="off")
+    with ms_cols[1]:
+        st.metric("Via Syndication",
+                  fmt_bn(method_split["syndication_bn"]),
+                  delta=fmt_pct(method_split["syndication_pct"]) + " of total",
+                  delta_color="off")
+    with ms_cols[2]:
+        if not synd_fy_df.empty:
+            # Compact syndication table inline
+            compact = synd_fy_df[["date", "gilt", "size_bn", "book_cover", "nip_bps"]].copy()
+            compact["date"] = compact["date"].dt.strftime("%d %b %Y")
+            compact["book_cover"] = compact["book_cover"].apply(
+                lambda x: f"{x:.2f}×" if pd.notna(x) else "—")
+            compact["nip_bps"] = compact["nip_bps"].apply(
+                lambda x: f"{x:.1f}" if pd.notna(x) else "—")
+            compact.columns = ["Date", "Gilt", "Size (£bn)", "Cover", "NIP (bps)"]
+            st.dataframe(compact, use_container_width=True, hide_index=True,
+                         column_config={"Size (£bn)": st.column_config.NumberColumn(format="£%.1f bn")})
+        else:
+            st.caption("No syndications recorded for this FY.")
+
+    st.divider()
+
+    # -----------------------------------------------------------------------
     # Historical remit trend
     # -----------------------------------------------------------------------
     st.subheader("Historical Gilt Remit — 10-Year View")

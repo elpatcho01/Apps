@@ -123,14 +123,22 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
     # -----------------------------------------------------------------------
     st.subheader(f"Gilt Portfolio ({len(filtered)} bonds)")
 
+    # Tag gilts that were launched via syndication
+    synd_isins = set(store.syndications[store.syndications["is_new_benchmark"] == True]["isin"])
+    synd_all_isins = set(store.syndications["isin"])
+    filtered = filtered.copy()
+    filtered["launch_method"] = filtered["isin"].apply(
+        lambda i: "Syndication" if i in synd_all_isins else "Auction"
+    )
+
     display = filtered[[
         "name", "isin", "coupon", "maturity",
-        "type", "outstanding_bn", "years_to_maturity"
+        "type", "outstanding_bn", "years_to_maturity", "launch_method"
     ]].copy()
     display["maturity"] = display["maturity"].dt.strftime("%d %b %Y")
     display.columns = [
         "Name", "ISIN", "Coupon (%)", "Maturity",
-        "Sector", "Outstanding (£bn)", "Years to Maturity"
+        "Sector", "Outstanding (£bn)", "Years to Maturity", "Launch Method"
     ]
 
     selected_rows = st.dataframe(
@@ -143,6 +151,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             "Coupon (%)": st.column_config.NumberColumn(format="%.3f%%"),
             "Outstanding (£bn)": st.column_config.NumberColumn(format="£%.1f bn"),
             "Years to Maturity": st.column_config.NumberColumn(format="%.1f yr"),
+            "Launch Method": st.column_config.TextColumn(help="Whether the gilt's inaugural issuance was via auction or syndication"),
         }
     )
 
@@ -158,12 +167,37 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
         st.divider()
         st.subheader(f"🔎 Detail: {sel_row['name']}")
 
-        d1, d2, d3, d4, d5 = st.columns(5)
+        d1, d2, d3, d4, d5, d6 = st.columns(6)
         d1.metric("ISIN", sel_row["isin"])
         d2.metric("Coupon", f"{sel_row['coupon']:.3f}%")
         d3.metric("Maturity", sel_row["maturity"].strftime("%d %b %Y"))
         d4.metric("Sector", sel_row["type"])
         d5.metric("Outstanding", fmt_bn(sel_row["outstanding_bn"]))
+        d6.metric("Launch Method", sel_row.get("launch_method", "—"))
+
+        # Syndication history for this gilt
+        gilt_syndications = store.syndications[
+            store.syndications["isin"] == sel_row["isin"]
+        ].copy()
+        if not gilt_syndications.empty:
+            st.subheader("Syndication History")
+            synd_display = gilt_syndications[[
+                "date", "size_bn", "book_size_bn", "book_cover",
+                "yield_pct", "nip_bps", "purpose", "lead_managers"
+            ]].copy()
+            synd_display["date"] = synd_display["date"].dt.strftime("%d %b %Y")
+            synd_display.columns = [
+                "Date", "Size (£bn)", "Book (£bn)", "Book Cover",
+                "Yield (%)", "NIP (bps)", "Purpose", "Lead Managers"
+            ]
+            st.dataframe(synd_display, use_container_width=True, hide_index=True,
+                column_config={
+                    "Size (£bn)": st.column_config.NumberColumn(format="£%.1f bn"),
+                    "Book (£bn)": st.column_config.NumberColumn(format="£%.1f bn"),
+                    "Book Cover": st.column_config.NumberColumn(format="%.2f×"),
+                    "Yield (%)": st.column_config.NumberColumn(format="%.3f%%"),
+                    "NIP (bps)": st.column_config.NumberColumn(format="%.1f bps"),
+                })
 
         # Auction history for this gilt
         all_auctions = store.get_auction_results()

@@ -67,6 +67,7 @@ with st.sidebar:
             "📊 Remit Overview",
             "🏗️ Sector Breakdown",
             "📅 Issuance Calendar",
+            "🤝 Syndications",
             "🔍 Bond Tracker",
             "📉 PSND & Borrowing",
             "🔬 Econometric Forecasting",
@@ -119,6 +120,10 @@ elif page == "🏗️ Sector Breakdown":
 
 elif page == "📅 Issuance Calendar":
     from ui.calendar_page import render
+    render(store, selected_fy)
+
+elif page == "🤝 Syndications":
+    from ui.syndications_page import render
     render(store, selected_fy)
 
 elif page == "🔍 Bond Tracker":

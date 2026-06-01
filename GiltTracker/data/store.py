@@ -16,6 +16,7 @@ from data.historical import (
     OBR_FORECASTS,
     AUCTION_RESULTS,
     UPCOMING_AUCTIONS,
+    SYNDICATIONS,
     get_remit_for_fy,
     get_quarterly_progress,
     get_ytd_issuance,
@@ -38,6 +39,7 @@ class GiltDataStore:
         self.obr_forecasts: pd.DataFrame = OBR_FORECASTS.copy()
         self.auction_results: pd.DataFrame = AUCTION_RESULTS.copy()
         self.upcoming_auctions: pd.DataFrame = UPCOMING_AUCTIONS.copy()
+        self.syndications: pd.DataFrame = SYNDICATIONS.copy()
         self.last_refresh: Optional[datetime] = None
         self.live_status: dict = {}
 
@@ -154,22 +156,111 @@ class GiltDataStore:
         return df.loc[idx].sort_values("fy")
 
     # ------------------------------------------------------------------
+    # Syndication accessors
+    # ------------------------------------------------------------------
+
+    def get_syndications(self, fy: Optional[str] = None,
+                         bond_type: Optional[str] = None,
+                         completed_only: bool = False) -> pd.DataFrame:
+        df = self.syndications.copy()
+        if fy:
+            df = df[df["fy"] == fy]
+        if bond_type:
+            df = df[df["type"] == bond_type]
+        if completed_only:
+            df = df[df["status"] == "Completed"]
+        return df.sort_values("date", ascending=False)
+
+    def get_syndication_summary(self, fy: Optional[str] = None) -> pd.DataFrame:
+        """Per-FY summary: count, total size, avg book cover, avg NIP."""
+        df = self.syndications[self.syndications["status"] == "Completed"].copy()
+        if fy:
+            df = df[df["fy"] == fy]
+        return (
+            df.groupby("fy")
+            .agg(
+                count=("size_bn", "count"),
+                total_size_bn=("size_bn", "sum"),
+                avg_book_cover=("book_cover", "mean"),
+                avg_nip_bps=("nip_bps", "mean"),
+                avg_book_size_bn=("book_size_bn", "mean"),
+            )
+            .reset_index()
+            .sort_values("fy")
+        )
+
+    def get_lead_manager_league(self, fy: Optional[str] = None) -> pd.DataFrame:
+        """Rank banks by number of syndications led."""
+        df = self.syndications[self.syndications["status"] == "Completed"].copy()
+        if fy:
+            df = df[df["fy"] == fy]
+        rows = []
+        for _, row in df.iterrows():
+            for bank in [b.strip() for b in str(row["lead_managers"]).split(",")]:
+                if bank and bank != "TBD":
+                    rows.append({"bank": bank, "size_bn": row["size_bn"]})
+        if not rows:
+            return pd.DataFrame(columns=["bank", "deals", "total_size_bn"])
+        lg = pd.DataFrame(rows)
+        return (
+            lg.groupby("bank")
+            .agg(deals=("size_bn", "count"), total_size_bn=("size_bn", "sum"))
+            .sort_values("deals", ascending=False)
+            .reset_index()
+        )
+
+    def get_method_split(self, fy: str) -> dict:
+        """Return auction vs syndication issuance split for a given FY."""
+        auctions = self.get_auction_results(fy=fy)
+        synd = self.get_syndications(fy=fy, completed_only=True)
+        auction_total = auctions["size_bn"].sum()
+        synd_total = synd["size_bn"].sum()
+        grand = auction_total + synd_total
+        return {
+            "auction_bn": auction_total,
+            "syndication_bn": synd_total,
+            "total_bn": grand,
+            "auction_pct": auction_total / grand * 100 if grand else 0,
+            "syndication_pct": synd_total / grand * 100 if grand else 0,
+        }
+
+    # ------------------------------------------------------------------
     # Calendar helpers
     # ------------------------------------------------------------------
 
     def get_calendar_for_fy(self, fy: str) -> pd.DataFrame:
+        # Auctions
         past = self.auction_results[self.auction_results["fy"] == fy].copy()
         past["status"] = "Completed"
-        future = self.upcoming_auctions.copy()
-        future["status"] = future["confirmed"].map(
+        past["method"] = "Auction"
+
+        future_a = self.upcoming_auctions.copy()
+        future_a["status"] = future_a["confirmed"].map(
             {True: "Confirmed", False: "Indicative"}
         )
-        future["yield_pct"] = None
-        future["cover_ratio"] = None
-        future["fy"] = fy
+        future_a["yield_pct"] = None
+        future_a["cover_ratio"] = None
+        future_a["fy"] = fy
+        future_a["method"] = "Auction"
+
+        # Syndications
+        synd_all = self.syndications[self.syndications["fy"] == fy].copy()
+        synd_all["cover_ratio"] = synd_all["book_cover"]
+        synd_all["method"] = "Syndication"
+        synd_all = synd_all.rename(columns={"nip_bps": "_nip"})
+
         cols = ["date", "gilt", "size_bn", "yield_pct", "cover_ratio",
-                "type", "status"]
+                "type", "status", "method"]
+
+        # Align columns for concat
+        for df in [past, future_a]:
+            if "method" not in df.columns:
+                df["method"] = "Auction"
+        for c in cols:
+            if c not in synd_all.columns:
+                synd_all[c] = None
+
         all_rows = pd.concat(
-            [past[cols], future[cols]], ignore_index=True
+            [past[cols], future_a[cols], synd_all[cols]], ignore_index=True
         )
         return all_rows.sort_values("date")

@@ -34,16 +34,25 @@ def _week_heatmap(cal_df: pd.DataFrame, start: date, end: date) -> go.Figure:
     cell_dates["dow"] = cell_dates["date"].dt.weekday  # 0=Mon … 4=Fri
     dow_labels = ["Mon", "Tue", "Wed", "Thu", "Fri"]
 
-    # Match auction dates
+    # Match auction + syndication dates
     cal_df = cal_df.copy()
     cal_df["date_only"] = pd.to_datetime(cal_df["date"]).dt.normalize()
     merged = cell_dates.merge(
-        cal_df[["date_only", "gilt", "size_bn", "status", "type"]],
+        cal_df[["date_only", "gilt", "size_bn", "status", "type",
+                "method"] if "method" in cal_df.columns else
+               ["date_only", "gilt", "size_bn", "status", "type"]],
         left_on="date", right_on="date_only", how="left"
     )
 
-    status_map = {"Completed": 3, "Confirmed": 2, "Indicative": 1}
-    merged["val"] = merged["status"].map(status_map).fillna(0)
+    # 0=none, 1=indicative, 2=confirmed, 3=completed auction, 4=syndication
+    def _val(row):
+        if pd.isna(row.get("status")):
+            return 0
+        if row.get("method") == "Syndication":
+            return 4
+        return {"Completed": 3, "Confirmed": 2, "Indicative": 1}.get(row["status"], 0)
+
+    merged["val"] = merged.apply(_val, axis=1)
 
     n_weeks = merged["week"].max() + 1 if not merged.empty else 0
     z = np.zeros((5, n_weeks))
@@ -69,10 +78,11 @@ def _week_heatmap(cal_df: pd.DataFrame, start: date, end: date) -> go.Figure:
     ]
 
     colorscale = [
-        [0.0,  "#1c2333"],   # no auction
-        [0.33, "#9467bd"],   # indicative
-        [0.66, "#1f77b4"],   # confirmed
-        [1.0,  "#2ca02c"],   # completed
+        [0.00, "#1c2333"],   # none
+        [0.25, "#9467bd"],   # indicative auction
+        [0.50, "#1f77b4"],   # confirmed auction
+        [0.75, "#2ca02c"],   # completed auction
+        [1.00, "#e377c2"],   # syndication
     ]
 
     fig = go.Figure(go.Heatmap(
@@ -82,12 +92,12 @@ def _week_heatmap(cal_df: pd.DataFrame, start: date, end: date) -> go.Figure:
         text=hover,
         hovertemplate="%{text}<extra></extra>",
         colorscale=colorscale,
-        zmin=0, zmax=3,
+        zmin=0, zmax=4,
         showscale=True,
         colorbar=dict(
-            title="Status",
-            tickvals=[0, 1, 2, 3],
-            ticktext=["None", "Indicative", "Confirmed", "Completed"],
+            title="Type",
+            tickvals=[0, 1, 2, 3, 4],
+            ticktext=["None", "Indicative", "Confirmed", "Completed", "Syndication"],
         ),
     ))
     fig.update_layout(
@@ -114,9 +124,9 @@ def _quarter_dates(fy: str, q: str):
 def render(store: GiltDataStore, selected_fy: str) -> None:
     st.title("📅 Gilt Issuance Calendar")
     st.caption(
-        "Announced auction schedule from the DMO, overlaid with model-predicted "
-        "auctions for unannounced periods. Green = completed, blue = confirmed, "
-        "purple = model prediction."
+        "Announced auctions and syndications from the DMO, overlaid with model-predicted "
+        "auctions for unannounced periods. "
+        "🟢 Completed auction · 🔵 Confirmed · 🟣 Indicative · 🌸 Syndication"
     )
 
     # -----------------------------------------------------------------------
