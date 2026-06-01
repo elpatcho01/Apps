@@ -19,30 +19,27 @@ from config import SECTOR_COLOURS, PLOTLY_TEMPLATE, CHART_HEIGHT
 
 def _week_heatmap(cal_df: pd.DataFrame, start: date, end: date) -> go.Figure:
     """Build a week-by-week calendar heatmap for the given date range."""
-    # Build a grid of weekdays
+    # Build a grid of weekdays as Timestamps so dtype matches calendar data
+    start_ts = pd.Timestamp(start)
     current = start
     cells = []
     while current <= end:
         if current.weekday() < 5:  # Mon–Fri
-            cells.append(current)
+            cells.append(pd.Timestamp(current))
         current += timedelta(days=1)
 
     cell_dates = pd.DataFrame({"date": cells})
-    cell_dates["week"] = cell_dates["date"].apply(
-        lambda d: (d - start).days // 7
-    )
+    cell_dates["week"] = ((cell_dates["date"] - start_ts).dt.days // 7)
     cell_dates["dow"] = cell_dates["date"].dt.weekday  # 0=Mon … 4=Fri
     dow_labels = ["Mon", "Tue", "Wed", "Thu", "Fri"]
 
-    # Match auction + syndication dates
+    # Match auction + syndication dates — both sides must be datetime64
     cal_df = cal_df.copy()
     cal_df["date_only"] = pd.to_datetime(cal_df["date"]).dt.normalize()
-    merged = cell_dates.merge(
-        cal_df[["date_only", "gilt", "size_bn", "status", "type",
-                "method"] if "method" in cal_df.columns else
-               ["date_only", "gilt", "size_bn", "status", "type"]],
-        left_on="date", right_on="date_only", how="left"
-    )
+    merge_cols = ["date_only", "gilt", "size_bn", "status", "type"]
+    if "method" in cal_df.columns:
+        merge_cols.append("method")
+    merged = cell_dates.merge(cal_df[merge_cols], left_on="date", right_on="date_only", how="left")
 
     # 0=none, 1=indicative, 2=confirmed, 3=completed auction, 4=syndication
     def _val(row):
