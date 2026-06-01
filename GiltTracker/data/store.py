@@ -72,7 +72,62 @@ class GiltDataStore:
     # ------------------------------------------------------------------
 
     def get_ytd(self, fy: str, as_of: Optional[date] = None) -> dict:
-        return get_ytd_issuance(fy, as_of)
+        as_of = as_of or date.today()
+        base = get_ytd_issuance(fy, as_of)
+
+        # If quarterly aggregates exist use them; otherwise build from raw results
+        if base["total"] > 0:
+            return base
+
+        # Fallback: sum confirmed upcoming auctions + completed syndications
+        # that fall within this FY and on/before as_of
+        fy_year = int(fy[:4])
+        fy_start = date(fy_year, 4, 1)
+        fy_end = date(fy_year + 1, 3, 31)
+
+        totals: dict = {k: 0.0 for k in ("short", "medium", "long", "linkers", "total")}
+
+        # Confirmed upcoming auctions already executed
+        upcoming = self.upcoming_auctions.copy()
+        executed = upcoming[
+            (upcoming["confirmed"] == True) &
+            (upcoming["date"].dt.date >= fy_start) &
+            (upcoming["date"].dt.date <= as_of)
+        ]
+        for _, row in executed.iterrows():
+            size = float(row["size_bn"])
+            sector = str(row["type"]).lower().replace("linker", "linkers")
+            if sector in totals:
+                totals[sector] += size
+            totals["total"] += size
+
+        # Past auction results that fall in this FY
+        results = self.auction_results.copy()
+        fy_results = results[
+            (results["fy"] == fy) &
+            (results["date"].dt.date <= as_of)
+        ]
+        for _, row in fy_results.iterrows():
+            size = float(row["size_bn"])
+            sector = str(row["type"]).lower().replace("linker", "linkers")
+            if sector in totals:
+                totals[sector] += size
+            totals["total"] += size
+
+        # Completed syndications in this FY
+        synd = self.syndications[
+            (self.syndications["fy"] == fy) &
+            (self.syndications["status"] == "Completed") &
+            (self.syndications["date"].dt.date <= as_of)
+        ]
+        for _, row in synd.iterrows():
+            size = float(row["size_bn"])
+            sector = str(row["type"]).lower().replace("linker", "linkers")
+            if sector in totals:
+                totals[sector] += size
+            totals["total"] += size
+
+        return totals
 
     def get_quarterly_progress(self, fy: str) -> pd.DataFrame:
         return get_quarterly_progress(fy)

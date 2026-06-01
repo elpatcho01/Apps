@@ -9,9 +9,17 @@ Run:  streamlit run app.py
 
 import sys
 import os
+from datetime import date
 
 # Ensure local packages are importable regardless of working directory
 sys.path.insert(0, os.path.dirname(__file__))
+
+
+def _current_fy() -> str:
+    """Return the UK fiscal year string for today's date (e.g. '2026-27')."""
+    today = date.today()
+    start_year = today.year if today.month >= 4 else today.year - 1
+    return f"{start_year}-{str(start_year + 1)[2:]}"
 
 import streamlit as st
 from datetime import datetime
@@ -77,10 +85,13 @@ with st.sidebar:
 
     st.divider()
 
+    fy_options = list(reversed(ALL_FYS))
+    current_fy = _current_fy()
+    default_idx = fy_options.index(current_fy) if current_fy in fy_options else 0
     selected_fy = st.selectbox(
         "Fiscal Year",
-        options=list(reversed(ALL_FYS)),
-        index=0,
+        options=fy_options,
+        index=default_idx,
         format_func=lambda x: f"FY {x}",
     )
 
