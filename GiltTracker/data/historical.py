@@ -13,6 +13,7 @@ Long >15yr, Linkers = index-linked (all maturities).
 import pandas as pd
 import numpy as np
 from datetime import date, datetime
+from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -562,7 +563,7 @@ UPCOMING_AUCTIONS["type"] = UPCOMING_AUCTIONS["gilt"].apply(_infer_type)
 # Helper accessors
 # ---------------------------------------------------------------------------
 
-def get_remit_for_fy(fy: str) -> dict | None:
+def get_remit_for_fy(fy: str) -> Optional[dict]:
     row = ANNUAL_REMIT[ANNUAL_REMIT["fy"] == fy]
     if row.empty:
         return None
@@ -573,7 +574,7 @@ def get_quarterly_progress(fy: str) -> pd.DataFrame:
     return QUARTERLY_ISSUANCE[QUARTERLY_ISSUANCE["fy"] == fy].copy()
 
 
-def get_ytd_issuance(fy: str, as_of: date | None = None) -> dict:
+def get_ytd_issuance(fy: str, as_of: Optional[date] = None) -> dict:
     as_of = as_of or date.today()
     df = QUARTERLY_ISSUANCE[QUARTERLY_ISSUANCE["fy"] == fy].copy()
     df = df[df["q_start"] <= as_of]
