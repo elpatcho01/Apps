@@ -144,6 +144,8 @@ GILT_PORTFOLIO = pd.DataFrame([
     ("4.750% Treasury Gilt 2035",   "GB00BVYPQY09", 4.750, "2035-07-22",  "Medium",   24.0),
     # 4⅞% 2036 confirmed: ISIN GB00BWBR1N39; new benchmark launched Apr 2026 (DMO pr070426)
     ("4.875% Treasury Gilt 2036",   "GB00BWBR1N39", 4.875, "2036-07-31",  "Medium",   15.0),
+    # 4⅝% Green Gilt 2037 confirmed: ISIN GB00BVP99905; new green gilt benchmark Mar 2026 (DMO pr030326/pr100326a)
+    ("4.625% Green Gilt 2037",      "GB00BVP99905", 4.625, "2037-03-07",  "Medium",    6.25),
     # Long (> 15yr)
     ("4.375% Treasury Gilt 2040",   "GB00BLD5FX80", 4.375, "2040-10-22",  "Long",     28.5),
     ("5.250% Treasury Gilt 2041",   "GB00BVP99897", 5.250, "2041-10-22",  "Long",     22.0),
@@ -300,8 +302,25 @@ def _make_auction_results():
         ("2026-03-10", "0.125% IL Treasury Gilt 2073",1.0, 0.47, 2.43),
         ("2026-03-17", "4.250% Treasury Gilt 2055",   2.0, 4.90, 2.65),
     ]
-    for date_str, gilt, size, yld, cover in auctions_2425 + auctions_2526:
-        fy = "2024-25" if date_str < "2025-04-01" else "2025-26"
+    # FY2026-27 Q1 auctions: dates and gilt names confirmed from DMO Q1 2026-27 auction
+    # calendar (auctioncalendar060126.pdf). Sizes are estimates; yields/covers = None
+    # except May 28 tender (result confirmed via Investing.com).
+    # Actual results available at: dmo.gov.uk/data/gilt-market/results-of-gilt-operations/
+    auctions_2627 = [
+        # date           gilt                              size_bn  yield   cover
+        ("2026-04-09", "4⅛% Treasury Gilt 2033",           3.0, None,  None),
+        ("2026-04-16", "1⅞% IL Treasury Gilt 2049",        1.5, None,  None),
+        ("2026-04-21", "4% Treasury Gilt 2029",             3.5, None,  None),
+        ("2026-05-06", "1⅛% IL Treasury Gilt 2035",        1.5, None,  None),
+        ("2026-05-12", "4⅛% Treasury Gilt 2031",           3.0, None,  None),
+        ("2026-05-19", "0⅛% IL Treasury Gilt 2031",        1.5, None,  None),
+        ("2026-05-21", "Conventional gilt (TBC)",           3.5, None,  None),
+        # May 28 2026 tender: result confirmed (Investing.com)
+        ("2026-05-28", "1⅛% Treasury Gilt 2039",           1.0, 5.085, 4.04),
+    ]
+    for date_str, gilt, size, yld, cover in auctions_2425 + auctions_2526 + auctions_2627:
+        fy = ("2024-25" if date_str < "2025-04-01" else
+              "2025-26" if date_str < "2026-04-01" else "2026-27")
         rows.append({
             "date": pd.Timestamp(date_str),
             "gilt": gilt,
@@ -485,7 +504,8 @@ SYNDICATIONS = pd.DataFrame([
     ("2025-09-24", "0.125% IL Treasury Gilt 2031",  "GB00BN65R644",  3.50, 14.0, 4.00, 0.280, 9.0,
      "Citi, Deutsche Bank, JP Morgan, Morgan Stanley",   "2025-26", "Linker", False, "Reopening"),
     # Oct 15 2025: size £9.0bn, issue price 101.621, leads confirmed (DMO prosp141025b)
-    ("2025-10-15", "5¼% Treasury Gilt 2041",        "GB00BVP99897",  9.00, 55.0, 6.11, 5.167, 3.5,
+    # yield 5.0969% confirmed from DMO prospectus pr071025
+    ("2025-10-15", "5¼% Treasury Gilt 2041",        "GB00BVP99897",  9.00, 55.0, 6.11, 5.0969, 3.5,
      "Barclays, BofA Securities, Deutsche Bank, Morgan Stanley, RBC Capital Markets","2025-26","Long",True,"New Benchmark"),
     # Nov 2025: IL syndication (estimated)
     ("2025-11-11", "1¾% Index-Linked Gilt 2046",    "GB00BQRTLX65",  3.50, 13.5, 3.86, 0.290, 9.0,
@@ -496,6 +516,10 @@ SYNDICATIONS = pd.DataFrame([
     # Feb/Mar 2026: conventional (estimated)
     ("2026-02-17", "4¾% Treasury Gilt 2035",        "GB00BVYPQY09", 10.00, 58.0, 5.80, 4.820, 4.5,
      "Barclays, HSBC, JP Morgan, Morgan Stanley, NatWest","2025-26", "Medium", False, "Reopening"),
+    # Mar 11 2026: £6.25bn new green gilt benchmark confirmed (DMO pr030326 / pr100326a)
+    # ISIN GB00BVP99905 confirmed; book cover and book size not yet published
+    ("2026-03-11", "4⅝% Green Gilt 2037",           "GB00BVP99905",  6.25,  None, None, 4.7167, 10.75,
+     "Barclays, BNP Paribas, Citi, HSBC, JP Morgan, NatWest","2025-26","Medium",True,"New Benchmark"),
 
     # ---- FY2026-27 (confirmed Q1 deal + indicative pipeline) ----
     # Apr 15 2026: size £15.0bn (record), book £148.2bn (9.88x), yield 4.9158%
@@ -511,38 +535,24 @@ SYNDICATIONS = pd.DataFrame([
 ])
 
 SYNDICATIONS["date"] = pd.to_datetime(SYNDICATIONS["date"])
-SYNDICATIONS["status"] = SYNDICATIONS["book_cover"].apply(
+SYNDICATIONS["status"] = SYNDICATIONS["size_bn"].apply(
     lambda x: "Completed" if pd.notna(x) else "Indicative"
 )
 
 
 # ---------------------------------------------------------------------------
-# 8.  Upcoming / forward auction calendar  (2026-27 Q1 – illustrative)
+# 8.  Upcoming / forward auction calendar
+#
+# Q1 2026-27 (Apr–May 2026) auctions are complete and recorded in
+# AUCTION_RESULTS above. Q2 2026-27 calendar was published by the DMO on
+# 29 May 2026 but is not yet accessible here; populate from the official
+# D5D data report at: dmo.gov.uk/data/pdfdatareport?reportCode=D5D
 # ---------------------------------------------------------------------------
 
-UPCOMING_AUCTIONS = pd.DataFrame([
-    # date          gilt                               size_bn  confirmed
-    # FY2026-27 Q1 (Apr–Jun 2026) — confirmed schedule
-    ("2026-04-07", "4.125% Treasury Gilt 2027",         3.5, True),
-    ("2026-04-14", "0.500% IL Treasury Gilt 2050",      1.5, True),
-    ("2026-04-21", "4.250% Treasury Gilt 2034",         3.0, True),
-    ("2026-05-05", "4.500% Treasury Gilt 2028",         3.5, True),
-    ("2026-05-12", "0.125% IL Treasury Gilt 2031",      1.8, True),
-    ("2026-05-19", "4⅞% Treasury Gilt 2036",            4.5, True),  # new benchmark, confirmed Q1
-    # FY2026-27 Q2 (Jul–Sep 2026) — indicative
-    ("2026-06-02", "3.750% Treasury Gilt 2030",         3.5, False),
-    ("2026-06-09", "0.250% IL Treasury Gilt 2035",      1.8, False),
-    ("2026-06-16", "4⅞% Treasury Gilt 2036",            4.5, False),
-    ("2026-07-07", "4.000% Treasury Gilt 2027",         3.5, False),
-    ("2026-07-14", "0.125% IL Treasury Gilt 2039",      1.5, False),
-    ("2026-07-21", "4.500% Treasury Gilt 2035",         4.0, False),
-    ("2026-08-04", "4.500% Treasury Gilt 2028",         3.5, False),
-    ("2026-08-11", "0.125% IL Treasury Gilt 2073",      1.0, False),
-    ("2026-08-18", "5.250% Treasury Gilt 2041",         3.5, False),
-    ("2026-09-01", "4.125% Treasury Gilt 2027",         3.5, False),
-    ("2026-09-08", "0.500% IL Treasury Gilt 2050",      1.5, False),
-    ("2026-09-15", "4⅞% Treasury Gilt 2036",            4.5, False),
-], columns=["date", "gilt", "size_bn", "confirmed"])
+UPCOMING_AUCTIONS = pd.DataFrame(
+    [],
+    columns=["date", "gilt", "size_bn", "confirmed"],
+)
 
 UPCOMING_AUCTIONS["date"] = pd.to_datetime(UPCOMING_AUCTIONS["date"])
 UPCOMING_AUCTIONS["type"] = UPCOMING_AUCTIONS["gilt"].apply(_infer_type)
