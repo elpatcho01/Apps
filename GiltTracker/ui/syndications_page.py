@@ -169,7 +169,7 @@ def _league_table_chart(lg: pd.DataFrame) -> go.Figure:
 # ---------------------------------------------------------------------------
 
 def render(store: GiltDataStore, selected_fy: str) -> None:
-    st.title("🤝 Gilt Syndications")
+    st.title("Gilt Syndications")
     st.caption(
         "Analysis of DMO syndicated gilt issuance — book demand, new issue premiums, "
         "lead-manager participation, and comparison with competitive auction issuance."

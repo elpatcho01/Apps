@@ -138,14 +138,14 @@ def _sector_tab(store: GiltDataStore, sector: str, selected_fy: str) -> None:
 
 
 def render(store: GiltDataStore, selected_fy: str) -> None:
-    st.title("📊 Sector Breakdown")
+    st.title("Sector Breakdown")
     st.caption(
         "Detailed analysis of gilt issuance split across Short (<7yr), "
         "Medium (7–15yr), Long (>15yr), and Index-Linked sectors."
     )
 
     # Cross-sector overview
-    with st.expander("📈 Cross-Sector Overview", expanded=True):
+    with st.expander("Cross-Sector Overview", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
             prop_df = store.get_sector_proportions()

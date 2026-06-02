@@ -28,6 +28,19 @@ SECTORS = {
 
 SECTOR_COLOURS = {k: v["colour"] for k, v in SECTORS.items()}
 
+# Refined palette — cleaner against dark backgrounds, better inter-sector
+# contrast, inspired by Tailwind's 500-level swatches
+SECTOR_COLOURS = {
+    "short":   "#3B82F6",  # blue-500
+    "medium":  "#F59E0B",  # amber-500
+    "long":    "#10B981",  # emerald-500
+    "linkers": "#A78BFA",  # violet-400
+}
+
+GOLD = "#C7A84A"      # accent / target lines
+SURFACE = "#131E2E"   # card / panel background
+BORDER = "#1E3553"    # subtle dividers
+
 # ---------------------------------------------------------------------------
 # DMO public data endpoints
 # ---------------------------------------------------------------------------

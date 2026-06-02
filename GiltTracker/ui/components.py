@@ -18,35 +18,58 @@ from utils.formatters import fmt_bn, fmt_pct, fmt_yield, fmt_cover
 # Remit progress gauge
 # ---------------------------------------------------------------------------
 
-def remit_gauge(issued: float, remit: float, label: str, colour: str = "#1f77b4") -> go.Figure:
+def remit_gauge(issued: float, remit: float, label: str, colour: str = "#3B82F6") -> go.Figure:
+    """Horizontal bullet-style progress chart — cleaner than a semicircle gauge."""
     pct = min(issued / remit * 100, 110) if remit else 0
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
-        value=pct,
-        delta={"reference": 100, "valueformat": ".1f", "suffix": "%"},
-        number={"suffix": "%", "valueformat": ".1f"},
-        title={"text": label, "font": {"size": 13}},
-        gauge={
-            "axis": {"range": [0, 110], "tickwidth": 1, "tickcolor": "white"},
-            "bar": {"color": colour, "thickness": 0.25},
-            "steps": [
-                {"range": [0, 80],   "color": "#1c2333"},
-                {"range": [80, 95],  "color": "#2a3555"},
-                {"range": [95, 110], "color": "#1e3a1e"},
-            ],
-            "threshold": {
-                "line": {"color": "#ffd700", "width": 3},
-                "thickness": 0.75,
-                "value": 100,
-            },
-        },
-    ))
+    bar_pct = min(pct, 100)
+
+    fig = go.Figure()
+
+    # Background track
+    fig.add_shape(type="rect", x0=0, x1=100, y0=0.28, y1=0.72,
+                  fillcolor="#1B2A3C", line_width=0, layer="below")
+
+    # Pace zone (80–100% = on-track band)
+    fig.add_shape(type="rect", x0=80, x1=100, y0=0.28, y1=0.72,
+                  fillcolor="rgba(255,255,255,0.04)", line_width=0)
+
+    # Progress fill
+    if bar_pct > 0:
+        fig.add_shape(type="rect", x0=0, x1=bar_pct, y0=0.32, y1=0.68,
+                      fillcolor=colour, line_width=0)
+
+    # Target line at 100%
+    fig.add_shape(type="line", x0=100, x1=100, y0=0.18, y1=0.82,
+                  line=dict(color="#C7A84A", width=2, dash="dot"))
+
+    # Percentage label (large, centred)
+    fig.add_annotation(
+        x=50, y=1.35,
+        text=f"<b>{pct:.1f}%</b>",
+        showarrow=False,
+        font=dict(size=22, color=colour if pct < 95 else "#C7A84A"),
+        xanchor="center",
+    )
+    # Sub-label
+    issued_str = f"£{issued:.1f}bn" if issued else "—"
+    remit_str  = f"£{remit:.1f}bn" if remit else "—"
+    fig.add_annotation(
+        x=50, y=-0.55,
+        text=f"{issued_str} of {remit_str}",
+        showarrow=False,
+        font=dict(size=10, color="#6B8CAE"),
+        xanchor="center",
+    )
+
     fig.update_layout(
-        height=200,
-        margin=dict(l=20, r=20, t=40, b=10),
+        title=dict(text=f"<b>{label}</b>", font=dict(size=11, color="#8BA0BB"), x=0.5, xanchor="center"),
+        xaxis=dict(range=[-2, 108], showgrid=False, showticklabels=False, zeroline=False),
+        yaxis=dict(range=[-0.8, 1.8], showgrid=False, showticklabels=False, zeroline=False),
+        height=155,
+        margin=dict(l=10, r=10, t=38, b=18),
         paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         font_color="#e8ecf0",
-        template=PLOTLY_TEMPLATE,
     )
     return fig
 
@@ -55,27 +78,48 @@ def remit_gauge(issued: float, remit: float, label: str, colour: str = "#1f77b4"
 # Stacked bar – sector issuance history
 # ---------------------------------------------------------------------------
 
+_SECTOR_LABELS = {
+    "short": "Short (<7yr)", "medium": "Medium (7–15yr)",
+    "long": "Long (>15yr)", "linkers": "Index-Linked",
+}
+
+_LAYOUT_BASE = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#C8D4E3", size=12),
+    template=PLOTLY_TEMPLATE,
+    margin=dict(l=10, r=10, t=44, b=10),
+    legend=dict(
+        orientation="h", y=-0.18, x=0.5, xanchor="center",
+        font=dict(size=11), bgcolor="rgba(0,0,0,0)",
+    ),
+)
+
+
+def _layout(**kw) -> dict:
+    d = _LAYOUT_BASE.copy()
+    d.update(kw)
+    return d
+
+
 def sector_history_bar(df: pd.DataFrame, title: str = "Annual Gilt Issuance by Sector") -> go.Figure:
     fig = go.Figure()
     for sector, colour in SECTOR_COLOURS.items():
         if sector in df.columns:
             fig.add_trace(go.Bar(
-                name=sector.capitalize(),
+                name=_SECTOR_LABELS.get(sector, sector.capitalize()),
                 x=df["fy"],
                 y=df[sector],
                 marker_color=colour,
             ))
     fig.update_layout(
-        barmode="stack",
-        title=title,
-        xaxis_title="Fiscal Year",
-        yaxis_title="£bn",
-        xaxis=dict(type="category"),
-        height=CHART_HEIGHT,
-        template=PLOTLY_TEMPLATE,
-        legend=dict(orientation="h", y=-0.2),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        **_layout(
+            barmode="stack",
+            title=dict(text=title, font=dict(size=13), pad=dict(b=8)),
+            xaxis=dict(type="category", title="Fiscal Year", tickfont=dict(size=11)),
+            yaxis=dict(title="£bn"),
+            height=CHART_HEIGHT,
+        )
     )
     return fig
 
@@ -91,38 +135,37 @@ def quarterly_vs_remit_chart(
 ) -> go.Figure:
     df = quarterly_df.copy()
     df["cumulative"] = df["total"].cumsum()
-    target_per_q = remit_total / 4
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Bar(
         name="Quarterly Issued",
         x=df["quarter"],
         y=df["total"],
-        marker_color="#1f77b4",
+        marker_color="#3B82F6",
+        marker_line_width=0,
     ), secondary_y=False)
     fig.add_trace(go.Scatter(
         name="Cumulative",
         x=df["quarter"],
         y=df["cumulative"],
         mode="lines+markers",
-        line=dict(color="#ffd700", width=2),
-        marker=dict(size=8),
+        line=dict(color="#C7A84A", width=2),
+        marker=dict(size=7),
     ), secondary_y=True)
     fig.add_hline(
-        y=remit_total, line_dash="dash", line_color="#ff7f0e",
-        annotation_text=f"Full Year Remit {fmt_bn(remit_total)}",
-        secondary_y=True
+        y=remit_total, line_dash="dash", line_color="#F59E0B",
+        annotation_text=f"FY Remit {fmt_bn(remit_total)}",
+        annotation_font_size=11,
+        secondary_y=True,
     )
     fig.update_layout(
-        title=f"{fy} Issuance Progress",
-        height=CHART_HEIGHT,
-        template=PLOTLY_TEMPLATE,
-        legend=dict(orientation="h", y=-0.2),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        **_layout(
+            title=dict(text=f"{fy} Quarterly Progress", font=dict(size=13)),
+            height=CHART_HEIGHT,
+        )
     )
-    fig.update_yaxes(title_text="Quarterly £bn", secondary_y=False)
-    fig.update_yaxes(title_text="Cumulative £bn", secondary_y=True)
+    fig.update_yaxes(title_text="£bn (quarterly)", secondary_y=False, gridcolor="rgba(255,255,255,0.05)")
+    fig.update_yaxes(title_text="£bn (cumulative)", secondary_y=True)
     return fig
 
 
@@ -196,15 +239,12 @@ def fan_chart(
         ))
 
     fig.update_layout(
-        title=title,
-        xaxis_title="Fiscal Year",
-        yaxis_title="£bn",
-        xaxis=dict(type="category"),
-        height=CHART_HEIGHT_TALL,
-        template=PLOTLY_TEMPLATE,
-        legend=dict(orientation="h", y=-0.18),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        **_layout(
+            title=dict(text=title, font=dict(size=13)),
+            xaxis=dict(type="category", title="Fiscal Year", tickfont=dict(size=11)),
+            yaxis=dict(title="£bn"),
+            height=CHART_HEIGHT_TALL,
+        )
     )
     return fig
 
@@ -219,7 +259,7 @@ def sector_proportion_chart(df: pd.DataFrame) -> go.Figure:
         col = f"{sector}_pct"
         if col in df.columns:
             fig.add_trace(go.Scatter(
-                name=sector.capitalize(),
+                name=_SECTOR_LABELS.get(sector, sector.capitalize()),
                 x=df["fy"],
                 y=df[col],
                 mode="lines+markers",
@@ -228,16 +268,12 @@ def sector_proportion_chart(df: pd.DataFrame) -> go.Figure:
                 fillcolor=colour,
             ))
     fig.update_layout(
-        title="Sector Allocation (% of Total Remit)",
-        xaxis_title="Fiscal Year",
-        yaxis_title="% of total",
-        xaxis=dict(type="category"),
-        height=CHART_HEIGHT,
-        template=PLOTLY_TEMPLATE,
-        legend=dict(orientation="h", y=-0.2),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        yaxis=dict(ticksuffix="%"),
+        **_layout(
+            title=dict(text="Sector Allocation (% of Total Remit)", font=dict(size=13)),
+            xaxis=dict(type="category", title="Fiscal Year", tickfont=dict(size=11)),
+            yaxis=dict(title="% of total", ticksuffix="%"),
+            height=CHART_HEIGHT,
+        )
     )
     return fig
 
@@ -278,18 +314,15 @@ def psnd_chart(df: pd.DataFrame) -> go.Figure:
     ), secondary_y=True)
 
     fig.update_layout(
-        title="UK Public Sector Net Debt",
-        height=CHART_HEIGHT,
-        template=PLOTLY_TEMPLATE,
-        barmode="overlay",
-        legend=dict(orientation="h", y=-0.22),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        **_layout(
+            title=dict(text="UK Public Sector Net Debt", font=dict(size=13)),
+            height=CHART_HEIGHT,
+            barmode="overlay",
+        )
     )
-    fig.update_xaxes(type="category")
-    fig.update_yaxes(title_text="PSND £bn", secondary_y=False)
-    fig.update_yaxes(title_text="PSND % GDP", secondary_y=True,
-                     ticksuffix="%")
+    fig.update_xaxes(type="category", tickfont=dict(size=11))
+    fig.update_yaxes(title_text="PSND £bn", secondary_y=False, gridcolor="rgba(255,255,255,0.05)")
+    fig.update_yaxes(title_text="PSND % GDP", secondary_y=True, ticksuffix="%")
     return fig
 
 
@@ -325,15 +358,12 @@ def auction_scatter(df: pd.DataFrame, x_col: str = "date",
             customdata=sub["size_bn"],
         ))
     fig.update_layout(
-        title=title,
-        xaxis_title="Date",
-        yaxis_title="Yield (%)",
-        height=CHART_HEIGHT,
-        template=PLOTLY_TEMPLATE,
-        legend=dict(orientation="h", y=-0.2),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        yaxis=dict(ticksuffix="%"),
+        **_layout(
+            title=dict(text=title, font=dict(size=13)),
+            xaxis=dict(title="Date"),
+            yaxis=dict(title="Yield (%)", ticksuffix="%"),
+            height=CHART_HEIGHT,
+        )
     )
     return fig
 
@@ -347,24 +377,26 @@ def cover_ratio_chart(df: pd.DataFrame) -> go.Figure:
     fig = go.Figure()
     for bond_type in df_sorted["type"].unique():
         sub = df_sorted[df_sorted["type"] == bond_type]
+        colour = SECTOR_COLOURS.get(
+            "linkers" if bond_type.lower() == "linker" else bond_type.lower(), "#aaa"
+        )
         fig.add_trace(go.Scatter(
             name=bond_type,
             x=sub["date"],
             y=sub["cover_ratio"],
             mode="lines+markers",
-            marker=dict(size=5),
+            line=dict(color=colour, width=1.5),
+            marker=dict(size=5, color=colour),
         ))
-    fig.add_hline(y=2.0, line_dash="dash", line_color="#aaaaaa",
-                  annotation_text="2.0× threshold")
+    fig.add_hline(y=2.0, line_dash="dash", line_color="rgba(255,255,255,0.3)",
+                  annotation_text="2.0× floor", annotation_font_size=10)
     fig.update_layout(
-        title="Bid-to-Cover Ratios by Sector",
-        xaxis_title="Date",
-        yaxis_title="Cover Ratio",
-        height=CHART_HEIGHT,
-        template=PLOTLY_TEMPLATE,
-        legend=dict(orientation="h", y=-0.2),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        **_layout(
+            title=dict(text="Bid-to-Cover Ratios by Sector", font=dict(size=13)),
+            xaxis=dict(title="Date"),
+            yaxis=dict(title="Cover Ratio", gridcolor="rgba(255,255,255,0.05)"),
+            height=CHART_HEIGHT,
+        )
     )
     return fig
 
@@ -418,14 +450,12 @@ def mc_distribution_chart(mc_df: pd.DataFrame, fy: str) -> go.Figure:
 
 def render_data_status(data_store) -> None:
     from datetime import datetime
-    st.sidebar.divider()
-    st.sidebar.caption("**Data Sources**")
     if data_store.last_refresh:
         age = (datetime.now() - data_store.last_refresh).seconds // 60
-        colour = "🟢" if age < 60 else "🟡" if age < 1440 else "🔴"
-        st.sidebar.caption(f"{colour} Last refresh: {age} min ago")
+        dot = "🟢" if age < 60 else "🟡" if age < 1440 else "🔴"
+        st.sidebar.caption(f"{dot} Refreshed {age} min ago")
     else:
-        st.sidebar.caption("🔴 No live refresh yet")
+        st.sidebar.caption("⚪ Live data not yet loaded")
     if data_store.live_status.get("errors"):
         with st.sidebar.expander("⚠️ Fetch warnings"):
             for e in data_store.live_status["errors"]:

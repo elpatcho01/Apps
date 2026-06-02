@@ -17,7 +17,8 @@ from config import SECTOR_COLOURS
 
 
 def render(store: GiltDataStore, selected_fy: str) -> None:
-    st.title("🏛️ UK Gilt Remit Dashboard")
+    st.title("UK Gilt Remit Dashboard")
+    st.caption(f"Annual issuance remit, sector progress, and pace analysis for FY{selected_fy}.")
 
     remit = store.get_remit(selected_fy)
     if remit is None:
@@ -29,6 +30,8 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
     total_issued = ytd["total"]
     pct_complete = total_issued / total_remit * 100 if total_remit else 0
     weeks_left = weeks_remaining_in_fy(selected_fy)
+
+    st.divider()
 
     # -----------------------------------------------------------------------
     # KPI row
@@ -60,7 +63,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             "label": "Remaining",
             "value": fmt_bn(total_remit - total_issued),
             "delta": f"{weeks_left} weeks left" if weeks_left else "FY complete",
-            "delta_colour": "inverse",
+            "delta_colour": "off",
         },
         {
             "label": "Implied Weekly Pace",
@@ -78,8 +81,8 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
     # -----------------------------------------------------------------------
     st.subheader("Progress by Sector")
     g_cols = st.columns(4)
-    sectors = [("short", "Short (<7yr)"), ("medium", "Medium (7–15yr)"),
-               ("long", "Long (>15yr)"), ("linkers", "Index-Linked")]
+    sectors = [("short", "Short  (<7yr)"), ("medium", "Medium  (7–15yr)"),
+               ("long", "Long  (>15yr)"), ("linkers", "Index-Linked")]
     for col, (sector, label) in zip(g_cols, sectors):
         with col:
             issued = ytd.get(sector, 0)
@@ -87,10 +90,6 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             st.plotly_chart(
                 remit_gauge(issued, r, label, SECTOR_COLOURS[sector]),
                 use_container_width=True,
-            )
-            st.caption(
-                f"{fmt_bn(issued)} of {fmt_bn(r)} "
-                f"({fmt_pct(issued / r * 100) if r else '—'})"
             )
 
     st.divider()
@@ -108,11 +107,13 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
                 use_container_width=True,
             )
         else:
-            st.info("No quarterly data available for this year.")
+            st.caption("Quarterly outturn data not yet published for this fiscal year.")
 
     with col_right:
         st.subheader("Quarterly Sector Breakdown")
         if not q_df.empty:
+            _LABELS = {"short": "Short (<7yr)", "medium": "Medium (7–15yr)",
+                       "long": "Long (>15yr)", "linkers": "Index-Linked"}
             melt = q_df.melt(
                 id_vars=["quarter"],
                 value_vars=["short", "medium", "long", "linkers"],
@@ -123,10 +124,11 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             for sector, colour in SECTOR_COLOURS.items():
                 sub = melt[melt["sector"] == sector]
                 fig.add_trace(go.Bar(
-                    name=sector.capitalize(),
+                    name=_LABELS.get(sector, sector.capitalize()),
                     x=sub["quarter"],
                     y=sub["issued_bn"],
                     marker_color=colour,
+                    marker_line_width=0,
                 ))
             fig.update_layout(
                 barmode="stack",
@@ -134,9 +136,11 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
                 height=400,
                 xaxis_title="Quarter",
                 yaxis_title="£bn",
-                legend=dict(orientation="h", y=-0.2),
+                legend=dict(orientation="h", y=-0.2, bgcolor="rgba(0,0,0,0)"),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=10, r=10, t=10, b=10),
+                font=dict(color="#C8D4E3", size=12),
             )
             st.plotly_chart(fig, use_container_width=True)
 

@@ -25,7 +25,7 @@ from config import PLOTLY_TEMPLATE, CHART_HEIGHT, CHART_HEIGHT_TALL, NEXT_FY
 
 
 def render(store: GiltDataStore, selected_fy: str) -> None:
-    st.title("🔬 Econometric Forecasting")
+    st.title("Econometric Forecasting")
     st.caption(
         "ARIMA time-series models, OLS regression (borrowing → issuance), "
         "seasonal decomposition, and Monte Carlo uncertainty quantification."

@@ -119,11 +119,11 @@ def _quarter_dates(fy: str, q: str):
 
 
 def render(store: GiltDataStore, selected_fy: str) -> None:
-    st.title("📅 Gilt Issuance Calendar")
+    st.title("Gilt Issuance Calendar")
     st.caption(
-        "Announced auctions and syndications from the DMO, overlaid with model-predicted "
-        "auctions for unannounced periods. "
-        "🟢 Completed auction · 🔵 Confirmed · 🟣 Indicative · 🌸 Syndication"
+        "Confirmed and completed auctions from the DMO, with model-predicted issuance "
+        "for unannounced quarters. "
+        "🟢 Completed · 🔵 Confirmed · 🟣 Indicative · 🩷 Syndication"
     )
 
     # -----------------------------------------------------------------------
@@ -175,6 +175,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
                 c3.metric("Short", fmt_bn(pred_row.iloc[0].get("short")))
                 c4.metric("Linkers", fmt_bn(pred_row.iloc[0].get("linkers")))
 
+            st.divider()
             # Calendar heatmap
             st.subheader("Weekly Auction Calendar")
             cal_df = store.get_calendar_for_fy(selected_fy)

@@ -17,7 +17,7 @@ from config import PLOTLY_TEMPLATE, CHART_HEIGHT, CHART_HEIGHT_TALL
 
 
 def render(store: GiltDataStore, selected_fy: str) -> None:
-    st.title("📉 Public Sector Net Debt & Borrowing")
+    st.title("Public Sector Net Debt & Borrowing")
     st.caption(
         "PSND and PSNB time series (ONS actuals + OBR forecasts), and the "
         "structural relationship between borrowing and gilt issuance."

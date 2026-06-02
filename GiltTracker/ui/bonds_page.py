@@ -12,10 +12,10 @@ from config import SECTOR_COLOURS, PLOTLY_TEMPLATE, CHART_HEIGHT
 
 
 def render(store: GiltDataStore, selected_fy: str) -> None:
-    st.title("🔍 Bond-Level Gilt Tracker")
+    st.title("Bond-Level Gilt Tracker")
     st.caption(
         "Search the gilt portfolio, view outstanding amounts, and inspect the "
-        "full auction history for any individual gilt."
+        "full auction and syndication history for any individual gilt."
     )
 
     portfolio = store.get_portfolio()
@@ -87,6 +87,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             template=PLOTLY_TEMPLATE,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#C8D4E3", size=12),
             margin=dict(t=40, b=20),
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -104,7 +105,8 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
         fig2 = go.Figure(go.Bar(
             x=decade_summary["maturity_decade"],
             y=decade_summary["outstanding_bn"],
-            marker_color="#1f77b4",
+            marker_color="#3B82F6",
+            marker_line_width=0,
         ))
         fig2.update_layout(
             title="Outstanding by Maturity Decade",
@@ -113,6 +115,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             template=PLOTLY_TEMPLATE,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#C8D4E3", size=12),
             margin=dict(t=40, b=20),
         )
         st.plotly_chart(fig2, use_container_width=True)
@@ -166,7 +169,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
     if selected_indices:
         sel_row = filtered.iloc[selected_indices[0]]
         st.divider()
-        st.subheader(f"🔎 Detail: {sel_row['name']}")
+        st.subheader(f"Detail: {sel_row['name']}")
 
         d1, d2, d3, d4, d5, d6 = st.columns(6)
         d1.metric("ISIN", sel_row["isin"])
