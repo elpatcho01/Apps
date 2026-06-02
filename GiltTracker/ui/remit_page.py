@@ -5,15 +5,16 @@ Page 1: Remit Overview — headline dashboard for the current fiscal year.
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
+import numpy as np
 from datetime import date
 
 from data.store import GiltDataStore
 from ui.components import (
-    remit_gauge, sector_history_bar, quarterly_vs_remit_chart,
+    remit_gauge, quarterly_vs_remit_chart,
     fan_chart, kpi_row,
 )
 from utils.formatters import fmt_bn, fmt_pct, weeks_remaining_in_fy
-from config import SECTOR_COLOURS
+from config import SECTOR_COLOURS, PLOTLY_TEMPLATE, CHART_HEIGHT
 
 
 def render(store: GiltDataStore, selected_fy: str) -> None:
@@ -182,16 +183,86 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
     st.divider()
 
     # -----------------------------------------------------------------------
-    # Historical remit trend
+    # Historical remit trend — auction vs syndication per sector
     # -----------------------------------------------------------------------
     st.subheader("Historical Gilt Remit — 10-Year View")
     hist_df = store.get_sector_history()
-    # Show last 10 years + 1 forecast
     hist_view = hist_df.tail(12).copy()
-    st.plotly_chart(
-        sector_history_bar(hist_view, "Annual Gilt Issuance by Sector (£bn)"),
-        use_container_width=True,
+
+    # Build syndication totals per (FY, sector)
+    _TYPE_MAP = {"Short": "short", "Medium": "medium", "Long": "long", "Linker": "linkers"}
+    synd_raw = store.get_syndications(completed_only=True).copy()
+    synd_raw["sector_key"] = synd_raw["type"].map(_TYPE_MAP)
+    synd_totals = (
+        synd_raw.groupby(["fy", "sector_key"])["size_bn"]
+        .sum()
+        .unstack(fill_value=0)
     )
+
+    _LABELS = {
+        "short": "Short (<7yr)", "medium": "Medium (7–15yr)",
+        "long": "Long (>15yr)", "linkers": "Index-Linked",
+    }
+
+    fig_hist = go.Figure()
+    fys = hist_view["fy"].tolist()
+
+    for sector, colour in SECTOR_COLOURS.items():
+        if sector not in hist_view.columns:
+            continue
+
+        total_vals = hist_view[sector].fillna(0).values
+        synd_vals = np.array([
+            float(synd_totals.loc[fy, sector])
+            if (fy in synd_totals.index and sector in synd_totals.columns) else 0.0
+            for fy in fys
+        ])
+        auction_vals = np.clip(total_vals - synd_vals, 0, None)
+        label = _LABELS[sector]
+
+        # Auction portion — solid fill
+        fig_hist.add_trace(go.Bar(
+            name=f"{label} — Auction",
+            x=fys,
+            y=auction_vals,
+            marker=dict(color=colour, line_width=0),
+            legendgroup=sector,
+            legendgrouptitle_text=label,
+            hovertemplate=f"<b>{label}</b><br>Auction: £%{{y:.1f}}bn<extra></extra>",
+        ))
+        # Syndication portion — same colour, hatched overlay
+        fig_hist.add_trace(go.Bar(
+            name=f"{label} — Syndication",
+            x=fys,
+            y=synd_vals,
+            marker=dict(
+                color=colour,
+                opacity=0.55,
+                pattern=dict(shape="/", fgcolor="rgba(255,255,255,0.5)", size=5),
+                line_width=0,
+            ),
+            legendgroup=sector,
+            hovertemplate=f"<b>{label}</b><br>Syndication: £%{{y:.1f}}bn<extra></extra>",
+        ))
+
+    fig_hist.update_layout(
+        barmode="stack",
+        title=dict(text="Annual Gilt Issuance by Sector — Auction vs Syndication (£bn)", font=dict(size=13)),
+        xaxis=dict(type="category", title="Fiscal Year", tickfont=dict(size=11)),
+        yaxis=dict(title="£bn"),
+        height=CHART_HEIGHT + 60,
+        template=PLOTLY_TEMPLATE,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#C8D4E3", size=11),
+        legend=dict(
+            orientation="h", y=-0.28, x=0.5, xanchor="center",
+            font=dict(size=10), bgcolor="rgba(0,0,0,0)",
+            groupclick="toggleitem",
+        ),
+        margin=dict(l=10, r=10, t=44, b=10),
+    )
+    st.plotly_chart(fig_hist, use_container_width=True)
 
     st.divider()
 
