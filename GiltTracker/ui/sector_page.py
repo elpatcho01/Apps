@@ -89,7 +89,9 @@ def _sector_tab(store: GiltDataStore, sector: str, selected_fy: str) -> None:
         line=dict(color=meta["colour"], width=2),
         marker=dict(size=7),
         fill="tozeroy",
-        fillcolor=meta["colour"] + "33",
+        fillcolor="rgba({},{},{},0.2)".format(
+            *[int(meta["colour"].lstrip("#")[i:i+2], 16) for i in (0, 2, 4)]
+        ),
     ))
     fig2.update_layout(
         title=f"{meta['label']} Share of Total Remit (%)",
