@@ -285,9 +285,18 @@ class GiltDataStore:
             grand = float(quarterly["total"].sum())
             auction_total = max(grand - synd_total, 0.0)
         else:
-            # Current / future FY: sum confirmed upcoming + auction results
+            # Current / future FY: sum completed auction results + confirmed
+            # upcoming auctions whose date has already passed
             auctions = self.get_auction_results(fy=fy)
             auction_total = float(auctions["size_bn"].sum())
+            fy_year = int(fy[:4])
+            fy_start = pd.Timestamp(fy_year, 4, 1)
+            executed_upcoming = self.upcoming_auctions[
+                (self.upcoming_auctions["confirmed"] == True) &
+                (self.upcoming_auctions["date"] >= fy_start) &
+                (self.upcoming_auctions["date"] <= pd.Timestamp.today())
+            ]
+            auction_total += float(executed_upcoming["size_bn"].sum())
             grand = auction_total + synd_total
 
         return {

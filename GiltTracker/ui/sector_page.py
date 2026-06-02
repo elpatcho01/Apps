@@ -70,10 +70,10 @@ def _sector_tab(store: GiltDataStore, sector: str, selected_fy: str) -> None:
         marker_color=meta["colour"],
         name=meta["label"],
     ))
-    # Add remit line for non-complete years
     fig.update_layout(
         title=f"{meta['label']} Annual Issuance",
         xaxis_title="Fiscal Year", yaxis_title="£bn",
+        xaxis=dict(type="category"),
         height=CHART_HEIGHT, template=PLOTLY_TEMPLATE,
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
@@ -89,13 +89,13 @@ def _sector_tab(store: GiltDataStore, sector: str, selected_fy: str) -> None:
         line=dict(color=meta["colour"], width=2),
         marker=dict(size=7),
         fill="tozeroy",
-        fillcolor=meta["colour"].replace(")", ",0.2)").replace("rgb", "rgba") if "#" not in meta["colour"]
-                  else meta["colour"] + "33",
+        fillcolor=meta["colour"] + "33",
     ))
     fig2.update_layout(
         title=f"{meta['label']} Share of Total Remit (%)",
         xaxis_title="Fiscal Year",
         yaxis_title="% of total", yaxis=dict(ticksuffix="%"),
+        xaxis=dict(type="category"),
         height=300, template=PLOTLY_TEMPLATE,
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )

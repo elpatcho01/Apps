@@ -72,8 +72,9 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
         sector_outstanding = (
             filtered.groupby("type")["outstanding_bn"].sum().reset_index()
         )
-        colours = [SECTOR_COLOURS.get(s.lower(), "#aaa")
-                   for s in sector_outstanding["type"]]
+        colours = [SECTOR_COLOURS.get(
+            "linkers" if s.lower() == "linker" else s.lower(), "#aaa"
+        ) for s in sector_outstanding["type"]]
         fig = go.Figure(go.Bar(
             x=sector_outstanding["type"],
             y=sector_outstanding["outstanding_bn"],

@@ -115,6 +115,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
                 )
+                fig_res.update_xaxes(type="category", col=1)
                 st.plotly_chart(fig_res, use_container_width=True)
 
                 rmse = np.sqrt(np.mean(residuals**2))
@@ -165,6 +166,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             fig.update_layout(
                 title="Actual vs OLS-Fitted Issuance",
                 yaxis_title="£bn",
+                xaxis=dict(type="category"),
                 height=CHART_HEIGHT,
                 template=PLOTLY_TEMPLATE,
                 legend=dict(orientation="h", y=-0.2),
@@ -379,6 +381,7 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             barmode="stack",
             title="Forecast Sector Split (Combined Model)",
             yaxis_title="£bn",
+            xaxis=dict(type="category"),
             height=CHART_HEIGHT,
             template=PLOTLY_TEMPLATE,
             legend=dict(orientation="h", y=-0.2),

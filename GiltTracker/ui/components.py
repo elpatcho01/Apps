@@ -70,6 +70,7 @@ def sector_history_bar(df: pd.DataFrame, title: str = "Annual Gilt Issuance by S
         title=title,
         xaxis_title="Fiscal Year",
         yaxis_title="£bn",
+        xaxis=dict(type="category"),
         height=CHART_HEIGHT,
         template=PLOTLY_TEMPLATE,
         legend=dict(orientation="h", y=-0.2),
@@ -198,6 +199,7 @@ def fan_chart(
         title=title,
         xaxis_title="Fiscal Year",
         yaxis_title="£bn",
+        xaxis=dict(type="category"),
         height=CHART_HEIGHT_TALL,
         template=PLOTLY_TEMPLATE,
         legend=dict(orientation="h", y=-0.18),
@@ -229,6 +231,7 @@ def sector_proportion_chart(df: pd.DataFrame) -> go.Figure:
         title="Sector Allocation (% of Total Remit)",
         xaxis_title="Fiscal Year",
         yaxis_title="% of total",
+        xaxis=dict(type="category"),
         height=CHART_HEIGHT,
         template=PLOTLY_TEMPLATE,
         legend=dict(orientation="h", y=-0.2),
@@ -283,6 +286,7 @@ def psnd_chart(df: pd.DataFrame) -> go.Figure:
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
     )
+    fig.update_xaxes(type="category")
     fig.update_yaxes(title_text="PSND £bn", secondary_y=False)
     fig.update_yaxes(title_text="PSND % GDP", secondary_y=True,
                      ticksuffix="%")
