@@ -267,6 +267,16 @@ def sector_proportion_chart(df: pd.DataFrame) -> go.Figure:
                 stackgroup="one",
                 fillcolor=colour,
             ))
+    if "unallocated_pct" in df.columns:
+        fig.add_trace(go.Scatter(
+            name="Unallocated",
+            x=df["fy"],
+            y=df["unallocated_pct"].clip(lower=0),
+            mode="lines+markers",
+            line=dict(color="#6B7280", width=2, dash="dot"),
+            stackgroup="one",
+            fillcolor="rgba(107,114,128,0.4)",
+        ))
     fig.update_layout(
         **_layout(
             title=dict(text="Sector Allocation (% of Total Remit)", font=dict(size=13)),
@@ -283,8 +293,9 @@ def sector_proportion_chart(df: pd.DataFrame) -> go.Figure:
 # ---------------------------------------------------------------------------
 
 def psnd_chart(df: pd.DataFrame) -> go.Figure:
-    actual = df[df["fy"] <= "2024-25"]
-    forecast = df[df["fy"] >= "2024-25"]
+    # 2025-26 now has confirmed PSNB outturn; PSND level is estimated pending full ONS release
+    actual = df[df["fy"] <= "2025-26"]
+    forecast = df[df["fy"] >= "2025-26"]
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -315,14 +326,14 @@ def psnd_chart(df: pd.DataFrame) -> go.Figure:
 
     fig.update_layout(
         **_layout(
-            title=dict(text="UK Public Sector Net Debt", font=dict(size=13)),
+            title=dict(text="UK Public Sector Net Debt (excl. PS banks, ONS headline)", font=dict(size=13)),
             height=CHART_HEIGHT,
             barmode="overlay",
         )
     )
     fig.update_xaxes(type="category", tickfont=dict(size=11))
     fig.update_yaxes(title_text="PSND £bn", secondary_y=False, gridcolor="rgba(255,255,255,0.05)")
-    fig.update_yaxes(title_text="PSND % GDP", secondary_y=True, ticksuffix="%")
+    fig.update_yaxes(title_text="% of GDP", secondary_y=True, ticksuffix="%")
     return fig
 
 

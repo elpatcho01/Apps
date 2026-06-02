@@ -178,6 +178,8 @@ GILT_PORTFOLIO["years_to_maturity"] = (
 
 PSND_DATA = pd.DataFrame([
     # fy        psnd_pct_gdp  psnd_bn   borrowing_bn   gdp_bn
+    # Measure: PSND excluding public sector banks (ONS headline; includes BoE APF distortion).
+    # Sources: ONS PSF bulletins (March each year); OBR for forecasts.
     ("2010-11",  75.9,  1108,   148.1,  1461),
     ("2011-12",  79.9,  1200,   119.9,  1502),
     ("2012-13",  82.6,  1281,   120.6,  1550),
@@ -190,10 +192,14 @@ PSND_DATA = pd.DataFrame([
     ("2019-20",  84.4,  1800,    57.0,  2134),
     ("2020-21",  97.0,  2154,   319.0,  2219),
     ("2021-22",  96.1,  2233,   147.5,  2324),
-    ("2022-23",  98.3,  2477,   127.8,  2521),
-    ("2023-24",  98.3,  2606,   122.1,  2651),
-    ("2024-25",  96.4,  2684,   137.3,  2785),
-    ("2025-26",  97.8,  2817,   148.9,  2881),  # OBR Spring 2025 est.
+    # 2022-23: PSND £2,530bn / 99.6% GDP (ONS PSF March 2023); PSNB revised to ~£127.8bn
+    ("2022-23",  99.6,  2530,   127.8,  2541),
+    # 2023-24: PSND ~£2,650bn / 98.3% GDP (ONS PSF March 2024); PSNB £122.1bn initial
+    ("2023-24",  98.3,  2650,   122.1,  2695),
+    # 2024-25: PSND ~£2,807bn / 95.8% GDP (ONS PSF March 2025); PSNB £151.9bn outturn
+    ("2024-25",  95.8,  2807,   151.9,  2930),
+    # 2025-26: PSNB £129.0bn outturn (ONS PSF March 2026); PSND estimated
+    ("2025-26",  97.5,  2936,   129.0,  3011),
     ("2026-27",  98.5,  2965,   143.0,  3010),  # OBR forecast
     ("2027-28",  98.8,  3097,   131.0,  3135),
     ("2028-29",  98.6,  3218,   119.0,  3264),
@@ -522,13 +528,33 @@ SYNDICATIONS = pd.DataFrame([
     ("2026-03-11", "4⅝% Green Gilt 2037",           "GB00BVP99905",  6.25,  None, None, 4.7167, 10.75,
      "Barclays, BNP Paribas, Citi, HSBC, JP Morgan, NatWest","2025-26","Medium",True,"New Benchmark"),
 
-    # ---- FY2026-27 (confirmed Q1 deal + indicative pipeline) ----
+    # ---- FY2026-27 (confirmed + indicative pipeline) ----
+    # Financing Remit 2026-27 (sa030326) plans 7 syndications at £42.0bn total:
+    #   2 medium conventional (~£20bn), 3 long conventional (~£15bn), 2 IL (~£7bn).
     # Apr 15 2026: size £15.0bn (record), book £148.2bn (9.88x), yield 4.9158%
     # leads: BofA, Barclays, Deutsche Bank, GS, JPM, MS, NatWest (DMO pr070426/prosp150426b)
     ("2026-04-15", "4⅞% Treasury Gilt 2036",        "GB00BWBR1N39", 15.00,148.2, 9.88, 4.9158, 3.0,
      "BofA Securities, Barclays, Deutsche Bank, Goldman Sachs, JP Morgan, Morgan Stanley, NatWest","2026-27","Medium",True,"New Benchmark"),
+    # Jun 2026: 4⅝% Green Gilt 2037 reopening (within medium allocation, target ~£12bn green total FY)
+    ("2026-06-04", "4⅝% Green Gilt 2037",           "GB00BVP99905",  None, None, None,  None,  None,
+     "TBD", "2026-27", "Medium", False, "Indicative"),
+    # Jun 2026: 1⅛% IL Treasury Gilt 2035 (ISIN GB00BT7HZZ68) — IL transaction 1 of 2
+    ("2026-06-11", "1⅛% IL Treasury Gilt 2035",     "GB00BT7HZZ68",  None, None, None,  None,  None,
+     "TBD", "2026-27", "Linker", False, "Indicative"),
+    # Jul 2026: 5¼% Treasury Gilt 2041 reopening — Long transaction 1 of 3
     ("2026-07-14", "5¼% Treasury Gilt 2041",        "GB00BVP99897",  None, None, None,  None,  None,
      "TBD", "2026-27", "Long", False, "Indicative"),
+    # Sep/Oct 2026: 2nd medium conventional (~£5bn to reach ~£20bn medium total)
+    ("2026-10-13", "Medium conventional gilt (TBC)", "TBD",           None, None, None,  None,  None,
+     "TBD", "2026-27", "Medium", False, "Indicative"),
+    # Oct/Nov 2026: Long conventional transactions 2 and 3 of 3 (~£5bn each)
+    ("2026-11-10", "Long conventional gilt (TBC)",   "TBD",           None, None, None,  None,  None,
+     "TBD", "2026-27", "Long", False, "Indicative"),
+    ("2027-01-12", "Long conventional gilt (TBC)",   "TBD",           None, None, None,  None,  None,
+     "TBD", "2026-27", "Long", False, "Indicative"),
+    # Nov 2026: IL transaction 2 of 2 (~£3.5bn)
+    ("2026-11-24", "IL gilt (TBC)",                  "TBD",           None, None, None,  None,  None,
+     "TBD", "2026-27", "Linker", False, "Indicative"),
 ], columns=[
     "date", "gilt", "isin", "size_bn", "book_size_bn", "book_cover",
     "yield_pct", "nip_bps", "lead_managers", "fy", "type",

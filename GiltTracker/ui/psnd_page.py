@@ -19,18 +19,19 @@ from config import PLOTLY_TEMPLATE, CHART_HEIGHT, CHART_HEIGHT_TALL
 def render(store: GiltDataStore, selected_fy: str) -> None:
     st.title("Public Sector Net Debt & Borrowing")
     st.caption(
-        "PSND and PSNB time series (ONS actuals + OBR forecasts), and the "
-        "structural relationship between borrowing and gilt issuance."
+        "PSND excluding public sector banks (ONS headline measure) and PSNB time series. "
+        "Outturn data from ONS Public Sector Finances bulletins; forward years from OBR."
     )
 
     psnd_df = store.get_psnd()
     annual_df = store.get_all_remits()
 
     # -----------------------------------------------------------------------
-    # Headline KPIs
+    # Headline KPIs — show most recent outturn year, not OBR forecast years
     # -----------------------------------------------------------------------
-    latest = psnd_df.iloc[-1]
-    prev = psnd_df.iloc[-2]
+    actual_df = psnd_df[psnd_df["fy"] <= "2025-26"]
+    latest = actual_df.iloc[-1]
+    prev = actual_df.iloc[-2]
     c1, c2, c3, c4 = st.columns(4)
     c1.metric(
         f"PSND ({latest['fy']})",

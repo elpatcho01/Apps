@@ -159,6 +159,8 @@ class GiltDataStore:
         df = self.get_sector_history()
         for col in ["short", "medium", "long", "linkers"]:
             df[f"{col}_pct"] = df[col] / df["current_remit"] * 100
+        sector_sum = df[["short", "medium", "long", "linkers"]].sum(axis=1)
+        df["unallocated_pct"] = (df["current_remit"] - sector_sum).clip(lower=0) / df["current_remit"] * 100
         return df
 
     # ------------------------------------------------------------------

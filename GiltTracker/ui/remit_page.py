@@ -32,6 +32,9 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
     pct_complete = total_issued / total_remit * 100 if total_remit else 0
     weeks_left = weeks_remaining_in_fy(selected_fy)
 
+    remit_sector_sum = sum(remit.get(s, 0) or 0 for s in ["short", "medium", "long", "linkers"])
+    unallocated_bn = max(0.0, total_remit - remit_sector_sum)
+
     st.divider()
 
     # -----------------------------------------------------------------------
@@ -81,16 +84,43 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
     # Sector gauges
     # -----------------------------------------------------------------------
     st.subheader("Progress by Sector")
-    g_cols = st.columns(4)
+    g_cols = st.columns(5)
     sectors = [("short", "Short  (<7yr)"), ("medium", "Medium  (7–15yr)"),
                ("long", "Long  (>15yr)"), ("linkers", "Index-Linked")]
-    for col, (sector, label) in zip(g_cols, sectors):
+    for col, (sector, label) in zip(g_cols[:4], sectors):
         with col:
             issued = ytd.get(sector, 0)
             r = remit.get(sector, 0) or 0
             st.plotly_chart(
                 remit_gauge(issued, r, label, SECTOR_COLOURS[sector]),
                 use_container_width=True,
+            )
+    with g_cols[4]:
+        if unallocated_bn > 0:
+            st.markdown(
+                f"""<div style="padding:12px 8px;border:1px solid #1E3553;border-radius:8px;
+                background:#131E2E;text-align:center;height:155px;display:flex;
+                flex-direction:column;justify-content:center;">
+                <div style="color:#9CA3AF;font-size:0.65rem;text-transform:uppercase;
+                letter-spacing:0.08em;margin-bottom:4px;">Unallocated</div>
+                <div style="color:#C8D4E3;font-size:1.5rem;font-weight:700;
+                line-height:1.2;">{fmt_bn(unallocated_bn)}</div>
+                <div style="color:#6B7280;font-size:0.7rem;margin-top:8px;">
+                {fmt_pct(unallocated_bn / total_remit * 100)} of {fmt_bn(total_remit)} remit<br>
+                not yet sector-assigned</div></div>""",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                """<div style="padding:12px 8px;border:1px solid #1E3553;border-radius:8px;
+                background:#131E2E;text-align:center;height:155px;display:flex;
+                flex-direction:column;justify-content:center;">
+                <div style="color:#9CA3AF;font-size:0.65rem;text-transform:uppercase;
+                letter-spacing:0.08em;margin-bottom:4px;">Unallocated</div>
+                <div style="color:#10B981;font-size:1.4rem;font-weight:700;">£0bn</div>
+                <div style="color:#6B7280;font-size:0.7rem;margin-top:8px;">
+                Fully sector-allocated</div></div>""",
+                unsafe_allow_html=True,
             )
 
     st.divider()
@@ -204,6 +234,13 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
         "long": "Long (>15yr)", "linkers": "Index-Linked",
     }
 
+    # FY2026-27 sector columns are auction-programme ONLY (not total). For all
+    # other FYs the sector columns represent total outturn or total plan (auction+synds).
+    AUCTION_ONLY_FYS = {"2026-27"}
+
+    remit_hist_vals = hist_view["current_remit"].fillna(0).values
+    total_bars = np.zeros(len(hist_view))
+
     fig_hist = go.Figure()
     fys = hist_view["fy"].tolist()
 
@@ -217,7 +254,14 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             if (fy in synd_totals.index and sector in synd_totals.columns) else 0.0
             for fy in fys
         ])
-        auction_vals = np.clip(total_vals - synd_vals, 0, None)
+        # For auction-only FYs, sector col IS the auction programme — don't subtract synds
+        # For all others, sector col includes synds — split them out
+        auction_vals = np.array([
+            total_vals[i] if fys[i] in AUCTION_ONLY_FYS
+            else max(0.0, total_vals[i] - synd_vals[i])
+            for i in range(len(fys))
+        ])
+        total_bars += auction_vals + synd_vals
         label = _LABELS[sector]
 
         # Auction portion — solid fill
@@ -245,6 +289,19 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
             hovertemplate=f"<b>{label}</b><br>Syndication: £%{{y:.1f}}bn<extra></extra>",
         ))
 
+    # Unallocated segment — gap between total bars shown and current remit
+    unallocated_hist = np.clip(remit_hist_vals - total_bars, 0, None)
+    fig_hist.add_trace(go.Bar(
+        name="Unallocated",
+        x=fys,
+        y=unallocated_hist,
+        marker=dict(color="#6B7280", opacity=0.5, line_width=0,
+                    pattern=dict(shape=".", fgcolor="rgba(255,255,255,0.15)", size=4)),
+        legendgroup="unallocated",
+        legendgrouptitle_text="Unallocated",
+        hovertemplate="<b>Unallocated / Unassigned</b><br>£%{y:.1f}bn<extra></extra>",
+    ))
+
     fig_hist.update_layout(
         barmode="stack",
         title=dict(text="Annual Gilt Issuance by Sector — Auction vs Syndication (£bn)", font=dict(size=13)),
@@ -256,11 +313,11 @@ def render(store: GiltDataStore, selected_fy: str) -> None:
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#C8D4E3", size=11),
         legend=dict(
-            orientation="h", y=-0.28, x=0.5, xanchor="center",
+            orientation="h", y=-0.32, x=0.5, xanchor="center",
             font=dict(size=10), bgcolor="rgba(0,0,0,0)",
             groupclick="toggleitem",
         ),
-        margin=dict(l=10, r=10, t=44, b=10),
+        margin=dict(l=10, r=10, t=44, b=20),
     )
     st.plotly_chart(fig_hist, use_container_width=True)
 
