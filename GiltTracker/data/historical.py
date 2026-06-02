@@ -21,6 +21,9 @@ from datetime import date, datetime
 
 ANNUAL_REMIT = pd.DataFrame([
     # fy    original  revised    actual  short  medium   long  linkers  notes
+    # Sources: DMO Financing Remit announcements + Annual Reviews (dmo.gov.uk)
+    # WARNING: sector splits for years prior to 2024-25 are estimated from DMO Annual
+    # Reviews and should be verified against official D8 data at dmo.gov.uk/data.
     ("2010-11", 164.8, 185.2, 186.3, 55.4, 52.6, 43.7, 34.6, "Crisis deficit financing"),
     ("2011-12", 165.4, 178.0, 178.6, 53.0, 50.4, 42.8, 32.4, ""),
     ("2012-13", 166.6, 170.0, 170.4, 50.6, 48.2, 40.9, 30.7, ""),
@@ -35,9 +38,23 @@ ANNUAL_REMIT = pd.DataFrame([
     ("2021-22", 154.3, 194.3, 195.1, 57.0, 53.8, 47.0, 37.3, "Post-COVID wind-down"),
     ("2022-23", 168.0, 237.3, 238.1, 69.2, 63.8, 57.8, 47.3, "Mini-budget shock revision"),
     ("2023-24", 237.3, 265.3, 265.9, 77.1, 72.8, 65.0, 51.0, "Autumn Statement uplift"),
-    ("2024-25", 271.3, 278.0, 278.8, 81.5, 76.3, 68.1, 52.9, "Spring Budget 2024 revision"),
-    ("2025-26", 296.9, 296.9,  None, 86.9, 81.0, 72.9, 56.1, "Spring Statement Mar-25"),
-    ("2026-27", 315.0,    None,  None, 92.5, 86.3, 77.8, 58.4, "OBR forecast (est.)"),
+    # 2024-25: actual outturn £297.7bn per DMO Annual Review 2024-25 (Aug 2025).
+    # revised_remit reflects Autumn Budget 2024 revision (sa301024); further revisions
+    # raised the final outturn above the published revised remit.
+    # Sector splits are estimated — verify against DMO D8 data report.
+    ("2024-25", 271.3, 278.0, 297.7, 81.5, 76.3, 68.1, 52.9, "Autumn Budget 2024 revision; actual per DMO Annual Review 2024-25"),
+    # 2025-26: revised_remit reflects Budget 2025 (sa261125, Nov 2025) uplift to £303.7bn.
+    # Sector splits are from the original March 2025 remit and have NOT been updated
+    # to reflect the Budget 2025 revision — use with caution.
+    # Actual outturn not yet published (DMO Annual Review due ~Aug 2026).
+    ("2025-26", 296.9, 303.7,  None, 86.9, 81.0, 72.9, 56.1, "Budget 2025 revision Nov-25 → £303.7bn; sector splits from original Mar-25 remit"),
+    # 2026-27: original remit £252.1bn announced 3 Mar 2026 (sa030326).
+    # revised_remit reflects Apr 2026 redemption adjustment (pr230426_2) → £246.2bn.
+    # Sector splits below are AUCTION PROGRAMME ONLY from the March 2026 remit:
+    #   Short £97.3bn, Medium £57.8bn, Long £8.0bn, IL £16.5bn (total £179.6bn via auction).
+    #   ADDITIONALLY: £42.0bn via syndication (sector TBD) + £30.5bn initially unallocated.
+    #   These do NOT sum to the total remit. Do not use for proportional sector analysis.
+    ("2026-27", 252.1, 246.2,  None, 97.3, 57.8,  8.0, 16.5, "DMO Financing Remit 3-Mar-26 (sa030326); revised Apr-26 (pr230426_2); sector cols = auction programme only"),
 ], columns=["fy", "original_remit", "revised_remit", "actual",
             "short", "medium", "long", "linkers", "notes"])
 
