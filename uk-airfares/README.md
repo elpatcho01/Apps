@@ -156,7 +156,7 @@ this dataset only.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 153 tests, no network
+python -m pytest                                    # 217 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -269,6 +269,102 @@ Combinations missing any haul are skipped rather than partially weighted.
 
 ---
 
+## Making it like-for-like with ONS
+
+Our reconstruction produces a **mean fare in pounds** (~£350). ONS publish an
+**index number** on a January = 100 basis. These are not comparable in level and
+never will be — we are not sampling the same routes, carriers or fare classes,
+and ONS's sample isn't public. Any attempt to match levels would be measuring
+our sample composition, not the fare market.
+
+So don't. Contribute only the *change*, and take the level from ONS:
+
+```
+nowcast_level(m) = ONS published_level(m-1) × our price_relative(m-1 → m)
+```
+
+This is a **splice**. It's like-for-like in the only sense that matters — both
+sides are a month-on-month price relative for the same CPI item — and the output
+is a level on ONS's own basis, directly comparable to what they will publish,
+without ever reproducing their history. It's also the number you'd actually act
+on. `validate.py` reports its error as `splice_mae_index_points`.
+
+### Matched samples
+
+The price relative is computed **only over routes priced in both months**. This
+isn't fussiness. If `LHR-CPT` returns £900 in March and nothing in April, an
+unmatched average reads the drop as a fall in prices when nothing about the fare
+market changed. With a demand-driven cache producing routine `no_data` gaps,
+unmatched aggregation would manufacture large phantom movements every month —
+there's a test (`test_dropped_expensive_route_does_not_read_as_a_price_fall`)
+showing the naive version inventing a 25% price collapse out of one missing
+route. Matching is also what CPI does: price relatives are computed on matched
+models.
+
+A relative is refused below `min_matched` routes (default 3), and
+`build_chained_index` **breaks the series** rather than carrying a level forward
+when a month can't be chained — a fabricated level that looks like real data is
+worse than a visible gap.
+
+### Elementary aggregate formula
+
+Which formula ONS use for item 07.3.3 specifically isn't established by any
+public source we could reach. Jevons is used for most CPI items so it's the most
+likely, but all three standard formulas are computed and tagged, and validation
+settles it against published values:
+
+| Formula | Definition | Note |
+|---|---|---|
+| **Jevons** | geometric mean of relatives | CPI default for most items |
+| **Dutot** | ratio of arithmetic means | dominated by expensive routes |
+| **Carli** | arithmetic mean of relatives | known upward bias; what a naive implementation does |
+
+### Basis: detected, not assumed
+
+The ad hoc release presents these sub-indices "on the January (of each year) =
+100 basis", but whether the published series **resets** every January or is
+**chain-linked** into a continuous one isn't clear from that description. Rather
+than guess, `index.detect_basis` reads it off the backfilled data: if every
+January is exactly 100, it resets. The answer is recorded on every row of
+`ons_published_index`, and `rebase_to_january` can express our own series the
+same way.
+
+Note that our panel starts mid-2026, so we won't *have* a January to base on
+until 2027 — another reason the splice, which needs no base month at all, is the
+right primary construction.
+
+---
+
+## Backfilling ONS's published series
+
+```bash
+PYTHONPATH=src python -m ukairfares.backfill --discover
+```
+
+Loads ONS's actual sub-indices (January 2017 onward) into `ons_published_index`
+— the validation answer key. It comes from the same workbook as the weights, so
+one fetch serves both. Runs monthly via `airfares-backfill-ons`.
+
+**What this does not do:** it does not let you reconstruct history. The fares
+needed for that are unobservable in retrospect — an advertised fare is a quote,
+not a record, and no provider retains them (Travelpayouts keeps 48 hours, Duffel
+prices live inventory only, SerpApi scrapes live). Historical *shopping* data is
+purchasable — OAG, who acquired Infare in 2023, hold roughly four trillion
+historical airfares — and the pipeline is already replay-capable (the calendar
+is pure date arithmetic; `pull.py --scrape-date 2019-06-11` works today). The
+one interface change needed would be an *as-of* parameter on
+`FareProvider.search()`.
+
+What the backfill **does** buy you: the target series in BigQuery, so you can
+size each haul category's real volatility before trusting any nowcast of it, and
+so the comparison is already in place the moment live reconstructions land.
+
+Worth being clear that backfilled *reconstructions* would have no standalone
+value anyway — ONS already published every historical month. This pipeline's
+entire value is the ~1-month lead on the current one.
+
+---
+
 ## Validation
 
 `validate.py` is deliberately hard to get a favourable answer out of. Guards, in
@@ -351,11 +447,13 @@ uk-airfares/
 │   ├── bq.py           Append-only BigQuery writer + dry-run writer
 │   ├── pull.py         Daily collection (Task 3)
 │   ├── onsfetch.py     CPI bulletin index-day parser
-│   ├── onsweights.py   Fetches + parses ONS sub-index weights
+│   ├── onsweights.py   Fetches + parses ONS weights and sub-indices
+│   ├── backfill.py     Loads ONS published series (the answer key)
+│   ├── index.py        Matched-sample relatives, splicing, rebasing
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   └── providers/      base.py · travelpayouts.py · mock.py
-└── tests/              153 tests, no network required
+└── tests/              217 tests, no network required
 ```
 
 ## Non-goals

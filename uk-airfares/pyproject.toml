@@ -22,6 +22,7 @@ airfares-reconcile = "ukairfares.reconcile:main"
 airfares-validate = "ukairfares.validate:main"
 airfares-ensure-tables = "ukairfares.ensure_tables:main"
 airfares-weights = "ukairfares.onsweights:main"
+airfares-backfill = "ukairfares.backfill:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

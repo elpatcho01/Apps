@@ -31,6 +31,7 @@ fine); it is wired into the monthly reconciliation workflow.
 from __future__ import annotations
 
 import argparse
+import calendar
 import csv
 import datetime as dt
 import io
@@ -69,13 +70,24 @@ _CATEGORY_PATTERNS = {
     "long_haul": (r"long[\s-]?haul", r"longhaul"),
 }
 _YEAR_PATTERNS = (r"^year$", r"^date$", r"^period$")
+_MONTH_PATTERNS = (r"^month$", r"^date$", r"^period$", r"^index month$")
 
 #: Sanity bounds. A weight outside this is a parse error, not a datum.
 MIN_YEAR, MAX_YEAR = 2015, 2035
 
+#: The sub-index series begins in January 2017 per the release title.
+MIN_SERIES_YEAR = 2016
+
+_MONTH_NAMES = {m.lower(): i for i, m in enumerate(calendar.month_name) if m}
+_MONTH_NAMES.update({m.lower(): i for i, m in enumerate(calendar.month_abbr) if m})
+
 
 class WeightsParseError(RuntimeError):
     """The workbook could not be parsed into defensible weights."""
+
+
+class SubIndexParseError(RuntimeError):
+    """The workbook could not be parsed into a defensible sub-index series."""
 
 
 def _norm(value: Any) -> str:
@@ -94,6 +106,40 @@ def _as_year(value: Any) -> int | None:
     if match:
         year = int(match.group(1))
         return year if MIN_YEAR <= year <= MAX_YEAR else None
+    return None
+
+
+def _as_month(value: Any) -> dt.date | None:
+    """Parse a monthly period label into the first of that month.
+
+    Excel usually hands these over as datetimes, but ONS sheets also carry
+    "Jan 2017", "January 2017" and "2017-01" forms depending on the vintage.
+    """
+    if isinstance(value, dt.datetime):
+        return dt.date(value.year, value.month, 1)
+    if isinstance(value, dt.date):
+        return dt.date(value.year, value.month, 1)
+
+    text = _norm(value)
+    if not text:
+        return None
+
+    # "2017-01", "2017/01"
+    match = re.match(r"^(20\d{2})[-/](\d{1,2})$", text)
+    if match:
+        year, month = int(match.group(1)), int(match.group(2))
+        return dt.date(year, month, 1) if 1 <= month <= 12 else None
+
+    # "jan 2017", "january 2017"
+    match = re.match(r"^([a-z]+)[\s-]+(20\d{2})$", text)
+    if match and match.group(1) in _MONTH_NAMES:
+        return dt.date(int(match.group(2)), _MONTH_NAMES[match.group(1)], 1)
+
+    # "2017 jan"
+    match = re.match(r"^(20\d{2})[\s-]+([a-z]+)$", text)
+    if match and match.group(2) in _MONTH_NAMES:
+        return dt.date(int(match.group(1)), _MONTH_NAMES[match.group(2)], 1)
+
     return None
 
 
@@ -166,8 +212,17 @@ def _find_weight_sheet(sheets: Sequence[tuple[str, list[list[Any]]]]):
     return named + [s for s in sheets if s not in named]
 
 
-def _find_header(rows: list[list[Any]]) -> tuple[int, dict[str, int]] | None:
-    """Locate the header row and map category -> column index."""
+def _find_header(
+    rows: list[list[Any]], key: str = "year"
+) -> tuple[int, dict[str, int]] | None:
+    """Locate the header row and map category -> column index.
+
+    `key` selects whether the leading column holds years (weights sheet) or
+    monthly periods (sub-index sheet).
+    """
+    key_patterns = _YEAR_PATTERNS if key == "year" else _MONTH_PATTERNS
+    coerce = _as_year if key == "year" else _as_month
+
     for idx, row in enumerate(rows[:40]):
         cells = [_norm(c) for c in row]
         if not any(cells):
@@ -180,23 +235,24 @@ def _find_header(rows: list[list[Any]]) -> tuple[int, dict[str, int]] | None:
                     break
         if len(columns) != 3:
             continue
-        year_col = next(
-            (c for c, cell in enumerate(cells) if any(re.search(p, cell) for p in _YEAR_PATTERNS)),
+        key_col = next(
+            (c for c, cell in enumerate(cells) if any(re.search(p, cell) for p in key_patterns)),
             None,
         )
-        if year_col is None:
-            # No explicit "Year" header: fall back to the first column not
-            # claimed by a category, provided it actually holds years.
+        if key_col is None:
+            # No explicit header for the key column: fall back to the first
+            # column not claimed by a category, provided it actually holds
+            # values of the expected kind.
             claimed = set(columns.values())
             for c in range(len(cells)):
                 if c in claimed:
                     continue
-                if any(_as_year(r[c]) for r in rows[idx + 1 : idx + 15] if c < len(r)):
-                    year_col = c
+                if any(coerce(r[c]) for r in rows[idx + 1 : idx + 15] if c < len(r)):
+                    key_col = c
                     break
-        if year_col is None:
+        if key_col is None:
             continue
-        columns["year"] = year_col
+        columns[key] = key_col
         return idx, columns
     return None
 
@@ -245,6 +301,73 @@ def parse_weights(xlsx_bytes: bytes) -> list[dict[str, Any]]:
 
     raise WeightsParseError(
         "could not locate a weights table. Workbook structure:\n" + describe(sheets)
+    )
+
+
+def _find_subindex_sheet(sheets: Sequence[tuple[str, list[list[Any]]]]):
+    """Prefer a sheet named for indices; explicitly deprioritise the weights sheet."""
+    def rank(entry) -> int:
+        title = _norm(entry[0])
+        if "weight" in title:
+            return 2
+        if any(word in title for word in ("index", "indices", "sub-ind", "subind", "series")):
+            return 0
+        return 1
+
+    return sorted(sheets, key=rank)
+
+
+def parse_subindices(xlsx_bytes: bytes) -> list[dict[str, Any]]:
+    """Extract ONS's published monthly sub-index series from the release.
+
+    Same defensive posture as `parse_weights`: locate by searching, validate
+    hard, and refuse rather than guess. This series is the validation *answer
+    key*, so a mis-parse would not merely degrade the output -- it would make
+    every accuracy figure wrong in a direction we could not detect.
+    """
+    try:
+        import openpyxl
+    except ImportError as exc:  # pragma: no cover
+        raise SubIndexParseError(
+            "openpyxl is required to parse the ONS release; pip install openpyxl"
+        ) from exc
+
+    workbook = openpyxl.load_workbook(io.BytesIO(xlsx_bytes), data_only=True, read_only=True)
+    sheets = list(_iter_sheets(workbook))
+
+    for title, rows in _find_subindex_sheet(sheets):
+        found = _find_header(rows, key="month")
+        if not found:
+            continue
+        header_idx, columns = found
+        out: list[dict[str, Any]] = []
+        seen: set[dt.date] = set()
+        for row in rows[header_idx + 1 :]:
+            if not row or columns["month"] >= len(row):
+                continue
+            month = _as_month(row[columns["month"]])
+            if month is None or month.year < MIN_SERIES_YEAR or month in seen:
+                continue
+            values: dict[str, float] = {}
+            for category in ("domestic", "european", "long_haul"):
+                col = columns[category]
+                value = _as_number(row[col]) if col < len(row) else None
+                if value is None or value <= 0:
+                    values = {}
+                    break
+                values[category] = value
+            if not values:
+                continue
+            seen.add(month)
+            out.append({"index_month": month, **values})
+
+        # A monthly series spanning years, not a handful of stray rows.
+        if len(out) >= 12:
+            log.info("parsed %d monthly sub-index rows from sheet %r", len(out), title)
+            return sorted(out, key=lambda r: r["index_month"])
+
+    raise SubIndexParseError(
+        "could not locate a monthly sub-index table. Workbook structure:\n" + describe(sheets)
     )
 
 

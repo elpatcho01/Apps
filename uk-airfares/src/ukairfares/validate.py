@@ -48,23 +48,39 @@ log = logging.getLogger("ukairfares.validate")
 #: One full quarter of overlap before any headline accuracy claim is allowed.
 MIN_OVERLAP_MONTHS = 3
 
+#: Our reconstructions joined to ONS's published series.
+#:
+#: The published values come from `ons_published_index` (backfilled from the ad
+#: hoc release) rather than from a column we maintain by hand, so the answer key
+#: has a single source of truth and its revision history is preserved. The join
+#: is on (index_month, haul_category); `published_ons_value` keeps its original
+#: name so nothing downstream needs to know where it came from.
 SCORE_QUERY = """
-WITH latest AS (
+WITH latest_recon AS (
   SELECT *, ROW_NUMBER() OVER (
     PARTITION BY index_month, haul_category, attribution_rule, selection_rule, agg_method
     ORDER BY computed_ts DESC
   ) AS rn
   FROM `{table}`
-  WHERE published_ons_value IS NOT NULL
+  WHERE reconstructed_value IS NOT NULL
+),
+latest_published AS (
+  SELECT *, ROW_NUMBER() OVER (
+    PARTITION BY index_month, haul_category ORDER BY fetched_ts DESC
+  ) AS rn
+  FROM `{published_table}`
+  WHERE index_value IS NOT NULL
 )
 SELECT
-  index_month, haul_category, attribution_rule, selection_rule, agg_method,
-  reconstructed_value, published_ons_value, n_observations,
-  index_day_exact, index_day_offset_days,
-  weights_are_placeholder, source_is_cached
-FROM latest
-WHERE rn = 1
-ORDER BY index_month
+  r.index_month, r.haul_category, r.attribution_rule, r.selection_rule, r.agg_method,
+  r.reconstructed_value, p.index_value AS published_ons_value, p.basis AS published_basis,
+  r.n_observations, r.index_day_exact, r.index_day_offset_days,
+  r.weights_are_placeholder, r.source_is_cached
+FROM latest_recon r
+JOIN latest_published p
+  ON r.index_month = p.index_month AND r.haul_category = p.haul_category
+WHERE r.rn = 1 AND p.rn = 1
+ORDER BY r.index_month
 """
 
 
@@ -80,6 +96,10 @@ class VariantScore:
     mape: float
     rolling_mae: float | None
     months: tuple[dt.date, ...]
+    #: Mean absolute error of the spliced nowcast, in ONS index points.
+    #: See `splice_mae_index_points` in the module docstring for why this is the
+    #: interpretable headline rather than the percentage-point figure.
+    splice_mae_index_points: float | None = None
 
     @property
     def key(self) -> str:
@@ -135,6 +155,21 @@ def score_variant(rows: list[dict[str, Any]]) -> VariantScore | None:
         rolling.append(statistics.fmean(abs_errors[:k]))
     rolling_mae = statistics.fmean(rolling) if rolling else None
 
+    # The spliced nowcast: take ONS's previous published level and carry it
+    # forward by our estimated relative change. This is the number you would
+    # actually act on, and its error is in ONS index points rather than
+    # percentage points of change -- directly interpretable against the series
+    # you are trying to anticipate.
+    splice_errors: list[float] = []
+    for i in range(1, len(rows)):
+        prev_published = published[i - 1]
+        prev_recon = recon[i - 1]
+        if prev_published <= 0 or prev_recon <= 0:
+            continue
+        nowcast = prev_published * (recon[i] / prev_recon)
+        splice_errors.append(abs(nowcast - published[i]))
+    splice_mae = statistics.fmean(splice_errors) if splice_errors else None
+
     return VariantScore(
         haul_category=rows[0]["haul_category"],
         attribution_rule=rows[0]["attribution_rule"],
@@ -146,6 +181,7 @@ def score_variant(rows: list[dict[str, Any]]) -> VariantScore | None:
         mape=mape,
         rolling_mae=rolling_mae,
         months=tuple(r["index_month"] for r in rows),
+        splice_mae_index_points=splice_mae,
     )
 
 
@@ -220,6 +256,11 @@ def build_report(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "best_variant_rolling_mae_pp": (
                 round(best.rolling_mae, 4) if best.rolling_mae is not None else None
             ),
+            "best_variant_splice_mae_index_points": (
+                round(best.splice_mae_index_points, 4)
+                if best.splice_mae_index_points is not None
+                else None
+            ),
             "n_months": best.n_months,
             "selection_caveat": (
                 f"This variant was chosen as best-of-{len(haul_scores)} AFTER seeing the "
@@ -253,7 +294,12 @@ def build_report(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def run_validate(config: Config, *, reader=None) -> dict[str, Any]:
     reader = reader or bq.BigQueryWriter(config.project)
-    rows = reader.query(SCORE_QUERY.format(table=config.index_ref))
+    rows = reader.query(
+        SCORE_QUERY.format(
+            table=config.index_ref,
+            published_table=config.table_ref("ons_published_index"),
+        )
+    )
     return build_report(rows)
 
 
