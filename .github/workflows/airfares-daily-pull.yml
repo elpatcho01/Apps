@@ -107,8 +107,12 @@ jobs:
           # Collection mode: ${{ needs.decide.outputs.mode }}
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
           BQ_DATASET: ${{ secrets.BQ_DATASET }}
+          # Switch sources by setting the FARE_PROVIDER repository variable --
+          # no code or workflow edit needed. Both credentials are passed; the
+          # config picks up whichever the active provider requires.
+          FARE_PROVIDER: ${{ vars.FARE_PROVIDER || 'serpapi' }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
-          FARE_PROVIDER: travelpayouts
           TP_MARKET: uk
           FARE_CURRENCY: GBP
           # A run that mostly failed is not a usable vintage -- exit non-zero so

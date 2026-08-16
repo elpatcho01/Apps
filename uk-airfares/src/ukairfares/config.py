@@ -40,12 +40,23 @@ class ConfigError(RuntimeError):
     """Configuration is missing or invalid. Always fatal -- never soldier on."""
 
 
+#: Which environment variable holds each provider's credential. Adding a
+#: provider means adding a line here and one in providers/__init__.py -- there
+#: is deliberately no provider-specific branching anywhere else.
+PROVIDER_CREDENTIAL_ENV: dict[str, str] = {
+    "travelpayouts": "TRAVELPAYOUTS_TOKEN",
+    "serpapi": "SERPAPI_KEY",
+    "mock": "",  # needs none
+}
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class Config:
     project: str
     dataset: str
     provider_name: str
-    travelpayouts_token: str | None
+    #: The active provider's credential, whichever provider that is.
+    provider_credential: str | None
     market: str
     currency: str
     target_departure_time: dt.time
@@ -71,10 +82,18 @@ class Config:
             if not dataset:
                 raise ConfigError("BQ_DATASET is required (or set DRY_RUN=1)")
 
-        token = os.environ.get("TRAVELPAYOUTS_TOKEN", "").strip() or None
-        if provider_name == "travelpayouts" and not token:
+        if provider_name not in PROVIDER_CREDENTIAL_ENV:
             raise ConfigError(
-                "TRAVELPAYOUTS_TOKEN is required for the travelpayouts provider. "
+                f"unknown FARE_PROVIDER {provider_name!r}; expected one of "
+                f"{', '.join(sorted(PROVIDER_CREDENTIAL_ENV))}"
+            )
+        credential_env = PROVIDER_CREDENTIAL_ENV[provider_name]
+        credential = (
+            os.environ.get(credential_env, "").strip() or None if credential_env else None
+        )
+        if credential_env and not credential:
+            raise ConfigError(
+                f"{credential_env} is required for the {provider_name} provider. "
                 "Set FARE_PROVIDER=mock for a no-network run."
             )
 
@@ -86,7 +105,7 @@ class Config:
             project=project,
             dataset=dataset,
             provider_name=provider_name,
-            travelpayouts_token=token,
+            provider_credential=credential,
             market=os.environ.get("TP_MARKET", "uk").strip(),
             currency=os.environ.get("FARE_CURRENCY", "GBP").strip().upper(),
             target_departure_time=_env_time(

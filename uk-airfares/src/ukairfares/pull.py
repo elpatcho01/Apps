@@ -220,7 +220,9 @@ def run_pull(
     if provider is None:
         kwargs: dict[str, Any] = {}
         if config.provider_name == "travelpayouts":
-            kwargs = {"token": config.travelpayouts_token, "market": config.market}
+            kwargs = {"token": config.provider_credential, "market": config.market}
+        elif config.provider_name == "serpapi":
+            kwargs = {"api_key": config.provider_credential, "market": config.market}
         elif config.provider_name == "mock":
             kwargs = {"haul_of": {r.code: r.haul for r in routes}}
         provider = build_provider(config.provider_name, **kwargs)

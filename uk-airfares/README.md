@@ -15,20 +15,17 @@ GitHub Actions cron. No airline or OTA websites are scraped.
 Three limitations are structural, not bugs, and they bound every number that
 comes out of it.
 
-**1. The fare source is a cache, not a live quote.** Travelpayouts' Aviasales
-endpoint returns *"the cheapest tickets for specific dates found by Aviasales
-users in the last 48 hours"*. ONS price collectors read the fare advertised on
-index day. These are different measurements. Every row carries
-`is_cached_source = TRUE` and the provider's own `quote_found_at`, and the
-validation report downgrades any verdict built on cached data to `PROVISIONAL`.
-Swapping to a live-pricing provider is a single adapter file — see
-[Changing the fare source](#changing-the-fare-source).
+**1. No adapter has run against its live API yet.** Both the SerpApi and
+Travelpayouts adapters were written from documentation; the development sandbox
+blocks both hosts by egress policy. Parsing is defensive and `raw_response`
+retains every payload so observations can be reprocessed without re-querying,
+but the first production run is the first real test. Same caveat as the ONS
+parsers.
 
-**2. Coverage will be patchy on thin routes and distant dates.** Because the
-cache is demand-driven, a specific Tuesday six months out on, say, LHR–CPT may
-return nothing at all. That is recorded as a `no_data` row, not an error, so
-gaps are visible in the panel rather than silently absent. Expect long-haul
-180-day coverage to be the weakest cell in the table.
+**2. Coverage on thin routes and distant dates is unmeasured.** A specific
+Tuesday six months out on, say, LHR–CPT may return nothing. That is recorded as
+a `no_data` row, not an error, so gaps are visible in the panel rather than
+silently absent. Expect long-haul 180-day coverage to be the weakest cell.
 
 **3. Weights are fetched at runtime, and the parser is unverified.**
 `ukairfares.onsweights` downloads the ONS ad hoc release and parses its weights
@@ -147,7 +144,8 @@ Creates `airfare_scrapes` (partitioned by `scrape_date`, clustered by
 | `GCP_PROJECT` | BigQuery project ID |
 | `BQ_DATASET` | BigQuery dataset name |
 | `GCP_SA_KEY` | Service-account JSON. Needs `bigquery.dataEditor` + `bigquery.jobUser` |
-| `TRAVELPAYOUTS_TOKEN` | Travelpayouts API token |
+| `SERPAPI_KEY` | SerpApi API key (default provider) |
+| `TRAVELPAYOUTS_TOKEN` | *Optional.* Only if `FARE_PROVIDER=travelpayouts` |
 
 Nothing is read from a committed file. The service account should be scoped to
 this dataset only.
@@ -156,7 +154,7 @@ this dataset only.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 217 tests, no network
+python -m pytest                                    # 259 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -427,8 +425,8 @@ State of the options as researched in August 2026:
 | **Kiwi.com Tequila** | Public self-serve closed May 2024; invitation-only partners since. |
 | **Skyscanner** | Partner-only; approval unlikely without an established travel business. The "Sky Scrapper" RapidAPI listings are unofficial resellers — excluded as ToS-violating. |
 | **Duffel** | Live NDC fares, self-serve, exact date/cabin/pax control — methodologically the cleanest fit. But its agreement enforces a 1,500:1 search-to-book ratio with *"zero Orders … treated as one Order"*, and reserves the right to cap usage to honour airline supplier agreements. A pure-research account that never books risks being capped or closed. Cost itself is trivial (~$3/month at this volume). |
-| **SerpApi Google Flights** | Live advertised fares, closest to what ONS collectors actually do, ~$25/month at this volume. But it is scraping-as-a-service under active litigation (Google's DMCA claims dismissed July 2026; Reddit suit ongoing). |
-| **Travelpayouts** ← *current* | Free, self-serve, but cache-backed (48h) rather than live. See [limitations](#read-this-first-what-this-pipeline-can-and-cannot-currently-tell-you). |
+| **SerpApi Google Flights** ← *current* | Live advertised fares, closest to what ONS collectors actually do, ~$25/month at this volume. Returns the full timetable with departure times, which the ONS target-time selection rule needs. Caveat: scraping-as-a-service under active litigation (Google's DMCA claims dismissed July 2026; Reddit suit ongoing). |
+| **Travelpayouts** | Free, self-serve, but cache-backed (48h) rather than live. See [limitations](#read-this-first-what-this-pipeline-can-and-cannot-currently-tell-you). |
 
 ---
 
@@ -453,7 +451,7 @@ uk-airfares/
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   └── providers/      base.py · travelpayouts.py · mock.py
-└── tests/              217 tests, no network required
+└── tests/              259 tests, no network required
 ```
 
 ## Non-goals

@@ -297,7 +297,7 @@ class TestTravelpayoutsParsing:
 
 def _dry_config(**over):
     defaults = dict(
-        project="p", dataset="d", provider_name="mock", travelpayouts_token=None,
+        project="p", dataset="d", provider_name="mock", provider_credential=None,
         market="uk", currency="GBP", target_departure_time=dt.time(9, 0),
         failure_threshold=0.34, dry_run=True,
         scrapes_table="airfare_scrapes", index_table="reconstructed_index",
