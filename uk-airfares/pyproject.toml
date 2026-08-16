@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "requests>=2.31,<3",
     "google-cloud-bigquery>=3.25,<4",
+    "openpyxl>=3.1,<4",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +21,7 @@ airfares-pull = "ukairfares.pull:main"
 airfares-reconcile = "ukairfares.reconcile:main"
 airfares-validate = "ukairfares.validate:main"
 airfares-ensure-tables = "ukairfares.ensure_tables:main"
+airfares-weights = "ukairfares.onsweights:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -30,11 +30,18 @@ return nothing at all. That is recorded as a `no_data` row, not an error, so
 gaps are visible in the panel rather than silently absent. Expect long-haul
 180-day coverage to be the weakest cell in the table.
 
-**3. Weights are placeholders until you supply the real ones.**
-`src/ukairfares/data/weights.csv` ships with equal thirds and an
-`is_placeholder` flag. `load_weights()` refuses to return them to the validation
-path unless explicitly forced. Populate from the ONS ad hoc release before
-treating any aggregate as meaningful.
+**3. Weights are fetched at runtime, and the parser is unverified.**
+`ukairfares.onsweights` downloads the ONS ad hoc release and parses its weights
+sheet, and the monthly workflow runs it before reconciling. But that parser was
+written *without sight of the spreadsheet* — ons.gov.uk is blocked by egress
+policy from the sandbox this was built in — so its layout assumptions are
+inferred, not observed. It is written to fail loudly and dump the workbook
+structure rather than guess (see [Weights](#weights)). Until it has run
+successfully once against the real file, treat weights as unconfirmed: the
+committed `weights.csv` is an equal-thirds placeholder, `load_weights()` refuses
+to return placeholders to the validation path, and every reconstructed row
+carries `weights_are_placeholder` so a placeholder-based aggregate cannot be
+mistaken for a real one.
 
 The pipeline is designed to make these visible rather than to paper over them.
 
@@ -149,7 +156,7 @@ this dataset only.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 105 tests, no network
+python -m pytest                                    # 153 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -220,6 +227,45 @@ candidate failing it is discarded regardless of how confident the surrounding
 wording looked, and if nothing parses the job exits non-zero rather than
 guessing. A wrong index day would silently corrupt every reconstruction built on
 it.
+
+---
+
+## Weights
+
+The ONS sub-index weights (the domestic / European / long-haul shares of CPI
+item 07.3.3) do two jobs: they combine the three haul series into the single
+aggregate ONS actually publish, and once real, they give a second independent
+thing to score against. They do *not* weight routes within a category — ONS's
+within-category route weighting isn't published, which is why every `Route`
+carries `weight = 1.0`.
+
+```bash
+# Fetch from the pinned release
+PYTHONPATH=src python -m ukairfares.onsweights
+
+# Search ONS for a newer ad hoc vintage first
+PYTHONPATH=src python -m ukairfares.onsweights --discover
+
+# Inspect the spreadsheet without parsing it — start here if parsing fails
+PYTHONPATH=src python -m ukairfares.onsweights --dump
+```
+
+The parser locates the sheet, header row and columns by *searching* rather than
+by fixed offsets, tolerates reordered columns and "short-haul"/"long haul"
+naming variants, and validates every row (three positive weights, plausible
+year, no duplicates). Anything it cannot read defensibly is rejected with a dump
+of the workbook's actual structure — because a wrong weight silently corrupts
+every aggregate built on it, and a loud failure costs one CI log while a quiet
+mis-parse costs the whole series. If the layout differs from what it expects,
+`_find_weight_sheet` / `_find_header` are the only two functions to change.
+
+The weighted `haul_category = "all"` row is a weight-weighted mean of the three
+haul **levels**. Note that the month-on-month change of a weighted level is not
+the same as the weighted mean of the three changes — long-haul's much larger
+absolute fares dominate the former regardless of its weight. The statistically
+correct aggregate needs two months in hand, so it belongs in validation, not
+reconciliation; the `"all"` row is a convenience level, not the headline.
+Combinations missing any haul are skipped rather than partially weighted.
 
 ---
 
@@ -305,10 +351,11 @@ uk-airfares/
 │   ├── bq.py           Append-only BigQuery writer + dry-run writer
 │   ├── pull.py         Daily collection (Task 3)
 │   ├── onsfetch.py     CPI bulletin index-day parser
+│   ├── onsweights.py   Fetches + parses ONS sub-index weights
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   └── providers/      base.py · travelpayouts.py · mock.py
-└── tests/              105 tests, no network required
+└── tests/              153 tests, no network required
 ```
 
 ## Non-goals

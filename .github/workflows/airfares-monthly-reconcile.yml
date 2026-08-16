@@ -58,6 +58,27 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      # Refreshes weights.csv in the ephemeral checkout so the reconstruction
+      # uses real ONS weights rather than the committed placeholders. Allowed to
+      # fail: without weights the per-haul reconstructions are still correct and
+      # useful, only the weighted "all" aggregate is skipped -- and every row
+      # carries weights_are_placeholder so validation downgrades the verdict
+      # accordingly. A failure here degrades the output visibly; it does not
+      # corrupt it, so it should not block the month's reconstruction.
+      - name: Refresh ONS sub-index weights
+        id: weights
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: python -m ukairfares.onsweights --discover
+
+      - name: Warn if weights could not be refreshed
+        if: steps.weights.outcome == 'failure'
+        run: |
+          echo "::warning::Could not fetch ONS weights; reconstruction will use \
+          placeholders and skip the weighted aggregate. Run \
+          'python -m ukairfares.onsweights --dump' to inspect the release layout."
+
       - name: Reconstruct sub-indices
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}

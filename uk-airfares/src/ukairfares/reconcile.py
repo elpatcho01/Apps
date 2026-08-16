@@ -124,9 +124,35 @@ def aggregate(
     run_id: str,
     computed_ts: dt.datetime,
 ) -> list[dict[str, Any]]:
-    """Build every (attribution x selection x aggregation) reconstruction row."""
+    """Build every (attribution x selection x aggregation) reconstruction row.
+
+    Also emits a weighted `haul_category = "all"` row per combination, using the
+    ONS sub-index weights.
+
+    A caveat on that aggregate, stated here because it is easy to misread: it is
+    a weight-weighted mean of the three haul *levels*, and the month-on-month
+    change of a weighted level is not the same as the weighted mean of the three
+    changes -- long-haul's much larger absolute fares dominate the former
+    regardless of its weight. The statistically correct aggregate needs two
+    months in hand, so it is computed in `validate.py`, which has them. This row
+    is a convenience level, not the headline.
+    """
     out: list[dict[str, Any]] = []
     expected = {h: len(panel.routes_by_haul(h)) for h in HAULS}
+
+    # Weights are keyed by year and carried forward, matching how CPI weights
+    # are set annually. Placeholders are permitted here but the flag propagates
+    # to every row, so validation can refuse to treat the result as evidence.
+    weights_cache: dict[int, panel.Weights | None] = {}
+
+    def weights_for(year: int) -> panel.Weights | None:
+        if year not in weights_cache:
+            try:
+                weights_cache[year] = panel.load_weights(year, allow_placeholder=True)
+            except (FileNotFoundError, ValueError) as exc:
+                log.warning("no weights for %d (%s); skipping weighted aggregate", year, exc)
+                weights_cache[year] = None
+        return weights_cache[year]
 
     for attribution in ATTRIBUTION_RULES:
         key = (
@@ -182,7 +208,11 @@ def aggregate(
                                 "index_day_offset_days": offset_days,
                                 "n_routes": len({r["route"] for r in haul_rows}),
                                 "n_expected_routes": expected[haul],
-                                "weights_are_placeholder": None,
+                                "weights_are_placeholder": (
+                                    w.is_placeholder
+                                    if (w := weights_for(index_month.year))
+                                    else None
+                                ),
                                 "source_is_cached": any(
                                     bool(r.get("is_cached_source")) for r in haul_rows
                                 ),
@@ -191,6 +221,69 @@ def aggregate(
                                 "run_id": run_id,
                             }
                         )
+
+    out.extend(_weighted_aggregates(out, weights_for, run_id=run_id, computed_ts=computed_ts))
+    return out
+
+
+def _weighted_aggregates(
+    haul_rows: list[dict[str, Any]],
+    weights_for,
+    *,
+    run_id: str,
+    computed_ts: dt.datetime,
+) -> list[dict[str, Any]]:
+    """Combine the three haul rows into a weighted `haul_category = "all"` row.
+
+    Requires all three hauls to be present for a given combination -- a
+    two-thirds aggregate weighted as if it were whole would be misleading, so
+    incomplete combinations are skipped rather than partially weighted.
+    """
+    grouped: dict[tuple, dict[str, dict[str, Any]]] = {}
+    for row in haul_rows:
+        key = (
+            row["index_month"],
+            row["attribution_rule"],
+            row["selection_rule"],
+            row["agg_method"],
+        )
+        grouped.setdefault(key, {})[row["haul_category"]] = row
+
+    out: list[dict[str, Any]] = []
+    for (index_month, attribution, selection_rule, agg_method), by_haul in grouped.items():
+        if set(by_haul) != set(HAULS):
+            log.debug(
+                "skipping weighted aggregate for %s/%s: only %s present",
+                index_month,
+                agg_method,
+                sorted(by_haul),
+            )
+            continue
+        weights = weights_for(index_month.year)
+        if weights is None:
+            continue
+        shares = weights.normalised()
+        value = sum(
+            float(by_haul[h]["reconstructed_value"]) * shares[h] for h in HAULS
+        )
+        template = by_haul["long_haul"]
+        out.append(
+            {
+                **template,
+                "haul_category": "all",
+                "reconstructed_value": _quantise(value),
+                "n_observations": sum(by_haul[h]["n_observations"] for h in HAULS),
+                "mean_fare_gbp": None,
+                "median_fare_gbp": None,
+                "geomean_fare_gbp": None,
+                "n_routes": sum(by_haul[h]["n_routes"] for h in HAULS),
+                "n_expected_routes": sum(by_haul[h]["n_expected_routes"] for h in HAULS),
+                "weights_are_placeholder": weights.is_placeholder,
+                "source_is_cached": any(by_haul[h]["source_is_cached"] for h in HAULS),
+                "computed_ts": computed_ts,
+                "run_id": run_id,
+            }
+        )
     return out
 
 
