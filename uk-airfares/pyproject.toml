@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uk-airfares-nowcasting"
+version = "1.0.0"
+description = "Reconstructs ONS CPI air fare sub-indices from forward-looking fare snapshots collected on the ONS methodology."
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31,<3",
+    "google-cloud-bigquery>=3.25,<4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+airfares-pull = "ukairfares.pull:main"
+airfares-reconcile = "ukairfares.reconcile:main"
+airfares-validate = "ukairfares.validate:main"
+airfares-ensure-tables = "ukairfares.ensure_tables:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ukairfares = ["data/*.csv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

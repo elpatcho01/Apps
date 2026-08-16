@@ -1,0 +1,42 @@
+name: Air fares CI
+
+on:
+  push:
+    paths:
+      - "uk-airfares/**"
+      - ".github/workflows/airfares-*.yml"
+  pull_request:
+    paths:
+      - "uk-airfares/**"
+      - ".github/workflows/airfares-*.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-airfares
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-airfares/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest
+
+      - name: End-to-end dry run against the mock provider
+        env:
+          DRY_RUN: "1"
+          FARE_PROVIDER: mock
+          PYTHONPATH: src
+        run: |
+          python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
+          test "$(wc -l < /tmp/dry.ndjson)" -eq 44

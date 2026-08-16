@@ -1,0 +1,249 @@
+import datetime as dt
+from decimal import Decimal
+
+import pytest
+
+from ukairfares.onsfetch import IndexDayResult
+from ukairfares.reconcile import aggregate
+from ukairfares.validate import MIN_OVERLAP_MONTHS, build_report, score_variant
+
+INDEX_DAY = IndexDayResult(
+    index_month=dt.date(2026, 8, 1),
+    index_day=dt.date(2026, 8, 11),
+    ordinal=2,
+    source_url="https://example.invalid",
+    evidence="test",
+)
+
+
+def panel_row(route, haul, price, cheapest=None, dep_month=(2026, 9), coll_month=(2026, 8)):
+    return {
+        "route": route,
+        "haul_category": haul,
+        "scrape_date": dt.date(2026, 8, 11),
+        "days_out": 30,
+        "months_ahead": 1,
+        "departure_date": dt.date(dep_month[0], dep_month[1], 8),
+        "index_month_departure": dt.date(dep_month[0], dep_month[1], 1),
+        "index_month_collection": dt.date(coll_month[0], coll_month[1], 1),
+        "price_gbp": Decimal(str(price)),
+        "price_cheapest_gbp": Decimal(str(cheapest if cheapest is not None else price)),
+        "is_cached_source": True,
+        "status": "ok",
+    }
+
+
+class TestAggregate:
+    def _rows(self):
+        return [
+            panel_row("LHR-EDI", "domestic", 100, 80),
+            panel_row("LGW-EDI", "domestic", 200, 160),
+            panel_row("LHR-JFK", "long_haul", 400, 300),
+        ]
+
+    def test_computes_both_attributions(self):
+        out = aggregate(
+            self._rows(), index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 11),
+            offset_days=0, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        )
+        rules = {r["attribution_rule"] for r in out}
+        assert rules == {"departure_month", "collection_month"}
+
+    def test_attribution_changes_index_month(self):
+        out = aggregate(
+            self._rows(), index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 11),
+            offset_days=0, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        )
+        dep = {r["index_month"] for r in out if r["attribution_rule"] == "departure_month"}
+        coll = {r["index_month"] for r in out if r["attribution_rule"] == "collection_month"}
+        assert dep == {dt.date(2026, 9, 1)}
+        assert coll == {dt.date(2026, 8, 1)}
+
+    def test_all_three_aggregations_present(self):
+        out = aggregate(
+            self._rows(), index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 11),
+            offset_days=0, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        )
+        assert {r["agg_method"] for r in out} == {"mean", "median", "geometric_mean"}
+
+    def test_mean_median_geomean_values(self):
+        out = aggregate(
+            self._rows(), index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 11),
+            offset_days=0, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        )
+        dom = next(
+            r for r in out
+            if r["haul_category"] == "domestic"
+            and r["attribution_rule"] == "departure_month"
+            and r["selection_rule"] == "ons_target_time"
+            and r["agg_method"] == "mean"
+        )
+        assert float(dom["mean_fare_gbp"]) == pytest.approx(150.0)
+        assert float(dom["median_fare_gbp"]) == pytest.approx(150.0)
+        # sqrt(100*200) ~ 141.42
+        assert float(dom["geomean_fare_gbp"]) == pytest.approx(141.4214, abs=1e-3)
+        assert dom["n_observations"] == 2
+
+    def test_selection_rules_use_different_prices(self):
+        out = aggregate(
+            self._rows(), index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 11),
+            offset_days=0, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        )
+        def get(rule):
+            return next(
+                float(r["mean_fare_gbp"]) for r in out
+                if r["haul_category"] == "domestic"
+                and r["attribution_rule"] == "departure_month"
+                and r["selection_rule"] == rule and r["agg_method"] == "mean"
+            )
+        assert get("ons_target_time") == pytest.approx(150.0)
+        assert get("cheapest") == pytest.approx(120.0)
+
+    def test_records_index_day_substitution(self):
+        out = aggregate(
+            self._rows(), index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 13),
+            offset_days=2, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        )
+        assert all(r["index_day_exact"] is False for r in out)
+        assert all(r["index_day_offset_days"] == 2 for r in out)
+        assert all(r["scrape_date_used"] == dt.date(2026, 8, 13) for r in out)
+
+    def test_exact_index_day_flagged(self):
+        out = aggregate(
+            self._rows(), index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 11),
+            offset_days=0, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        )
+        assert all(r["index_day_exact"] is True for r in out)
+
+    def test_cached_source_propagates(self):
+        out = aggregate(
+            self._rows(), index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 11),
+            offset_days=0, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        )
+        assert all(r["source_is_cached"] for r in out)
+
+    def test_coverage_counts(self):
+        out = aggregate(
+            self._rows(), index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 11),
+            offset_days=0, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        )
+        dom = next(r for r in out if r["haul_category"] == "domestic")
+        assert dom["n_routes"] == 2
+        assert dom["n_expected_routes"] == 8  # panel has 8 domestic routes
+
+    def test_empty_input(self):
+        assert aggregate(
+            [], index_day=INDEX_DAY, scrape_date_used=dt.date(2026, 8, 11),
+            offset_days=0, run_id="r", computed_ts=dt.datetime(2026, 9, 17),
+        ) == []
+
+
+def scored_row(month, recon, published, haul="domestic", **over):
+    row = {
+        "index_month": dt.date(2026, month, 1),
+        "haul_category": haul,
+        "attribution_rule": "departure_month",
+        "selection_rule": "ons_target_time",
+        "agg_method": "mean",
+        "reconstructed_value": Decimal(str(recon)),
+        "published_ons_value": Decimal(str(published)),
+        "n_observations": 8,
+        "index_day_exact": True,
+        "index_day_offset_days": 0,
+        "weights_are_placeholder": False,
+        "source_is_cached": False,
+    }
+    row.update(over)
+    return row
+
+
+class TestScoreVariant:
+    def test_perfect_tracking_gives_zero_error(self):
+        rows = [
+            scored_row(1, 100, 100.0),
+            scored_row(2, 110, 110.0),
+            scored_row(3, 121, 121.0),
+        ]
+        s = score_variant(rows)
+        assert s.mae == pytest.approx(0.0)
+        assert s.bias == pytest.approx(0.0)
+
+    def test_detects_positive_bias(self):
+        # Reconstruction moves +20% while ONS moves +10%: bias +10pp.
+        rows = [scored_row(1, 100, 100), scored_row(2, 120, 110)]
+        s = score_variant(rows)
+        assert s.bias == pytest.approx(10.0, abs=0.2)
+        assert s.mae == pytest.approx(10.0, abs=0.2)
+
+    def test_needs_two_months(self):
+        assert score_variant([scored_row(1, 100, 100)]) is None
+        assert score_variant([]) is None
+
+    def test_compares_changes_not_levels(self):
+        # Different level scales, identical movement -> near-zero error.
+        rows = [scored_row(1, 500, 100), scored_row(2, 550, 110)]
+        s = score_variant(rows)
+        assert s.mae == pytest.approx(0.0, abs=1e-6)
+
+
+class TestBuildReport:
+    def test_no_data(self):
+        r = build_report([])
+        assert r["verdict"] == "INSUFFICIENT_DATA"
+        assert r["n_scored_months"] == 0
+
+    def test_refuses_to_score_below_a_quarter(self):
+        rows = [scored_row(1, 100, 100), scored_row(2, 110, 110)]
+        r = build_report(rows)
+        assert r["verdict"] == "INSUFFICIENT_DATA"
+        assert str(MIN_OVERLAP_MONTHS) in r["reason"]
+
+    def test_scores_at_a_full_quarter(self):
+        rows = [scored_row(m, 100 + 10 * m, 100 + 10 * m) for m in (1, 2, 3)]
+        r = build_report(rows)
+        assert r["verdict"] == "SCORED"
+        assert r["n_scored_months"] == 3
+
+    def test_placeholder_weights_downgrade_verdict(self):
+        rows = [
+            scored_row(m, 100 + 10 * m, 100 + 10 * m, weights_are_placeholder=True)
+            for m in (1, 2, 3)
+        ]
+        r = build_report(rows)
+        assert r["verdict"] == "PROVISIONAL"
+        assert any("PLACEHOLDER" in b for b in r["blockers"])
+
+    def test_cached_source_downgrades_verdict(self):
+        rows = [
+            scored_row(m, 100 + 10 * m, 100 + 10 * m, source_is_cached=True)
+            for m in (1, 2, 3)
+        ]
+        r = build_report(rows)
+        assert r["verdict"] == "PROVISIONAL"
+        assert any("cache-backed" in b for b in r["blockers"])
+
+    def test_inexact_index_day_flagged(self):
+        rows = [
+            scored_row(m, 100 + 10 * m, 100 + 10 * m, index_day_exact=False)
+            for m in (1, 2, 3)
+        ]
+        r = build_report(rows)
+        assert any("substitute scrape date" in b for b in r["blockers"])
+
+    def test_multiple_variants_carry_selection_caveat(self):
+        rows = []
+        for m in (1, 2, 3):
+            rows.append(scored_row(m, 100 + 10 * m, 100 + 10 * m))
+            rows.append(
+                scored_row(m, 100 + 20 * m, 100 + 10 * m, agg_method="median")
+            )
+        r = build_report(rows)
+        haul = r["by_haul_category"]["domestic"]
+        assert haul["n_variants_compared"] == 2
+        assert "best-of-2" in haul["selection_caveat"]
+        # The perfectly-tracking mean variant should win.
+        assert haul["best_variant"].endswith("/mean")
+
+    def test_reports_units(self):
+        rows = [scored_row(m, 100 + 10 * m, 100 + 10 * m) for m in (1, 2, 3)]
+        assert "percentage points" in build_report(rows)["units"]

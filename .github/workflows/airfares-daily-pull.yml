@@ -1,0 +1,146 @@
+name: Air fares daily pull
+
+# Collection cadence mirrors what we are trying to observe:
+#   * 8th-21st inclusive, daily -- this window brackets every possible 2nd or
+#     3rd Tuesday, so whichever day ONS later confirm as index day, we already
+#     hold a scrape for it, plus the surrounding days to measure fare drift.
+#   * Outside that window, Mondays only -- a cheap continuous baseline so the
+#     series has no month-shaped holes in it.
+#
+# The gate is evaluated inside the job rather than expressed as two cron
+# entries, because cron day-of-month and day-of-week are OR'd by GitHub, not
+# AND'd, which makes "8th-21st AND Mondays otherwise" impossible to express in
+# schedule syntax alone.
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      scrape_date:
+        description: "Override collection date (YYYY-MM-DD). Blank = today."
+        required: false
+        type: string
+      dry_run:
+        description: "Run without writing to BigQuery"
+        required: false
+        type: boolean
+        default: false
+      force:
+        description: "Run even if today is outside the collection cadence"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: airfares-pull
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  decide:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+      mode: ${{ steps.gate.outputs.mode }}
+    steps:
+      - id: gate
+        name: Decide whether today is a collection day
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "mode=manual" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          DAY_OF_MONTH=$(date -u +%-d)
+          DAY_OF_WEEK=$(date -u +%u)   # 1 = Monday
+          if [ "$DAY_OF_MONTH" -ge 8 ] && [ "$DAY_OF_MONTH" -le 21 ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "mode=index-window" >> "$GITHUB_OUTPUT"
+          elif [ "$DAY_OF_WEEK" -eq 1 ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "mode=weekly-baseline" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            echo "::notice::Day $DAY_OF_MONTH is outside the collection cadence; skipping."
+          fi
+
+  pull:
+    needs: decide
+    if: needs.decide.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-airfares
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-airfares/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Authenticate to Google Cloud
+        if: ${{ !inputs.dry_run }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Ensure BigQuery tables exist
+        if: ${{ !inputs.dry_run }}
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ secrets.BQ_DATASET }}
+        run: python -m ukairfares.ensure_tables
+
+      - name: Collect fares
+        env:
+          # Collection mode: ${{ needs.decide.outputs.mode }}
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ secrets.BQ_DATASET }}
+          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+          FARE_PROVIDER: travelpayouts
+          TP_MARKET: uk
+          FARE_CURRENCY: GBP
+          # A run that mostly failed is not a usable vintage -- exit non-zero so
+          # it is visible in the Actions UI rather than quietly written.
+          FAILURE_THRESHOLD: "0.34"
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          PYTHONPATH: src
+        run: |
+          python -m ukairfares.pull \
+            ${{ inputs.scrape_date && format('--scrape-date {0}', inputs.scrape_date) || '' }} \
+            | tee run-summary.json
+
+      - name: Publish run summary
+        if: always()
+        run: |
+          {
+            echo "### Air fares pull — ${{ needs.decide.outputs.mode }}"
+            echo ""
+            if [ -f run-summary.json ]; then
+              echo '```json'
+              cat run-summary.json
+              echo '```'
+            else
+              echo "No summary produced — the run failed before completing."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pull-summary-${{ github.run_id }}
+          path: uk-airfares/run-summary.json
+          if-no-files-found: ignore
+          retention-days: 30
