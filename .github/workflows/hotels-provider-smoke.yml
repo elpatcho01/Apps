@@ -1,0 +1,160 @@
+name: Accommodation provider smoke test
+
+# Proves the SerpApi adapter works against the live API, using nothing but the
+# SERPAPI_KEY secret. No GCP project, no Workload Identity, no BigQuery.
+#
+# WHY THIS EXISTS SEPARATELY FROM hotels-panel-refresh
+#
+# That workflow authenticates to Google Cloud before it reaches the discovery
+# step, because it wants the churn view to decide which properties to
+# substitute. So it cannot be used to test the provider before GCP exists --
+# which is exactly backwards for standing the pipeline up, since the adapter is
+# the component most likely to be wrong and the one you want to find out about
+# first.
+#
+# The adapter was written from SerpApi's documentation and has never run against
+# the live API: serpapi.com is blocked by egress policy in the development
+# sandbox where it was built. So the field names and nesting are inferred rather
+# than observed, and this is the run that settles it.
+#
+# COST: 12 calls, one per region. The free tier allows 250 a month.
+#
+# WHAT TO LOOK AT IN THE SUMMARY
+#   errors                    should be {}
+#   cells[*].returned         should be dozens per city -- 0 everywhere means
+#                             the response shape differs from the docs
+#   cells[*].comparable_available  a sane fraction of returned
+#   thin_cells                absent, ideally. Present against the LIVE provider
+#                             is a real signal: either RATE_BASIS is thinning
+#                             cells hard, or that city lacks 4-star supply on a
+#                             free-cancellation basis. Worth knowing before
+#                             collection starts rather than after.
+#
+# If the payload does not parse, the uploaded `raw-payload.json` artifact is a
+# single location's untouched response, with the credential already scrubbed out
+# of it by `serpapi_hotels.redact`. That is enough to fix the parser without
+# spending more quota.
+
+on:
+  workflow_dispatch:
+    inputs:
+      per_cell:
+        description: "Properties to pin per (region, tier)."
+        required: false
+        type: string
+        default: "5"
+      write_panel:
+        description: "Commit the discovered panel (leave off for a pure smoke test)."
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: hotels-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # only used when write_panel is true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fail early if the key is missing
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+        run: |
+          if [ -z "${SERPAPI_KEY}" ]; then
+            echo "::error::SERPAPI_KEY secret is not set. Add it under \
+            Settings > Secrets and variables > Actions > New repository secret."
+            exit 1
+          fi
+          echo "SERPAPI_KEY is present (${#SERPAPI_KEY} characters)."
+
+      # DRY_RUN=1 is what lets this run with no GCP project configured at all:
+      # config.from_env() skips the BigQuery requirements, and discovery never
+      # writes to BigQuery unless --substitute is passed, which it is not here.
+      - name: Query the live provider
+        id: discover
+        env:
+          DRY_RUN: "1"
+          HOTEL_PROVIDER: serpapi
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          HOTEL_MARKET: uk
+          HOTEL_CURRENCY: GBP
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
+          PYTHONPATH: src
+        run: |
+          python -m ukhotels.discover \
+            --per-cell "${{ inputs.per_cell || '5' }}" \
+            --dump-raw raw-payload.json \
+            ${{ inputs.write_panel && '' || '--dry-run-panel' }} \
+            | tee smoke-summary.json
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "### Provider smoke test"
+            echo ""
+            echo "12 calls against the live SerpApi Google Hotels engine."
+            echo ""
+            echo "Healthy looks like: \`errors: {}\`, \`returned\` in the dozens "
+            echo "per city, no \`thin_cells\`. If \`returned\` is 0 everywhere the "
+            echo "response shape differs from the documentation — download the "
+            echo "\`raw-payload\` artifact below to fix the parser."
+            echo ""
+            if [ -s smoke-summary.json ]; then
+              echo '```json'
+              cat smoke-summary.json
+              echo '```'
+            else
+              echo "No summary produced — the run failed before completing."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The credential is scrubbed out of this by the provider before it is ever
+      # returned, so it is safe to upload and safe to paste. See
+      # `serpapi_hotels.redact` and tests/test_redaction.py.
+      - name: Upload the raw payload for diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-payload-${{ github.run_id }}
+          path: |
+            uk-hotels/raw-payload.json
+            uk-hotels/smoke-summary.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Commit the panel
+        if: inputs.write_panel && success()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/ukhotels/data/property_panel.csv
+          if git diff --cached --quiet; then
+            echo "::notice::Property panel unchanged; nothing to commit."
+            exit 0
+          fi
+          git commit -m "Pin the initial property sample" \
+                     -m "Drawn price-blind from the live provider by the smoke-test workflow."
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

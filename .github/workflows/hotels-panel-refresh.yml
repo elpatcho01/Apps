@@ -1,0 +1,176 @@
+name: Accommodation property panel refresh
+
+# Maintains the pinned property sample and commits it.
+#
+# WHY THIS WORKFLOW HAS NO EQUIVALENT ON THE AIR-FARES PROJECT
+#
+# There, the panel is a list of routes written by hand once, because LHR-JFK
+# exists every month. Here the sample is made of individual hotels, and hotels
+# close, rebrand, leave the aggregator, renovate into a different price tier, or
+# are simply fully booked on the night we price. ONS handle that by substituting
+# a property; so do we, and this is where it happens.
+#
+# It runs monthly and does two things:
+#   * tops up any (region, tier) cell that has fallen below the pinned target;
+#   * replaces properties the `property_churn` view reports as having left,
+#     recording the replacement as `substitute_for:<old token>` so the sample's
+#     history stays legible rather than quietly reconstituting itself.
+#
+# The panel is a committed CSV because the Actions checkout is ephemeral: a
+# pinned sample held anywhere else would be redrawn every run, which is not a
+# pinned sample at all. Committing it also gives the sample a git history, and
+# is a second monthly commit against the 60-day inactivity clock.
+#
+# Runs on the 4th, after the monthly backfill and before the collection days for
+# the next CPI month.
+
+on:
+  schedule:
+    - cron: "0 8 4 * *"
+  workflow_dispatch:
+    inputs:
+      per_cell:
+        description: "Properties to pin per (region, tier)."
+        required: false
+        type: string
+        default: "5"
+      substitute:
+        description: "Replace properties that have left the sample"
+        required: false
+        type: boolean
+        default: true
+      commit:
+        description: "Commit the refreshed panel"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: hotels-panel
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  # Skips cleanly until Google Cloud is configured, rather than failing at the
+  # auth step. This is the same distinction the pipeline draws everywhere else:
+  # an expected absence is a notice, not an error. Without it, every scheduled
+  # run between merging this and finishing the GCP setup goes red -- and a wall
+  # of red runs for something nobody can act on yet is exactly how someone
+  # learns to ignore Actions email, which the 60-day inactivity trap makes
+  # expensive. Secrets cannot be read in a job-level `if`, hence a job.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          WIF: ${{ secrets.GCP_WIF_PROVIDER }}
+          SA: ${{ secrets.GCP_SA_EMAIL }}
+          PROJECT: ${{ secrets.GCP_PROJECT }}
+        run: |
+          if [ -n "${WIF}" ] && [ -n "${SA}" ] && [ -n "${PROJECT}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Google Cloud is not configured yet (needs \
+            GCP_WIF_PROVIDER, GCP_SA_EMAIL and GCP_PROJECT). Skipping."
+          fi
+
+  refresh:
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      # continue-on-error for the same reason the digest is: an existing pinned
+      # sample that could not be topped up is still a usable sample, and the
+      # commit step below is worth reaching either way. A failure here degrades
+      # coverage slowly and visibly; aborting would take the commit with it.
+      - name: Refresh the pinned property sample
+        id: discover
+        continue-on-error: true
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          HOTEL_PROVIDER: ${{ vars.HOTEL_PROVIDER || 'serpapi' }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
+          PYTHONPATH: src
+        run: |
+          python -m ukhotels.discover \
+            --per-cell "${{ inputs.per_cell || '5' }}" \
+            ${{ (inputs.substitute == false) && '' || '--substitute' }} \
+            | tee panel-summary.json
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "### Property panel refresh"
+            echo ""
+            if [ -s panel-summary.json ]; then
+              echo '```json'
+              cat panel-summary.json
+              echo '```'
+            else
+              echo "No summary produced — the run failed before completing."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the panel
+        if: always() && inputs.commit != false
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/ukhotels/data/property_panel.csv
+          if git diff --cached --quiet; then
+            echo "::notice::Property panel unchanged; nothing to commit."
+            exit 0
+          fi
+          git commit -m "Refresh the pinned property sample" \
+                     -m "Tops up thin cells and substitutes properties that have left the sample. Substitutions are recorded in selection_basis rather than made silently."
+          for delay in 0 2 4 8 16; do
+            if [ "$delay" -gt 0 ]; then
+              echo "::warning::push failed; retrying in ${delay}s"
+              sleep "$delay"
+            fi
+            if git pull --rebase origin "${GITHUB_REF_NAME}" \
+               && git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "::notice::Property panel committed and pushed."
+              exit 0
+            fi
+          done
+          echo "::error::could not push the panel commit after 5 attempts"
+          exit 1
+
+      - name: Fail the run if discovery failed
+        if: steps.discover.outcome == 'failure'
+        run: |
+          echo "::error::Property panel refresh failed; the existing panel is unchanged."
+          exit 1

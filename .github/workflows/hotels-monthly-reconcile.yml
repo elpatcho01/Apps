@@ -1,0 +1,171 @@
+name: Accommodation monthly reconciliation
+
+# ONS publish the CPI bulletin mid-month, and that bulletin retrospectively
+# confirms the *previous* month's index day. The exact publication date moves
+# around, so rather than guess it we attempt the reconciliation daily across the
+# 15th-25th. Attempts before the bulletin is out exit cleanly as a no-op (HTTP
+# 404 on the bulletin URL is an expected state, not a failure); the first
+# attempt after publication does the work.
+#
+# For this item the confirmed index day identifies the *stay nights*, and the
+# rows that priced them were collected six weeks earlier. So reconciliation is
+# reaching back two months into the panel, not into the current month.
+#
+# The distinctions that matter for alerting:
+#   bulletin not published yet          -> exit 0, notice   (we are early)
+#   bulletin published, cannot parse    -> exit 1, error    (our parser broke)
+#   month predates the panel            -> exit 0, notice   (permanent absence)
+#   panel covered it but rows missing   -> exit 1, error    (collector broke)
+# Without those splits a broken parser looks identical to being early, and a
+# broken collector looks identical to being new.
+
+on:
+  schedule:
+    - cron: "0 12 15-25 * *"
+  workflow_dispatch:
+    inputs:
+      index_month:
+        description: "Month to reconstruct (YYYY-MM). Blank = last month."
+        required: false
+        type: string
+      index_day:
+        description: "Confirmed index day (YYYY-MM-DD), skipping the bulletin fetch."
+        required: false
+        type: string
+
+concurrency:
+  group: hotels-reconcile
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # Skips cleanly until Google Cloud is configured, rather than failing at the
+  # auth step. This is the same distinction the pipeline draws everywhere else:
+  # an expected absence is a notice, not an error. Without it, every scheduled
+  # run between merging this and finishing the GCP setup goes red -- and a wall
+  # of red runs for something nobody can act on yet is exactly how someone
+  # learns to ignore Actions email, which the 60-day inactivity trap makes
+  # expensive. Secrets cannot be read in a job-level `if`, hence a job.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          WIF: ${{ secrets.GCP_WIF_PROVIDER }}
+          SA: ${{ secrets.GCP_SA_EMAIL }}
+          PROJECT: ${{ secrets.GCP_PROJECT }}
+        run: |
+          if [ -n "${WIF}" ] && [ -n "${SA}" ] && [ -n "${PROJECT}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Google Cloud is not configured yet (needs \
+            GCP_WIF_PROVIDER, GCP_SA_EMAIL and GCP_PROJECT). Skipping."
+          fi
+
+  reconcile:
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      # Allowed to fail, and expected to. No regional weights for this item were
+      # found in any public ONS source, so this step's usual outcome is a
+      # warning and the committed placeholders staying in place. Per-region
+      # reconstructions do not use weights at all; only the national "all"
+      # roll-up does, and every row it produces carries
+      # weights_are_placeholder so the degradation is visible rather than
+      # silent. Failing the job here would report a good reconstruction as red.
+      - name: Refresh ONS weights
+        id: weights
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: python -m ukhotels.onsweights --discover
+
+      - name: Note that weights are still placeholders
+        if: steps.weights.outcome == 'failure'
+        run: |
+          echo "::warning::No regional weights obtained (the expected outcome). \
+          Per-region reconstructions are unaffected; the weighted national \
+          aggregate stays flagged weights_are_placeholder."
+
+      - name: Reconstruct sub-indices
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
+          PYTHONPATH: src
+        run: |
+          python -m ukhotels.reconcile \
+            ${{ inputs.index_month && format('--index-month {0}', inputs.index_month) || '' }} \
+            ${{ inputs.index_day && format('--index-day {0}', inputs.index_day) || '' }} \
+            | tee reconcile-summary.json
+
+      # Scored against both published sources. The regional ad hoc release is
+      # the closer match to what we reconstruct; the national time series is
+      # scored too because it has years of history where the ad hoc release has
+      # months, and a wildly different answer between them is itself a signal.
+      - name: Score against published ONS values
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: |
+          python -m ukhotels.validate --series-source adhoc_regional \
+            | tee validation-adhoc.json
+          python -m ukhotels.validate --series-source timeseries \
+            | tee validation-timeseries.json
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "### Accommodation reconciliation"
+            echo ""
+            for f in reconcile-summary.json validation-adhoc.json validation-timeseries.json; do
+              if [ -s "$f" ]; then
+                echo "#### $f"
+                echo '```json'
+                cat "$f"
+                echo '```'
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reconcile-${{ github.run_id }}
+          path: |
+            uk-hotels/reconcile-summary.json
+            uk-hotels/validation-adhoc.json
+            uk-hotels/validation-timeseries.json
+          if-no-files-found: ignore
+          retention-days: 90
