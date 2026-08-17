@@ -247,3 +247,88 @@ class TestBuildReport:
     def test_reports_units(self):
         rows = [scored_row(m, 100 + 10 * m, 100 + 10 * m) for m in (1, 2, 3)]
         assert "percentage points" in build_report(rows)["units"]
+
+
+class TestNoCollectionYet:
+    """The month-predates-the-panel case must exit 0, not 1.
+
+    Reconcile is scheduled to attempt last month daily from the 15th to the
+    25th. In the pipeline's first weeks that means repeatedly asking for a month
+    older than the panel. Failing there produces a fortnight of red runs for an
+    absence that is expected and permanent, which teaches the operator to ignore
+    Actions email -- and the 60-day inactivity trap makes that expensive.
+    """
+
+    class Reader:
+        def __init__(self, nearest=None, first_day=None):
+            self.nearest = nearest or []
+            self.first_day = first_day
+
+        def query(self, sql, params=None):
+            if "MIN(scrape_date)" in sql:
+                return [{"first_day": self.first_day}]
+            return self.nearest
+
+    def _run(self, reader):
+        from ukairfares.config import Config
+        from ukairfares.reconcile import run_reconcile
+
+        config = Config(
+            project="p", dataset="d", provider_name="mock", provider_credential=None,
+            market="uk", currency="GBP", target_departure_time=dt.time(9, 0),
+            failure_threshold=0.34, dry_run=True,
+            scrapes_table="airfare_scrapes", index_table="reconstructed_index",
+        )
+        return run_reconcile(
+            config,
+            index_month=dt.date(2026, 7, 1),
+            index_day_override=dt.date(2026, 7, 14),
+            reader=reader,
+            writer=None,
+        )
+
+    def test_empty_panel_is_not_an_error(self):
+        from ukairfares.reconcile import NoCollectionYet
+
+        with pytest.raises(NoCollectionYet):
+            self._run(self.Reader(first_day=None))
+
+    def test_collection_started_after_the_index_day(self):
+        from ukairfares.reconcile import NoCollectionYet
+
+        with pytest.raises(NoCollectionYet) as exc:
+            self._run(self.Reader(first_day=dt.date(2026, 8, 17)))
+        assert "predates the panel" in str(exc.value)
+
+    def test_gap_during_active_collection_is_still_an_error(self):
+        """The distinction that earns the exception: a broken puller must fail."""
+        from ukairfares.reconcile import NoCollectionYet
+
+        with pytest.raises(RuntimeError) as exc:
+            self._run(self.Reader(first_day=dt.date(2026, 6, 1)))
+        assert not isinstance(exc.value, NoCollectionYet)
+        assert "has been running since 2026-06-01" in str(exc.value)
+
+    def test_main_exits_zero_for_no_collection_yet(self, monkeypatch):
+        import ukairfares.reconcile as rec
+
+        monkeypatch.setenv("GCP_PROJECT", "p")
+        monkeypatch.setenv("BQ_DATASET", "d")
+        monkeypatch.setenv("DRY_RUN", "1")
+        monkeypatch.setattr(
+            rec, "run_reconcile",
+            lambda *a, **k: (_ for _ in ()).throw(rec.NoCollectionYet("older than the panel")),
+        )
+        assert rec.main(["--index-month", "2026-07", "--index-day", "2026-07-14"]) == 0
+
+    def test_main_still_exits_one_for_a_real_gap(self, monkeypatch):
+        import ukairfares.reconcile as rec
+
+        monkeypatch.setenv("GCP_PROJECT", "p")
+        monkeypatch.setenv("BQ_DATASET", "d")
+        monkeypatch.setenv("DRY_RUN", "1")
+        monkeypatch.setattr(
+            rec, "run_reconcile",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("puller did not run")),
+        )
+        assert rec.main(["--index-month", "2026-07", "--index-day", "2026-07-14"]) == 1

@@ -97,6 +97,38 @@ ORDER BY ABS(DATE_DIFF(scrape_date, @target, DAY)), scrape_date
 LIMIT 1
 """
 
+#: The earliest date the panel holds anything usable, used only to explain an
+#: absence. See `NoCollectionYet`.
+COLLECTION_START_QUERY = """
+SELECT MIN(scrape_date) AS first_day
+FROM `{table}`
+WHERE status = 'ok'
+"""
+
+
+class NoCollectionYet(Exception):
+    """Asked to reconstruct a month from before collection started.
+
+    This exists to keep one specific absence out of the error path. Reconcile is
+    scheduled to attempt the *previous* month daily from the 15th to the 25th, so
+    in the pipeline's first weeks it is repeatedly asked for a month whose index
+    day predates the very first scrape. There is no data and there never will be
+    -- you cannot go back and collect July's index-day fares in August -- so
+    failing is both useless and actively harmful: five or six red runs in the
+    first fortnight is exactly how someone learns to ignore Actions
+    notifications, and this pipeline's survival depends on those being read (see
+    the 60-day inactivity trap in the README).
+
+    The distinction that matters, mirroring the bulletin split already made in
+    `main`:
+
+      * index month predates collection    -> exit 0, notice   (expected)
+      * collection covered it but no rows  -> exit 1, error    (puller broke)
+
+    Collapsing those two would mean a genuinely broken puller looked identical to
+    being new, and a month would be skipped in silence.
+    """
+
 
 def _geometric_mean(values: Iterable[float]) -> float | None:
     vals = [v for v in values if v > 0]
@@ -129,6 +161,17 @@ def resolve_scrape_date(
     if isinstance(chosen, dt.datetime):
         chosen = chosen.date()
     return chosen, (chosen - index_day).days
+
+
+def collection_start(reader, table: str) -> dt.date | None:
+    """The earliest date with a usable scrape, or None if there are none."""
+    rows = reader.query(COLLECTION_START_QUERY.format(table=table))
+    if not rows:
+        return None
+    first = rows[0].get("first_day")
+    if isinstance(first, dt.datetime):
+        return first.date()
+    return first
 
 
 def aggregate(
@@ -369,9 +412,23 @@ def run_reconcile(
 
     scrape_date_used, offset = resolve_scrape_date(reader, config.scrapes_ref, index_day.index_day)
     if scrape_date_used is None:
+        # Before calling this a failure, establish whether collection had even
+        # started. See NoCollectionYet for why the two cases must not be merged.
+        first_day = collection_start(reader, config.scrapes_ref)
+        if first_day is None:
+            raise NoCollectionYet(
+                f"the panel holds no successful scrapes at all, so {index_day.index_month:%B %Y} "
+                "cannot be reconstructed. Expected until the daily puller has run at least once."
+            )
+        if first_day > index_day.index_day:
+            raise NoCollectionYet(
+                f"collection started {first_day}, after the {index_day.index_month:%B %Y} index "
+                f"day ({index_day.index_day}). This month predates the panel and always will."
+            )
         raise RuntimeError(
-            f"no usable scrapes within a week of {index_day.index_day}. "
-            "Did the daily puller run during the collection window?"
+            f"no usable scrapes within a week of {index_day.index_day}, though collection "
+            f"has been running since {first_day}. Did the daily puller run during the "
+            "collection window?"
         )
     if offset != 0:
         _gha_notice(
@@ -453,6 +510,12 @@ def main(argv: list[str] | None = None) -> int:
         # a no-op until ONS publish.
         _gha_notice("notice", str(exc))
         log.info("%s -- nothing to do yet", exc)
+        return 0
+    except NoCollectionYet as exc:
+        # Also not an error: the month is simply older than the panel. Exit clean
+        # so the pipeline's first weeks are not a wall of red runs.
+        _gha_notice("notice", f"nothing to reconstruct: {exc}")
+        log.info("%s", exc)
         return 0
     except IndexDayNotFound as exc:
         # This IS an error: the bulletin exists but our parser could not read it.
