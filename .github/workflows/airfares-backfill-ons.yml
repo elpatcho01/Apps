@@ -55,10 +55,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # Keyless auth via Workload Identity Federation. Service-account JSON
+      # keys are blocked by the iam.disableServiceAccountKeyCreation org policy
+      # (Google's secure-by-default for new projects), and WIF is the
+      # recommended alternative regardless: GitHub mints a short-lived OIDC
+      # token per run, so there is no long-lived credential to leak or rotate.
+      # Requires `permissions: id-token: write`, set at the top of this file.
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
 
       - name: Ensure BigQuery tables exist
         env:

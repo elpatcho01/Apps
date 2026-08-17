@@ -149,12 +149,45 @@ is ~20 MB/year against a 10 GB free allowance, so expect a £0 bill.
 |---|---|
 | `GCP_PROJECT` | BigQuery project ID |
 | `BQ_DATASET` | BigQuery dataset name |
-| `GCP_SA_KEY` | Service-account JSON. Needs `bigquery.dataEditor` + `bigquery.jobUser` |
+| `GCP_WIF_PROVIDER` | Workload Identity provider resource name (keyless auth — see below) |
+| `GCP_SA_EMAIL` | Service-account email. Needs `bigquery.dataEditor` + `bigquery.jobUser` |
 | `SERPAPI_KEY` | SerpApi API key (default provider) |
 | `TRAVELPAYOUTS_TOKEN` | *Optional.* Only if `FARE_PROVIDER=travelpayouts` |
 
-Nothing is read from a committed file. The service account should be scoped to
-this dataset only.
+Nothing is read from a committed file, and there is **no service-account key**.
+Authentication uses Workload Identity Federation: GitHub mints a short-lived
+OIDC token per run and exchanges it for GCP credentials, so no long-lived
+secret exists to leak or rotate. This is also required in practice — Google
+applies `constraints/iam.disableServiceAccountKeyCreation` by default to new
+projects, which blocks JSON key creation outright.
+
+One-time setup (substitute your project and repo):
+
+```bash
+PROJECT_ID=your-project
+REPO=owner/repo
+SA=airfares-pipeline@$PROJECT_ID.iam.gserviceaccount.com
+NUM=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+
+gcloud services enable iamcredentials.googleapis.com sts.googleapis.com
+
+gcloud iam workload-identity-pools create github --location=global
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --location=global --workload-identity-pool=github \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='$REPO'"
+
+# Let only this repo impersonate the service account.
+gcloud iam service-accounts add-iam-policy-binding $SA \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/$NUM/locations/global/workloadIdentityPools/github/attribute.repository/$REPO"
+
+echo "GCP_WIF_PROVIDER = projects/$NUM/locations/global/workloadIdentityPools/github/providers/github-provider"
+```
+
+The `attribute-condition` is what stops any other repository on GitHub from
+exchanging a token for your credentials — do not omit it.
 
 ### 3. Verify without spending anything
 
