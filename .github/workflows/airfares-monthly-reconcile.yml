@@ -89,7 +89,7 @@ jobs:
       - name: Reconstruct sub-indices
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
-          BQ_DATASET: ${{ secrets.BQ_DATASET }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
           # This job reads BigQuery and ONS; it never queries a fare
           # provider, so it needs no fare-API credential.
           FARE_PROVIDER: mock
@@ -103,7 +103,7 @@ jobs:
       - name: Score against published ONS values
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
-          BQ_DATASET: ${{ secrets.BQ_DATASET }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
           # This job reads BigQuery and ONS; it never queries a fare
           # provider, so it needs no fare-API credential.
           FARE_PROVIDER: mock

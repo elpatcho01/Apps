@@ -106,14 +106,15 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
-          BQ_DATASET: ${{ secrets.BQ_DATASET }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
         run: python -m ukairfares.ensure_tables
 
       - name: Collect fares
         env:
           # Collection mode: ${{ needs.decide.outputs.mode }}
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
-          BQ_DATASET: ${{ secrets.BQ_DATASET }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
           # Switch sources by setting the FARE_PROVIDER repository variable --
           # no code or workflow edit needed. Both credentials are passed; the
           # config picks up whichever the active provider requires.
