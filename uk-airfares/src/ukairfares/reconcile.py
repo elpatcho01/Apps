@@ -51,7 +51,22 @@ def _gha_notice(level: str, message: str) -> None:
     print(f"::{level}::{message}", flush=True)
 
 
+#: Rows for one collection date, restricted to a SINGLE run.
+#:
+#: The panel is append-only and a date can legitimately carry several runs -- a
+#: manual re-run, a retry after a failure, or simply clicking dispatch twice.
+#: Without this restriction every route on that date is counted once per run:
+#: the mean is roughly unchanged but n_observations is inflated, which
+#: misrepresents coverage and would let a duplicated day outvote a clean one.
+#: The most recent run for the date is the one reconciliation uses.
 PANEL_QUERY = """
+WITH latest_run AS (
+  SELECT run_id
+  FROM `{table}`
+  WHERE scrape_date = @scrape_date
+  ORDER BY scrape_ts DESC
+  LIMIT 1
+)
 SELECT
   route,
   haul_category,
@@ -67,6 +82,7 @@ SELECT
   status
 FROM `{table}`
 WHERE scrape_date = @scrape_date
+  AND run_id = (SELECT run_id FROM latest_run)
   AND status = 'ok'
   AND price_gbp IS NOT NULL
 """

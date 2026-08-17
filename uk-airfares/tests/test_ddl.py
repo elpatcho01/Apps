@@ -106,3 +106,33 @@ class TestEnsureTablesSubmission:
             "CREATE TABLE" in q.upper()
             for q in writer._client.queries[:first_alter]
         )
+
+
+class TestPanelQueryDeduplicates:
+    """A collection date can carry several runs; reconciliation must pick one.
+
+    airfare_scrapes is append-only, so a manual re-run, a retry, or a
+    double-click on dispatch all leave multiple complete vintages for the same
+    scrape_date. Aggregating across them counts every route once per run --
+    n_observations inflates and a duplicated day carries more weight than a
+    clean one.
+    """
+
+    def test_query_restricts_to_a_single_run(self):
+        from ukairfares.reconcile import PANEL_QUERY
+
+        sql = PANEL_QUERY.format(table="p.d.airfare_scrapes")
+        assert "latest_run" in sql
+        assert "run_id = (SELECT run_id FROM latest_run)" in sql
+
+    def test_latest_run_is_chosen_by_scrape_ts(self):
+        from ukairfares.reconcile import PANEL_QUERY
+
+        sql = PANEL_QUERY.format(table="p.d.airfare_scrapes")
+        assert "ORDER BY scrape_ts DESC" in sql and "LIMIT 1" in sql
+
+    def test_still_filters_to_usable_rows(self):
+        from ukairfares.reconcile import PANEL_QUERY
+
+        sql = PANEL_QUERY.format(table="p.d.airfare_scrapes")
+        assert "status = 'ok'" in sql and "price_gbp IS NOT NULL" in sql
