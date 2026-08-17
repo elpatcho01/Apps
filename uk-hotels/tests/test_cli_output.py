@@ -57,14 +57,17 @@ def test_pull_stdout_is_json_when_nothing_is_due(mock_env, capsys):
     assert _json_stdout(capsys)["cells"] == 0
 
 
-def test_discover_stdout_is_json_even_with_warnings(mock_env, capsys, tmp_path):
-    # The mock returns thin cells on purpose, so every one emits a ::warning::
-    # after the JSON is printed. That is exactly the case that broke the first
-    # live run's artifact.
+def test_discover_stdout_is_json_even_with_warnings(
+    mock_env, capsys, monkeypatch, tmp_path
+):
+    # Forcing a basis the mock mostly fails makes every cell thin, so each emits
+    # a ::warning:: after the JSON is printed -- the exact case that broke the
+    # first live run's artifact. Forced rather than incidental, because the
+    # default basis is now "any" and no longer produces thin cells.
+    monkeypatch.setenv("RATE_BASIS", "non_refundable")
     discover.main(["--dry-run-panel", "--out", str(tmp_path / "p.csv")])
     summary = _json_stdout(capsys)
     assert summary["thin_cells"]
-    assert "::warning::" in capsys.readouterr().err or True  # already drained
 
 
 def test_discover_panel_listing_goes_to_stderr(mock_env, capsys, tmp_path):

@@ -20,10 +20,16 @@ that gets capped or closed. That is a worse outcome than a slightly less clean
 data source, so it was ruled out rather than risked.
 
 SerpApi asks for no booking intent, takes exact check-in and check-out dates and
-occupancy, and returns the two things the comparability filter needs most:
-`hotel_class` and `free_cancellation`. It also returns both the advertised rate
-and the before-taxes-and-fees rate, which is what lets this pipeline store both
-rather than silently picking one.
+occupancy, and returns both the advertised rate and the before-taxes-and-fees
+rate, which is what lets this pipeline store both rather than silently picking
+one.
+
+It does NOT return `free_cancellation`, despite what this docstring originally
+claimed on the strength of the documentation. A raw-key census over 214 live
+properties found the field on none of them; a nested `prices` array carried by
+~17% is the only route, and it yields a known value for about 6%. Cancellation
+policy is therefore uncontrolled in this series -- see `selection.py` and README
+limitation 2.
 
 It is also already in use on the sibling air-fares project, so the account, the
 billing and the `SERPAPI_KEY` secret are shared.
@@ -39,10 +45,11 @@ CAVEATS, RECORDED HONESTLY
    live run should be checked against `n_quotes` before it is trusted.
 
 2. ONE RATE PER PROPERTY. Google Hotels surfaces a property's lowest available
-   rate across sources, not a rate card. So `free_cancellation` describes *that*
-   rate, and there is no way to request the same property on the other basis.
-   The filter therefore selects properties whose lowest rate happens to be on
-   the configured basis, which thins the sample rather than biasing the level.
+   rate across sources, not a rate card, and does not say what terms that rate
+   carries. There is no way to request the same property on a stated basis. So
+   even where `free_cancellation` is recoverable for a minority of properties,
+   the field describes whichever rate happened to be cheapest -- which makes it
+   a description of the sample rather than a control over it.
 
 3. NO BOARD BASIS OR ROOM TYPE. Not returned at all. See `selection.py` -- these
    are recorded as unknown rather than assumed.

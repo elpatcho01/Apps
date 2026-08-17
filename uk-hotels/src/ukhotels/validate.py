@@ -93,7 +93,7 @@ SELECT
   p.series_source, p.coicop_class, p.methodology_era,
   r.n_observations, r.n_properties, r.n_properties_churned,
   r.index_day_exact, r.index_day_offset_days,
-  r.weights_are_placeholder, r.source_is_cached, r.board_basis_known
+  r.weights_are_placeholder, r.source_is_cached, r.board_basis_known, r.rate_basis
 FROM latest_recon r
 JOIN latest_published p
   ON r.index_month = p.index_month
@@ -286,6 +286,15 @@ def build_report(rows: list[dict[str, Any]], *, series_source: str) -> dict[str,
         blockers.append(
             f"{n_inexact} row(s) used a substitute collection date rather than the one "
             "the confirmed index day implies; rate drift is baked into their error."
+        )
+    if any(r.get("rate_basis") == "any" for r in rows):
+        blockers.append(
+            "Cancellation policy is UNCONTROLLED (rate_basis='any'): refundable and "
+            "non-refundable rates are mixed together. They differ by 30-40% on an "
+            "identical room, making this the largest single contamination in the "
+            "series, and its sign depends on how the mix shifts month to month. The "
+            "source does not expose the field, so this does not clear by fixing "
+            "anything in this repository."
         )
     if any(r.get("board_basis_known") is False for r in rows):
         blockers.append(

@@ -170,7 +170,7 @@ jobs:
           HOTEL_CURRENCY: GBP
           # The methodology knobs. Changing either of the first two mid-series
           # puts a step change into the index, so treat them as set-once.
-          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'any' }}
           TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
           COLLECTION_ALIGNMENT: ${{ vars.COLLECTION_ALIGNMENT || 'per_night' }}
           # A run that mostly failed is not a usable vintage -- exit non-zero so

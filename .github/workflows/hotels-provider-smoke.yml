@@ -103,7 +103,7 @@ jobs:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           HOTEL_MARKET: uk
           HOTEL_CURRENCY: GBP
-          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'any' }}
           TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
           PYTHONPATH: src
         run: |

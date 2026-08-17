@@ -20,14 +20,23 @@ after picking the right property the rate is not yet pinned down.
 So filtering happens before any selection rule, and what was filtered is
 recorded on every row rather than left implicit.
 
-THE FOUR CONTROLS, AND WHICH TWO WE CAN ACTUALLY APPLY
+THE FOUR CONTROLS, AND WHICH ONE WE CAN ACTUALLY APPLY
 -------------------------------------------------------
 +---------------------+------------------------------------------------------+
-| Cancellation policy | APPLIED. `free_cancellation` is returned per rate.    |
-|                     | Refundable versus non-refundable is routinely a       |
-|                     | 30-40% gap on an identical room, which makes it the   |
-|                     | largest single contamination risk here. The basis is  |
-|                     | configured, held constant, and recorded per row.      |
+| Cancellation policy | NOT APPLIED, and this is the most consequential gap   |
+|                     | in the pipeline. Refundable versus non-refundable is  |
+|                     | routinely a 30-40% gap on an identical room, the      |
+|                     | largest single contamination risk here -- and the     |
+|                     | source does not expose it. A raw-key census over 214  |
+|                     | live properties found `free_cancellation` in the key  |
+|                     | set of NONE of them; a nested `prices` array carried  |
+|                     | by ~17% is the only route, giving a known value for   |
+|                     | about 6%. Holding the basis constant rejected 100%    |
+|                     | of every cell and produced no panel at all.           |
+|                     | The control itself is intact and correct -- set       |
+|                     | RATE_BASIS=free_cancellation and it applies -- so     |
+|                     | this is a source limitation, and it is a validation   |
+|                     | blocker rather than a footnote.                       |
 +---------------------+------------------------------------------------------+
 | Room and occupancy  | APPLIED, at the query. Two adults, no children, one   |
 |                     | night, every call, every month. Constants in `panel`, |
@@ -80,8 +89,13 @@ from .providers.base import PropertyQuote
 DEFAULT_MAX_PRICE_RATIO = 5.0
 
 #: Which rate basis to hold constant. "free_cancellation" and "non_refundable"
-#: each give a coherent series; "any" does not and exists only so the effect of
-#: not controlling for it can be measured.
+#: each give a coherent series; "any" does not.
+#:
+#: "any" is the current default -- forced by the source, not chosen; see
+#: `config.Config.from_env`. It was written as the uncontrolled comparison case
+#: and is now the operating mode, which is exactly the sort of drift that gets
+#: forgotten. Hence the blocker in `validate` and the standing entry in the
+#: digest: the compromise has to keep announcing itself.
 RateBasis = Literal["free_cancellation", "non_refundable", "any"]
 
 #: Which price to treat as the headline. "advertised" is the rate as displayed,

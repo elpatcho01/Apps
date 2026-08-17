@@ -62,6 +62,13 @@ PROPERTY_PANEL_PATH = DATA_DIR / "property_panel.csv"
 #: budget rooms with no comparable product across regions) and 5 star (thin in
 #: most regions, and dominated by a handful of properties whose pricing is not
 #: representative of anything).
+#:
+#: The half-star upper bounds are inert against the current source: live runs
+#: return integer star classes only (observed 2.0, 3.0, 4.0, 5.0 across 240
+#: properties, never 3.5 or 4.5). They are kept because they cost nothing and a
+#: future source may be finer-grained -- but do not read them as evidence that
+#: the tiers are half-star wide in practice. They are effectively "3-star" and
+#: "4-star".
 StarTier = Literal["midscale", "upscale"]
 STAR_TIERS: dict[StarTier, tuple[float, float]] = {
     "midscale": (3.0, 3.5),

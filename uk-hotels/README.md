@@ -17,27 +17,55 @@ is the most useful section here if you already know that project.
 
 ## Read this first: what this pipeline cannot currently tell you
 
-Five limitations bound every number that comes out of this. Four are structural
-rather than bugs, and two of them may never fully resolve.
+Six limitations bound every number that comes out of this. Five are structural
+rather than bugs, and three of them may never fully resolve.
 
 **1. No collection has happened yet, so no accuracy claim is possible.** The
-pipeline is complete and tested (159 tests, no network) but has never run against
+pipeline is complete and tested (191 tests, no network) but has never run against
 the live provider. `validate` returns `INSUFFICIENT_DATA` and will keep doing so
 until a full quarter of overlap exists. That is enforced, not advisory.
 
-**2. Board basis and room type are unknown on every row.** This is the most
-serious limitation and it is a property of the data source, not of the code.
-Google Hotels — via SerpApi, the only viable provider (see
-[Choosing a price source](#choosing-a-price-source)) — returns a property's
-lowest available rate without saying whether it includes breakfast or which room
-it is for. Two of the four contamination controls the methodology calls for
-therefore **cannot be applied**. Room-only and breakfast-inclusive rates are
-mixed together in this series. That is a real bias of unknown sign, recorded as
-`board_basis = NULL` and `comparability_basis LIKE '%board=unknown%'` on every
-row, and it downgrades the validation verdict permanently until a provider that
-reports it is found.
+**2. Cancellation policy is uncontrolled, and this is the most serious
+limitation.** Refundable and non-refundable rates for an identical room
+routinely differ by **30–40%**, which makes holding cancellation policy constant
+the single most important contamination control in accommodation data. It cannot
+be applied on this source. A raw-key census over 214 live properties found
+`free_cancellation` in the key set of **none** of them; the only route is a
+nested `prices` array carried by ~17%, giving a known value for about 6%. With
+the control switched on, the filter rejected 100% of every cell and the pipeline
+produced no panel at all.
 
-**3. The regional weights are placeholders and probably always will be.** ONS
+So the series is collected with `RATE_BASIS=any` — a deliberate decision, taken
+on that evidence, to accept a known contamination rather than collect nothing.
+The bias is real and its *sign is not fixed*: it depends on how the refundable
+mix shifts month to month, which is exactly the kind of movement a nowcast would
+otherwise attribute to the market. The control code is intact and correct — set
+`RATE_BASIS=free_cancellation` and it applies — so this resolves if a source
+that reports the field is ever adopted.
+
+It is treated as a standing defect, not a footnote: `rate_basis` is on every
+row, `validate.py` raises a permanent blocker while it is `any`, and the monthly
+digest restates it.
+
+**The direct consequence: the validation verdict is capped at `PROVISIONAL`.**
+`SCORED` means "enough overlap *with clean provenance*", and provenance is not
+clean while a known contamination of unquantified size sits in the series. So
+this pipeline cannot reach `SCORED` on the current source however well it
+tracks ONS — and that is the intended behaviour, not an oversight to route
+around.
+
+**3. Board basis and room type are unknown on every row.** Same cause, second
+instance. Google Hotels returns a property's lowest available rate without
+saying whether it includes breakfast or which room it is for, so room-only and
+breakfast-inclusive rates are mixed together too. Recorded as
+`board_basis = NULL` and `comparability_basis LIKE '%board=unknown%'` on every
+row, and likewise a permanent validation blocker.
+
+**Of the four contamination controls the methodology calls for, one is
+applied** (room and occupancy, fixed at the query). Taxes are handled by storing
+both bases. The other two are unavailable.
+
+**4. The regional weights are placeholders and probably always will be.** ONS
 publish a CPI weight for class 11.2.0.1 as a whole, and regional expenditure
 weights in aggregate, but not the cross-tabulation needed to weight twelve
 regional sub-indices into one national figure *for this item*. The committed
@@ -47,19 +75,19 @@ the validation path. **Per-region reconstructions do not use weights at all and
 are unaffected** — only the national `location = "all"` roll-up is, and it is
 explicitly a convenience level rather than the headline.
 
-**4. The published series has two methodology breaks, both recent.** See
+**5. The published series has two methodology breaks, both recent.** See
 [The methodology being replicated](#the-methodology-being-replicated). The item
 was rebuilt in 2025 and again in February 2026. A value from 2024 and a value
 from 2026 are not measurements of the same thing, so comparisons never span a
 break — which cuts the usable answer key down sharply.
 
-**5. The answer key is short.** The regional ad hoc release begins in January
+**6. The answer key is short.** The regional ad hoc release begins in January
 2025 because the six-weeks-ahead item began then. Its published coverage at time
 of writing runs to July 2025. The national time series has decades of history but
 covers all of 11.2.0.1 including items we do not replicate, so agreement with it
 is weaker evidence.
 
-The pipeline is designed to make all five visible rather than to paper over them.
+The pipeline is designed to make all six visible rather than to paper over them.
 
 ---
 
@@ -179,7 +207,7 @@ terms, board and room type.
 
 | Control | Status |
 |---|---|
-| **Cancellation policy** | **Applied.** `free_cancellation` is returned per rate. Refundable vs non-refundable is routinely a 30–40% gap on an identical room, making this the largest single contamination risk. The basis is configured, held constant, and recorded per row. Unknown is treated as a non-match — a thinner honest sample beats a fuller contaminated one. |
+| **Cancellation policy** | **Not applied — see limitation 2.** The source does not expose it: absent from the key set of all 214 live properties surveyed. Holding it constant rejected 100% of every cell, so the series runs `RATE_BASIS=any` with the contamination recorded and blocked on rather than hidden. |
 | **Room and occupancy** | **Applied, at the query.** Two adults, no children, one night, every call, every month. These are constants in `panel.py`, not configuration, so they cannot drift mid-series. |
 | **Taxes and fees** | **Applied, by storing both.** `price_gbp` follows the configured `tax_basis`; `price_before_taxes_gbp` is kept alongside. So a series collected under one basis can be recomputed under the other without re-collecting. |
 | **Board basis and room type** | **NOT APPLIED.** Not reported by any implemented provider. See limitation 2 at the top. |
@@ -302,7 +330,7 @@ Researched August 2026.
 
 | Source | Verdict |
 |---|---|
-| **SerpApi Google Hotels** ← *chosen* | No booking intent required. Exact check-in/check-out and occupancy. Returns `hotel_class`, `free_cancellation`, and **both** `rate_per_night.lowest` and `before_taxes_fees` — which is what lets this pipeline store both tax bases rather than silently picking one. ~$25/month at this volume (250 searches free, $25 for 1,000); this panel needs ~24–48 calls a month. Same vendor, account and secret as the air-fares project. |
+| **SerpApi Google Hotels** ← *chosen* | No booking intent required. Exact check-in/check-out and occupancy. Returns `hotel_class` (a display string, plus a numeric `extracted_hotel_class`) and **both** `rate_per_night.lowest` and `before_taxes_fees`, which is what lets this pipeline store both tax bases rather than silently picking one. It does **not** return `free_cancellation` — see limitation 2. ~$25/month at this volume (250 searches free, $25 for 1,000); this panel needs ~24–48 calls a month. Same vendor, account and secret as the air-fares project. |
 | **Booking.com Demand API** | Application, manual review, partner approval. |
 | **Expedia Rapid (EPS)** | Formal partnership, minimum performance commitments, 3–6 month certification before going live. |
 | **Hotelbeds APItude** | Certification and credential approval; bedbank terms written around booking volume. |
@@ -399,7 +427,7 @@ a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                          # 159 tests, no network
+python -m pytest                          # 191 tests, no network
 
 # 2026-06-30 is exactly six weeks before the 2nd Tuesday of August 2026.
 DRY_RUN=1 HOTEL_PROVIDER=mock PYTHONPATH=src \
@@ -620,8 +648,16 @@ the order they bite:
 
 Errors are in **percentage points of month-on-month change**, not levels.
 
-Verdicts are `INSUFFICIENT_DATA` → `PROVISIONAL` → `SCORED`. **Do not claim the
-pipeline works before `SCORED`.**
+Verdicts are `INSUFFICIENT_DATA` → `PROVISIONAL` → `SCORED`.
+
+On the current source the ceiling is **`PROVISIONAL`**, permanently, because
+cancellation policy is uncontrolled and board basis is unknown (limitations 2
+and 3). `SCORED` requires clean provenance, and this series does not have it.
+Reaching `SCORED` needs a source that reports those fields, not a change here.
+
+So the honest reading of a good result is: *the movements track ONS closely,
+with a known contamination of unquantified size in the underlying rates.* That
+is still a useful nowcast. It is not a validated one.
 
 ---
 
@@ -677,7 +713,7 @@ uk-hotels/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi_hotels.py · mock.py
-└── tests/              159 tests, no network required
+└── tests/              191 tests, no network required
 ```
 
 ## Non-goals

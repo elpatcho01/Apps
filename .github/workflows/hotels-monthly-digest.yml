@@ -136,7 +136,7 @@ jobs:
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
-          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'any' }}
           TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
           PYTHONPATH: src
         run: python -m ukhotels.digest --month "${{ steps.month.outputs.month }}"
@@ -157,7 +157,7 @@ jobs:
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
-          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'any' }}
           TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
           PYTHONPATH: src
         run: python -m ukhotels.export

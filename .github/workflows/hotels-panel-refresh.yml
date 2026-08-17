@@ -119,7 +119,7 @@ jobs:
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
           HOTEL_PROVIDER: ${{ vars.HOTEL_PROVIDER || 'serpapi' }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'any' }}
           TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
           PYTHONPATH: src
         run: |

@@ -145,7 +145,27 @@ class Config:
             provider_credential=credential,
             market=os.environ.get("HOTEL_MARKET", "uk").strip(),
             currency=os.environ.get("HOTEL_CURRENCY", "GBP").strip().upper(),
-            rate_basis=_env_choice("RATE_BASIS", "free_cancellation", _RATE_BASES),
+            # DEFAULT IS "any", AND THAT IS A KNOWN COMPROMISE, NOT A CONVENIENCE.
+            #
+            # Cancellation policy is the largest single contamination risk in
+            # accommodation data -- refundable and non-refundable rates for an
+            # identical room routinely differ by 30-40%. Controlling for it is
+            # what "free_cancellation" does, and it was the original default.
+            #
+            # It cannot be controlled on this source. A raw-key census over 214
+            # live properties found `free_cancellation` in the key set of NONE
+            # of them; the only route to it is a nested `prices` array carried
+            # by ~17%, which yielded a known value for 6%. Holding the basis
+            # constant therefore rejected 100% of every cell and produced no
+            # panel at all.
+            #
+            # So the series is collected with cancellation policy UNCONTROLLED.
+            # That is a real bias of unknown sign, and it is treated as one:
+            # every row records rate_basis, validate.py raises a standing
+            # blocker while it is "any", and the digest reports the refundable
+            # mix where it is known so the magnitude can at least be estimated
+            # rather than merely acknowledged.
+            rate_basis=_env_choice("RATE_BASIS", "any", _RATE_BASES),
             tax_basis=_env_choice("TAX_BASIS", "advertised", _TAX_BASES),
             collection_alignment=alignment,
             advance_days=_env_int("ADVANCE_DAYS", ADVANCE_DAYS),

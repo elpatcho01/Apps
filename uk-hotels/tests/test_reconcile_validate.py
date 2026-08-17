@@ -274,6 +274,7 @@ def score_row(month, recon, published, **overrides):
         "weights_are_placeholder": False,
         "source_is_cached": False,
         "board_basis_known": True,
+        "rate_basis": "free_cancellation",
         "rn": 1,
     }
     row.update(overrides)
@@ -342,6 +343,10 @@ def test_a_methodology_break_interrupts_the_run_even_when_months_are_adjacent():
         ("source_is_cached", True, "cache-backed"),
         ("index_day_exact", False, "substitute collection date"),
         ("board_basis_known", False, "Board basis is UNKNOWN"),
+        # The operating default. Forced by the source rather than chosen, and
+        # therefore the one most likely to be forgotten -- which is precisely
+        # why it is a permanent blocker rather than a README footnote.
+        ("rate_basis", "any", "Cancellation policy is UNCONTROLLED"),
     ],
 )
 def test_provenance_issues_downgrade_the_verdict(field, value, fragment):

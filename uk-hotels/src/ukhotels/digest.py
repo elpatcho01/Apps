@@ -412,9 +412,14 @@ def build_digest(
     lines += [
         "## Standing limitations",
         "",
+        "- **Cancellation policy is uncontrolled.** `rate_basis=any` mixes "
+        "refundable and non-refundable rates, which differ by 30-40% on an identical "
+        "room. This is the largest single contamination in the series. The source "
+        "does not expose the field (a census of 214 live properties found it on "
+        "none), so it does not clear by changing anything here.",
         "- **Board basis and room type are unknown on every row.** No implemented "
         "provider reports them, so room-only and breakfast-inclusive rates are mixed "
-        "together. A real bias of unknown sign.",
+        "together. A second bias of unknown sign.",
         f"- **Regional weights are placeholders** (population-proportional, not "
         f"expenditure). Every weighted aggregate carries `weights_are_placeholder`.",
         "- **The published series has two methodology breaks** (2025 and February "
