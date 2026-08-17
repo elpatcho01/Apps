@@ -58,6 +58,9 @@ SCHEMA_VERSION = 1
 
 DEFAULT_OUT = pathlib.Path("reports/data/analytics.json")
 
+#: Sections exported as a single object rather than a list of rows.
+SINGLE_ROW_SECTIONS = frozenset({"coverage"})
+
 # --- The ONS published series: the richest thing in the warehouse today -------
 # 678 values, 113 months, six series, and it does not depend on collection
 # having run. This is what makes a dashboard worth looking at before the panel
@@ -177,12 +180,20 @@ def build_export(reader, config: Config, *, generated: dt.datetime | None = None
             rows = fn()
         except Exception as exc:  # noqa: BLE001 - a partial export beats none
             log.warning("%s failed: %s", name, exc)
-            out["errors"][name] = f"{type(exc).__name__}: {exc}"
-            out[name] = []
+            # Keep the message to one line: BigQuery's NotFound text carries the
+            # job id and location over several lines, which turns a JSON diff
+            # into noise and reads badly in a report.
+            out["errors"][name] = " ".join(f"{type(exc).__name__}: {exc}".split())
+            # Empty of the *same type* the success path would produce. The first
+            # live export returned `[]` for coverage on failure and `{}` on
+            # success, so a consumer doing `coverage["panel_rows"]` hit
+            # TypeError instead of KeyError -- a failure mode that looks like a
+            # code bug rather than missing data.
+            out[name] = {} if name in SINGLE_ROW_SECTIONS else []
             continue
         # `coverage` is a single-row summary; unwrap it so consumers do not have
         # to index into a one-element list.
-        out[name] = (rows[0] if rows else {}) if name == "coverage" else rows
+        out[name] = (rows[0] if rows else {}) if name in SINGLE_ROW_SECTIONS else rows
         log.info("%s: %d rows", name, len(rows))
 
     return out

@@ -179,3 +179,30 @@ def _write_partial(path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"errors": {"daily_by_series": "NotFound: no view"}}))
     return path
+
+
+class TestFailureShapeMatchesSuccessShape:
+    """The first live export got this wrong, and it matters to consumers.
+
+    `coverage` came back as `{}` when the table was empty but `[]` when the query
+    failed, so `data["coverage"]["panel_rows"]` raised TypeError rather than
+    KeyError -- which reads like a bug in the reader, not missing data.
+    """
+
+    def test_coverage_is_an_object_even_on_failure(self):
+        data = build_export(FakeReader({"": RuntimeError("NotFound")}), _config())
+        assert isinstance(data["coverage"], dict)
+
+    def test_row_sections_are_lists_even_on_failure(self):
+        data = build_export(FakeReader({"": RuntimeError("NotFound")}), _config())
+        for name in ("published_series", "daily_by_series", "latest_routes",
+                     "reconstructions"):
+            assert isinstance(data[name], list)
+
+    def test_error_messages_are_single_line(self):
+        """BigQuery's NotFound spans lines with a job id; that wrecks JSON diffs."""
+        multiline = RuntimeError("404 Not found: Table x\n\nLocation: europe-west2\nJob ID: abc\n")
+        data = build_export(FakeReader({"": multiline}), _config())
+        for msg in data["errors"].values():
+            assert "\n" not in msg
+            assert "  " not in msg

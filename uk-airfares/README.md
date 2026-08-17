@@ -132,6 +132,25 @@ digest reports the remaining gap every month, so it is tracked rather than
 assumed. Confirm what is currently loaded with the coverage query in
 [Backfilling](#backfilling-onss-published-series).
 
+**Nine months are absent, identically across all six series:** 2020-04, 2020-05,
+2020-06, 2020-11, and 2021-02 through 2021-06. That is 113 months out of a
+122-month span. The dates are the UK lockdown windows — with almost no flights to
+price, ONS suspended air-fare collection and imputed the CPI item rather than
+publishing a collected index. Two consequences:
+
+- **Rolling-origin validation must skip them.** They are not zeroes or dips to be
+  explained; there is no observation. A month-on-month relative spanning a hole
+  is meaningless.
+- **The "one full quarter of overlap" gate has to land on months that exist.**
+  Three consecutive *published* months, not three consecutive calendar months.
+
+**The six series do not peak in the same month.** Taking the median across all
+years, domestic and both European windows peak in **August** (European 1-month
+reaches 219), while long-haul 1-month and 6-month peak in **December** (162 and
+149). Summer holidays versus Christmas travel. Any seasonal adjustment or
+sanity check applied uniformly across hauls will therefore be wrong for half the
+series.
+
 **Weights are per series too.** Six weights per year, one per (haul × window),
 summing to 1. The split across a category's windows is *not* even — long-haul
 1-month carries ~0.056 while its 3- and 6-month windows carry ~0.251 each — so
@@ -675,7 +694,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              336 tests, no network required
+└── tests/              339 tests, no network required
 ```
 
 ## Non-goals
