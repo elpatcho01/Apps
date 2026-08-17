@@ -272,6 +272,9 @@ PYTHONPATH=src python -m ukairfares.reconcile --index-month 2026-08 --index-day 
 
 # Score against published ONS values
 PYTHONPATH=src python -m ukairfares.validate
+
+# Write the monthly digest to reports/YYYY-MM.md
+PYTHONPATH=src python -m ukairfares.digest --month 2026-08
 ```
 
 ### Schedules
@@ -280,6 +283,8 @@ PYTHONPATH=src python -m ukairfares.validate
 |---|---|---|
 | `airfares-daily-pull` | `0 9 * * *` | Runs daily on the 8th–21st; Mondays only outside that window |
 | `airfares-monthly-reconcile` | `0 12 15-25 * *` | Attempts daily; no-ops until the bulletin is out |
+| `airfares-backfill-ons` | `0 6 3 * *` | Refreshes the published ONS series and weights |
+| `airfares-monthly-digest` | `0 7 2 * *` | Writes and **commits** `reports/YYYY-MM.md` |
 | `airfares-ci` | on push/PR | Tests + an end-to-end mock dry run |
 
 The 8th–21st window is not arbitrary: it is exactly the range that brackets
@@ -304,6 +309,60 @@ run" and "fail loudly rather than silently skip". Resolved as:
 
 Failures are written to BigQuery as rows, not merely logged. An absent row and a
 failed row are different facts, and only one of them is recoverable later.
+
+---
+
+## The monthly digest, and the 60-day trap it exists to defuse
+
+`airfares-monthly-digest` writes `reports/YYYY-MM.md` — a summary of what was
+collected last month, how healthy it looked, what was reconstructed, and what
+needs attention. Read that one file and you have caught up.
+
+It also solves a problem that would otherwise kill this pipeline quietly, about
+two months after you stopped watching it:
+
+> **GitHub disables scheduled workflows after 60 days of repository inactivity —
+> and workflow runs do not count as activity. Only commits do.**
+
+So the failure mode is specifically the success case. A pipeline that collects
+perfectly every day for two months, needing no attention and therefore receiving
+no commits, gets switched off on day 60. You get one email, easy to miss among
+Actions notifications, and after that there is simply no data. Nothing errors;
+the runs stop appearing. And the gap is unrecoverable, because you cannot go back
+and collect August's index-day fares in October.
+
+Committing the digest is a real commit on a monthly cadence, so the counter never
+gets past ~30 days. The report that tells you the pipeline is healthy is the same
+thing keeping it alive.
+
+### Why this workflow's failure posture is inverted
+
+Everything else here fails loudly and early. This one does the opposite, on
+purpose: **it must always reach its commit step.**
+
+- `ukairfares.digest` wraps each query individually, so a failure becomes a note
+  in the report rather than an exception. "Reconstructions unavailable:
+  NotFound" is a useful digest. A digest that failed to generate is not.
+- If generation fails outright anyway, the workflow commits a placeholder saying
+  so, with a link to the run.
+- Only after committing does it exit non-zero, so the run still shows red.
+
+An aborting digest workflow would look like a minor annoyance and would take the
+collection schedules down with it six weeks later. That is not a trade worth
+making for a tidier exit code.
+
+### Things worth knowing
+
+- **Re-runs do not help.** Regenerating an identical report stages nothing, so
+  there is no commit and no clock reset. The reset comes from each month's first
+  run.
+- **CI ignores `reports/**`** (via a `!` exclusion in `paths` — GitHub rejects
+  `paths` and `paths-ignore` on the same event). Digest commits change no code,
+  and a red CI run on a generated report would misrepresent the pipeline's state.
+- **If the schedules do get disabled**, re-enabling them is a button in the
+  Actions tab; the data gap while they were off cannot be backfilled.
+- Any commit to the repository resets the clock — the digest just guarantees one
+  arrives without you having to remember.
 
 ---
 
@@ -535,7 +594,12 @@ State of the options as researched in August 2026:
 uk-airfares/
 ├── sql/
 │   ├── 001_airfare_scrapes.sql        Append-only observation panel
-│   └── 002_reconstructed_index.sql    Monthly reconstructions
+│   ├── 002_reconstructed_index.sql    Monthly reconstructions
+│   ├── 003_ons_published_index.sql    ONS's own values — the answer key
+│   ├── 004_add_months_ahead.sql       Migration: six series, not three
+│   ├── 005_add_candidate_filter.sql   Migration: selection-pool diagnostics
+│   └── 006_current_scrapes_view.sql   Latest coherent vintage per date
+├── reports/                           Monthly digests (committed by Actions)
 ├── src/ukairfares/
 │   ├── onscal.py       Index-day calendar arithmetic — the core of the thing
 │   ├── panel.py        Route panel + ONS weight loading
@@ -549,8 +613,9 @@ uk-airfares/
 │   ├── index.py        Matched-sample relatives, splicing, rebasing
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
 │   ├── validate.py     MAE/bias scoring (Task 6)
-│   └── providers/      base.py · travelpayouts.py · mock.py
-└── tests/              282 tests, no network required
+│   ├── digest.py       Monthly report — also what keeps the schedules alive
+│   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
+└── tests/              315 tests, no network required
 ```
 
 ## Non-goals

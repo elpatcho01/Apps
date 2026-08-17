@@ -1,0 +1,347 @@
+"""Monthly digest: the thing you read when you come back.
+
+Two jobs, and the second is not incidental.
+
+**Something to read.** Once a month, summarise what the pipeline collected, how
+healthy it looked, what it reconstructed, and whether anything needs attention.
+Written as Markdown so it renders in the repo without tooling.
+
+**Keeping the schedules alive.** GitHub disables scheduled workflows after 60
+days of repository inactivity, and *workflow runs do not count as activity* --
+only commits do. A pipeline that runs itself perfectly for two months and is
+never committed to gets switched off, silently. Committing this report is the
+activity that resets that clock, so the digest that tells you the pipeline is
+healthy is also what keeps it running.
+
+Every section degrades independently: a query that fails or returns nothing
+produces a note saying so rather than aborting the report. A digest that says
+"no reconstructions yet" is useful; a digest that failed to generate is not.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import logging
+import pathlib
+import sys
+from typing import Any, Callable
+
+from . import bq
+from .config import Config, ConfigError, PIPELINE_VERSION
+from .onscal import add_months
+
+log = logging.getLogger("ukairfares.digest")
+
+REPORTS_DIR = pathlib.Path("reports")
+
+COLLECTION_HEALTH = """
+SELECT
+  COUNT(DISTINCT scrape_date) AS days_collected,
+  COUNT(DISTINCT run_id)      AS runs,
+  COUNTIF(status = 'ok')      AS ok,
+  COUNTIF(status = 'no_data') AS no_data,
+  COUNTIF(status = 'error')   AS errors,
+  MIN(scrape_date)            AS first_day,
+  MAX(scrape_date)            AS last_day
+FROM `{view}`
+WHERE scrape_date BETWEEN @start AND @end
+"""
+
+BY_SERIES = """
+SELECT
+  haul_category, months_ahead,
+  COUNTIF(status = 'ok')      AS ok,
+  COUNTIF(status = 'no_data') AS no_data,
+  COUNTIF(status = 'error')   AS errors,
+  ROUND(AVG(n_quotes), 1)             AS flights_seen,
+  ROUND(AVG(n_quotes_considered), 1)  AS considered,
+  ROUND(AVG(ons_rule_time_delta_minutes)) AS mins_off_target,
+  ROUND(AVG(price_gbp))               AS avg_price_gbp,
+  ROUND(AVG(SAFE_DIVIDE(price_gbp - price_cheapest_gbp, price_cheapest_gbp)) * 100, 1)
+                                      AS pct_above_cheapest
+FROM `{view}`
+WHERE scrape_date BETWEEN @start AND @end
+GROUP BY 1, 2
+ORDER BY 1, 2
+"""
+
+WORST_ROUTES = """
+SELECT route, months_ahead,
+       COUNTIF(status = 'ok')      AS ok,
+       COUNTIF(status != 'ok')     AS not_ok
+FROM `{view}`
+WHERE scrape_date BETWEEN @start AND @end
+GROUP BY 1, 2
+HAVING not_ok > 0
+ORDER BY not_ok DESC, route
+LIMIT 10
+"""
+
+RECONSTRUCTIONS = """
+SELECT index_month, haul_category, months_ahead,
+       reconstructed_value, published_ons_value,
+       n_observations, index_day_exact, index_day_offset_days
+FROM `{index_table}`
+WHERE is_current
+  AND attribution_rule = 'departure_month'
+  AND selection_rule   = 'ons_target_time'
+  AND agg_method       = 'geometric_mean'
+ORDER BY index_month DESC, haul_category, months_ahead
+LIMIT 24
+"""
+
+PUBLISHED_COVERAGE = """
+SELECT COUNT(*) AS values_,
+       COUNT(DISTINCT index_month) AS months,
+       MIN(index_month) AS first_month,
+       MAX(index_month) AS last_month,
+       ANY_VALUE(basis) AS basis
+FROM `{published_table}`
+"""
+
+
+def _safe(fn: Callable[[], Any], label: str) -> tuple[Any, str | None]:
+    """Run a query, converting failure into a note rather than an abort."""
+    try:
+        return fn(), None
+    except Exception as exc:  # noqa: BLE001 - a digest must always be produced
+        log.warning("%s failed: %s", label, exc)
+        return None, f"_{label} unavailable: {type(exc).__name__}_"
+
+
+def _table(rows: list[dict[str, Any]], columns: list[str]) -> list[str]:
+    if not rows:
+        return ["_No rows._"]
+    out = ["| " + " | ".join(columns) + " |",
+           "|" + "|".join("---" for _ in columns) + "|"]
+    for row in rows:
+        out.append("| " + " | ".join(
+            "—" if row.get(c) is None else str(row.get(c)) for c in columns
+        ) + " |")
+    return out
+
+
+def build_digest(
+    reader,
+    config: Config,
+    *,
+    period_start: dt.date,
+    period_end: dt.date,
+    generated: dt.datetime | None = None,
+) -> str:
+    """Render the monthly digest as Markdown."""
+    generated = generated or dt.datetime.now(dt.timezone.utc)
+    view = config.table_ref("current_scrapes")
+    params = {"start": period_start, "end": period_end}
+    lines: list[str] = []
+    concerns: list[str] = []
+
+    lines += [
+        f"# Air fares digest — {period_start:%B %Y}",
+        "",
+        f"Collection window `{period_start}` to `{period_end}`. "
+        f"Generated {generated:%Y-%m-%d %H:%M} UTC by pipeline {PIPELINE_VERSION}.",
+        "",
+    ]
+
+    # --- Collection health -------------------------------------------------
+    health, err = _safe(
+        lambda: reader.query(COLLECTION_HEALTH.format(view=view), params), "collection health"
+    )
+    lines += ["## Collection", ""]
+    if err:
+        lines += [err, ""]
+    elif health and health[0].get("days_collected"):
+        h = health[0]
+        total = (h["ok"] or 0) + (h["no_data"] or 0) + (h["errors"] or 0)
+        lines += [
+            f"- **{h['days_collected']} days** collected ({h['first_day']} to {h['last_day']}), "
+            f"{h['runs']} runs",
+            f"- **{h['ok']} ok**, {h['no_data']} no-data, {h['errors']} errors "
+            f"of {total} observations",
+            "",
+        ]
+        if total and (h["errors"] or 0) / total > 0.05:
+            concerns.append(
+                f"Error rate {(h['errors'] / total):.0%} — check the Actions log for failures."
+            )
+        if (h["days_collected"] or 0) < 10:
+            concerns.append(
+                f"Only {h['days_collected']} collection days this period; the 8th–21st window "
+                "should produce ~14. Were runs skipped or disabled?"
+            )
+    else:
+        lines += ["_No observations in this period._", ""]
+        concerns.append(
+            "**No data collected this period.** Check that scheduled workflows are still "
+            "enabled — GitHub disables them after 60 days without commits."
+        )
+
+    # --- Per-series detail -------------------------------------------------
+    series, err = _safe(
+        lambda: reader.query(BY_SERIES.format(view=view), params), "per-series breakdown"
+    )
+    lines += ["## By series", ""]
+    if err:
+        lines += [err, ""]
+    else:
+        cols = ["haul_category", "months_ahead", "ok", "no_data", "errors",
+                "flights_seen", "considered", "mins_off_target",
+                "avg_price_gbp", "pct_above_cheapest"]
+        lines += _table(series or [], cols) + [""]
+        for row in series or []:
+            label = f"{row['haul_category']} {row['months_ahead']}m"
+            if (row.get("pct_above_cheapest") or 0) > 200:
+                concerns.append(
+                    f"{label}: ONS-rule fare is {row['pct_above_cheapest']}% above cheapest. "
+                    "Selection may be picking non-comparable itineraries again."
+                )
+            if (row.get("mins_off_target") or 0) > 180:
+                concerns.append(
+                    f"{label}: selected flights average {row['mins_off_target']} minutes from "
+                    "the target time, so the ONS rule is barely constraining the choice."
+                )
+
+    # --- Route problems ----------------------------------------------------
+    worst, err = _safe(
+        lambda: reader.query(WORST_ROUTES.format(view=view), params), "route failures"
+    )
+    if worst:
+        lines += ["### Routes with gaps", "",
+                  *_table(worst, ["route", "months_ahead", "ok", "not_ok"]), ""]
+
+    # --- Reconstructions ---------------------------------------------------
+    recon, err = _safe(
+        lambda: reader.query(RECONSTRUCTIONS.format(index_table=config.index_ref)),
+        "reconstructions",
+    )
+    lines += ["## Reconstructions", "",
+              "_Jevons / departure-month / ONS target-time variant._", ""]
+    if err:
+        lines += [err, ""]
+    else:
+        lines += _table(recon or [], [
+            "index_month", "haul_category", "months_ahead",
+            "reconstructed_value", "published_ons_value",
+            "n_observations", "index_day_offset_days",
+        ]) + [""]
+        if not recon:
+            lines += ["_None yet — reconciliation runs once ONS confirm the index day._", ""]
+
+    # --- Validation --------------------------------------------------------
+    lines += ["## Validation", ""]
+    try:
+        from .validate import run_validate
+
+        report = run_validate(config, reader=reader)
+        lines += [f"**Verdict: {report['verdict']}** — {report['reason']}", ""]
+        for blocker in report.get("blockers", []):
+            lines.append(f"- {blocker}")
+        if report.get("blockers"):
+            lines.append("")
+    except Exception as exc:  # noqa: BLE001
+        lines += [f"_Validation unavailable: {type(exc).__name__}_", ""]
+
+    # --- Published target --------------------------------------------------
+    pub, err = _safe(
+        lambda: reader.query(
+            PUBLISHED_COVERAGE.format(published_table=config.table_ref("ons_published_index"))
+        ),
+        "published series",
+    )
+    lines += ["## ONS published series (the target)", ""]
+    if pub and pub[0].get("values_"):
+        p = pub[0]
+        lines += [
+            f"- {p['values_']} values across {p['months']} months "
+            f"({p['first_month']} to {p['last_month']}), basis `{p['basis']}`",
+            "",
+        ]
+        if p["last_month"] and period_start > p["last_month"]:
+            gap = (period_start.year - p["last_month"].year) * 12 + (
+                period_start.month - p["last_month"].month
+            )
+            if gap > 6:
+                concerns.append(
+                    f"Published series ends {p['last_month']}, {gap} months before this "
+                    "period. Nothing to validate against until ONS release a newer vintage."
+                )
+    else:
+        lines += ["_Not loaded — run the ONS backfill workflow._", ""]
+        concerns.append("Published ONS series not loaded; validation cannot run.")
+
+    # --- Concerns, last so they are the thing you leave with ---------------
+    lines += ["## Needs attention", ""]
+    lines += ([f"- {c}" for c in concerns] if concerns
+              else ["Nothing flagged. Collection healthy."])
+    lines += [
+        "",
+        "---",
+        "",
+        "_Generated by `ukairfares.digest`. Committing this report is also what "
+        "keeps the scheduled workflows alive: GitHub disables them after 60 days "
+        "without repository commits, and workflow runs do not count._",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def run_digest(
+    config: Config,
+    *,
+    month: dt.date | None = None,
+    reader=None,
+    out_dir: pathlib.Path | None = None,
+) -> pathlib.Path:
+    """Generate the digest for `month` and write it to reports/YYYY-MM.md."""
+    month = (month or add_months(dt.date.today().replace(day=1), -1)).replace(day=1)
+    period_end = add_months(month, 1) - dt.timedelta(days=1)
+    reader = reader or bq.BigQueryWriter(config.project)
+
+    text = build_digest(reader, config, period_start=month, period_end=period_end)
+
+    out_dir = out_dir or REPORTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{month:%Y-%m}.md"
+    path.write_text(text, encoding="utf-8")
+    log.info("wrote %s (%d bytes)", path, len(text))
+    return path
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Generate the monthly air fares digest.")
+    parser.add_argument(
+        "--month",
+        type=lambda s: dt.datetime.strptime(s, "%Y-%m").date().replace(day=1),
+        default=None,
+        help="Month to report on, YYYY-MM. Defaults to last month.",
+    )
+    parser.add_argument("--out-dir", type=pathlib.Path, default=None)
+    parser.add_argument("--verbose", "-v", action="store_true")
+    args = parser.parse_args(argv)
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    )
+
+    try:
+        config = Config.from_env()
+    except ConfigError as exc:
+        print(f"::error::configuration error: {exc}", flush=True)
+        return 2
+
+    try:
+        path = run_digest(config, month=args.month, out_dir=args.out_dir)
+    except Exception as exc:  # noqa: BLE001
+        print(f"::error::digest failed: {exc}", flush=True)
+        log.exception("digest failed")
+        return 1
+
+    print(str(path))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,13 +1,25 @@
 name: Air fares CI
 
+# The `!` exclusion, rather than a `paths-ignore` block: GitHub rejects a
+# workflow that uses both `paths` and `paths-ignore` on the same event, so an
+# exclusion inside `paths` is the only way to express "this subtree, minus one
+# directory". Order matters — later patterns win.
+#
+# What is excluded and why: the monthly digest workflow commits
+# uk-airfares/reports/YYYY-MM.md every month, largely to keep GitHub's 60-day
+# scheduled-workflow inactivity clock from expiring. Those commits change no
+# code, so testing them is noise, and a red CI run on a generated report would
+# be actively misleading about the state of the pipeline.
 on:
   push:
     paths:
       - "uk-airfares/**"
+      - "!uk-airfares/reports/**"
       - ".github/workflows/airfares-*.yml"
   pull_request:
     paths:
       - "uk-airfares/**"
+      - "!uk-airfares/reports/**"
       - ".github/workflows/airfares-*.yml"
   workflow_dispatch:
 
