@@ -77,7 +77,7 @@ class Config:
     def from_env(cls) -> "Config":
         project = os.environ.get("GCP_PROJECT", "").strip()
         dataset = os.environ.get("BQ_DATASET", "").strip()
-        provider_name = os.environ.get("FARE_PROVIDER", "travelpayouts").strip()
+        provider_name = os.environ.get("FARE_PROVIDER", "serpapi").strip()
         dry_run = _env_bool("DRY_RUN", False)
 
         if not dry_run:
@@ -95,11 +95,12 @@ class Config:
         credential = (
             os.environ.get(credential_env, "").strip() or None if credential_env else None
         )
-        if credential_env and not credential:
-            raise ConfigError(
-                f"{credential_env} is required for the {provider_name} provider. "
-                "Set FARE_PROVIDER=mock for a no-network run."
-            )
+        # Deliberately NOT validated here. Most entry points -- ensure_tables,
+        # reconcile, validate, backfill -- read BigQuery and ONS and never query
+        # a fare provider, so demanding a fare-API credential from them is
+        # nonsense and blocks setup for no reason. The pull path calls
+        # `require_provider_credential()` before doing any work instead, which
+        # keeps the fail-fast behaviour exactly where it matters.
 
         threshold = _env_float("FAILURE_THRESHOLD", 0.34)
         if not 0.0 <= threshold <= 1.0:
@@ -123,6 +124,19 @@ class Config:
             ).strip(),
             location=os.environ.get("BQ_LOCATION", "europe-west2").strip(),
         )
+
+    def require_provider_credential(self) -> None:
+        """Assert the active provider's credential is present.
+
+        Called by the pull path before it issues any queries, so a missing token
+        fails immediately rather than after 40 failed route lookups.
+        """
+        credential_env = PROVIDER_CREDENTIAL_ENV.get(self.provider_name, "")
+        if credential_env and not self.provider_credential:
+            raise ConfigError(
+                f"{credential_env} is required for the {self.provider_name} provider. "
+                "Set FARE_PROVIDER=mock for a no-network run."
+            )
 
     def table_ref(self, table: str) -> str:
         return f"{self.project}.{self.dataset}.{table}"

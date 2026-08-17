@@ -296,14 +296,36 @@ class TestProviderRegistry:
 
 
 class TestConfigWiring:
-    def test_serpapi_requires_its_own_key(self, monkeypatch):
+    def test_missing_key_does_not_block_config_construction(self, monkeypatch):
+        """Loading config must not require a fare credential.
+
+        ensure_tables, reconcile, validate and backfill all build a Config but
+        never query a fare provider; demanding a token from them blocks setup
+        for no reason.
+        """
+        from ukairfares.config import Config
+
+        monkeypatch.setenv("DRY_RUN", "1")
+        monkeypatch.setenv("FARE_PROVIDER", "serpapi")
+        monkeypatch.delenv("SERPAPI_KEY", raising=False)
+        config = Config.from_env()
+        assert config.provider_credential is None
+
+    def test_pull_path_still_fails_fast_on_a_missing_key(self, monkeypatch):
         from ukairfares.config import Config, ConfigError
 
         monkeypatch.setenv("DRY_RUN", "1")
         monkeypatch.setenv("FARE_PROVIDER", "serpapi")
         monkeypatch.delenv("SERPAPI_KEY", raising=False)
         with pytest.raises(ConfigError, match="SERPAPI_KEY"):
-            Config.from_env()
+            Config.from_env().require_provider_credential()
+
+    def test_mock_requires_nothing(self, monkeypatch):
+        from ukairfares.config import Config
+
+        monkeypatch.setenv("DRY_RUN", "1")
+        monkeypatch.setenv("FARE_PROVIDER", "mock")
+        Config.from_env().require_provider_credential()  # must not raise
 
     def test_serpapi_key_is_picked_up(self, monkeypatch):
         from ukairfares.config import Config

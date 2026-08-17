@@ -218,6 +218,8 @@ def run_pull(
     routes = routes if routes is not None else panel.PANEL
 
     if provider is None:
+        # Fail before issuing any queries rather than after 40 failures.
+        config.require_provider_credential()
         kwargs: dict[str, Any] = {}
         if config.provider_name == "travelpayouts":
             kwargs = {"token": config.provider_credential, "market": config.market}
