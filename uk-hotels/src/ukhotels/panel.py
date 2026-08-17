@@ -237,7 +237,8 @@ def write_property_panel(
             "thereafter.\n"
             "# Keyed on property_token, never on name -- a rebrand changes the name "
             "and not the token.\n"
-            "# Regenerate with: python -m ukhotels.discover --commit\n"
+            "# Regenerate with: python -m ukhotels.discover "
+            "(writing is the default; --dry-run-panel to preview)\n"
         )
         writer = csv.DictWriter(
             fh,

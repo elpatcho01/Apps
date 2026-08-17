@@ -1,7 +1,8 @@
 # The pinned property sample. EMPTY until discovery has been run.
 #
-# Populate with:  python -m ukhotels.discover --commit
-# (or let the monthly hotels-panel-refresh workflow do it).
+# Populate with:  python -m ukhotels.discover
+# (writing is the default; pass --dry-run-panel to preview without writing.
+#  Or let the monthly hotels-panel-refresh workflow do it and commit the result.)
 #
 # Keyed on property_token, never on property_name: a rebrand changes the name
 # and keeps the token, and matching on names would read one rebrand as a
