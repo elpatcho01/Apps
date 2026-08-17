@@ -56,7 +56,35 @@ permissions:
   id-token: write      # for Workload Identity Federation
 
 jobs:
+  # Skips cleanly until Google Cloud is configured, rather than failing at the
+  # auth step. This is the same distinction the pipeline draws everywhere else:
+  # an expected absence is a notice, not an error. Without it, every scheduled
+  # run between merging this and finishing the GCP setup goes red -- and a wall
+  # of red runs for something nobody can act on yet is exactly how someone
+  # learns to ignore Actions email, which the 60-day inactivity trap makes
+  # expensive. Secrets cannot be read in a job-level `if`, hence a job.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          WIF: ${{ secrets.GCP_WIF_PROVIDER }}
+          SA: ${{ secrets.GCP_SA_EMAIL }}
+          PROJECT: ${{ secrets.GCP_PROJECT }}
+        run: |
+          if [ -n "${WIF}" ] && [ -n "${SA}" ] && [ -n "${PROJECT}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Google Cloud is not configured yet (needs \
+            GCP_WIF_PROVIDER, GCP_SA_EMAIL and GCP_PROJECT). Skipping."
+          fi
+
   digest:
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

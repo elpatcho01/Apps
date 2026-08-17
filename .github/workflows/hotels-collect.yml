@@ -57,12 +57,33 @@ jobs:
     outputs:
       should_run: ${{ steps.gate.outputs.should_run }}
       due: ${{ steps.gate.outputs.due }}
+      configured: ${{ steps.secrets.outputs.configured }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      # Skips cleanly until Google Cloud is configured rather than failing at
+      # the auth step, for the same reason as the other workflows: an expected
+      # absence is a notice, not an error. A dry run needs no credentials, so it
+      # is allowed through regardless.
+      - id: secrets
+        name: Is Google Cloud configured?
+        env:
+          WIF: ${{ secrets.GCP_WIF_PROVIDER }}
+          SA: ${{ secrets.GCP_SA_EMAIL }}
+          PROJECT: ${{ secrets.GCP_PROJECT }}
+        run: |
+          if { [ -n "${WIF}" ] && [ -n "${SA}" ] && [ -n "${PROJECT}" ]; } \
+             || [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Google Cloud is not configured yet; skipping \
+            collection. Nothing is lost unless a stay night was due today."
+          fi
 
       # Asks the calendar module rather than reimplementing it in shell. The
       # arithmetic (six-week lead, two nights, two index-day hypotheses, two
@@ -97,7 +118,9 @@ jobs:
 
   collect:
     needs: decide
-    if: needs.decide.outputs.should_run == 'true'
+    if: >-
+      needs.decide.outputs.should_run == 'true'
+      && needs.decide.outputs.configured == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
