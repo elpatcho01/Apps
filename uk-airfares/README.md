@@ -119,11 +119,18 @@ would compare against something ONS never publish.
 The workbook itself is one sheet per year, transposed (months across columns,
 series down rows), with the category label merged across its window rows.
 
-**Coverage runs 2007–2026.** Once discovery ranked releases by coverage period
-rather than reference number, it found a release spanning **2007 to 2026** —
-far wider than the Jan 2017–Feb 2025 vintage originally pinned, and crucially it
-reaches the period the panel will be collecting in. Confirm what actually landed
-with the coverage query in [Backfilling](#backfilling-onss-published-series).
+**Coverage actually loaded: 2016-01 to 2026-02** — 678 values, 113 months, six
+series. That is what the live backfill put in `ons_published_index`, read back by
+the first digest run. It is wider than the Jan 2017–Feb 2025 vintage originally
+pinned, but **it stops six months before collection begins**, so as of
+2026-08 the overlap is zero and no accuracy claim is possible.
+
+That gap is not a defect here and cannot be closed from this repository — it
+closes when ONS publish a newer vintage of the ad hoc release. The monthly
+backfill workflow re-runs discovery and picks one up automatically, and the
+digest reports the remaining gap every month, so it is tracked rather than
+assumed. Confirm what is currently loaded with the coverage query in
+[Backfilling](#backfilling-onss-published-series).
 
 **Weights are per series too.** Six weights per year, one per (haul × window),
 summing to 1. The split across a category's windows is *not* even — long-haul
@@ -623,7 +630,7 @@ uk-airfares/
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              320 tests, no network required
+└── tests/              324 tests, no network required
 ```
 
 ## Non-goals

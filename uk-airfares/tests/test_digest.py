@@ -78,9 +78,12 @@ HEALTHY = {
              reconstructed_value=104.2, published_ons_value=None, n_observations=8,
              index_day_exact=True, index_day_offset_days=0),
     ],
+    # last_month must cover the reported period, or the no-overlap concern fires
+    # and this stops being a clean fixture. In reality it does not cover it yet
+    # (ONS publish the ad hoc series with a long lag) -- see TestConcerns.
     "COUNT(DISTINCT index_month) AS months": [
-        dict(values_=1368, months=228, first_month=dt.date(2007, 1, 1),
-             last_month=dt.date(2026, 6, 1), basis="CPI"),
+        dict(values_=678, months=113, first_month=dt.date(2016, 1, 1),
+             last_month=dt.date(2026, 8, 1), basis="annual_january_100"),
     ],
 }
 
@@ -105,6 +108,31 @@ class TestAlwaysProducesAReport:
                             period_start=AUGUST, period_end=AUGUST_END)
         assert "Nothing flagged" in text
         assert "14 days** collected" in text
+
+    def test_a_report_that_cannot_see_the_data_never_says_healthy(self):
+        """The bug the first live digest shipped with.
+
+        `current_scrapes` did not exist yet, so every panel query raised NotFound
+        and the health checks never got the chance to notice anything wrong. The
+        report printed "Nothing flagged. Collection healthy." under two sections
+        reading "unavailable: NotFound" -- the precise misreading the digest is
+        supposed to prevent.
+        """
+        reader = FakeReader({"": RuntimeError("NotFound")})
+        text = build_digest(reader, _config(),
+                            period_start=AUGUST, period_end=AUGUST_END)
+        assert "Nothing flagged" not in text
+        assert "Collection healthy" not in text
+        assert "Could not read collection health" in text
+
+    def test_notfound_carries_the_self_healing_hint(self):
+        class NotFound(Exception):
+            pass
+
+        reader = FakeReader({"days_collected": NotFound("no such view")})
+        text = build_digest(reader, _config(),
+                            period_start=AUGUST, period_end=AUGUST_END)
+        assert "clears itself on the next collection run" in text
 
     def test_reports_no_overlap_honestly(self):
         """With no backfilled published values, the verdict must not be a pass."""
@@ -156,21 +184,39 @@ class TestConcerns:
                             period_start=AUGUST, period_end=AUGUST_END)
         assert any("minutes from" in c for c in self._concerns(text))
 
-    def test_stale_published_series_flagged(self):
-        responses = dict(HEALTHY, **{
+    def _published(self, last_month):
+        return dict(HEALTHY, **{
             "COUNT(DISTINCT index_month) AS months": [
-                dict(values_=100, months=20, first_month=dt.date(2007, 1, 1),
-                     last_month=dt.date(2025, 2, 1), basis="CPI"),
+                dict(values_=678, months=113, first_month=dt.date(2016, 1, 1),
+                     last_month=last_month, basis="annual_january_100"),
             ],
         })
-        text = build_digest(FakeReader(responses), _config(),
-                            period_start=AUGUST, period_end=AUGUST_END)
-        assert any("Published series ends" in c for c in self._concerns(text))
 
-    def test_recent_published_series_not_flagged_as_stale(self):
-        text = build_digest(FakeReader(HEALTHY), _config(),
+    def test_six_month_gap_is_flagged(self):
+        """The live case: published ends 2026-02, we are reporting on 2026-08.
+
+        A `> 6` threshold let exactly this through on the first real digest.
+        """
+        text = build_digest(FakeReader(self._published(dt.date(2026, 2, 1))), _config(),
                             period_start=AUGUST, period_end=AUGUST_END)
-        assert not any("Published series ends" in c for c in self._concerns(text))
+        concerns = self._concerns(text)
+        assert any("ends 2026-02, 6 month(s)" in c for c in concerns)
+
+    def test_any_gap_is_flagged(self):
+        text = build_digest(FakeReader(self._published(dt.date(2026, 7, 1))), _config(),
+                            period_start=AUGUST, period_end=AUGUST_END)
+        assert any("1 month(s) before this period" in c for c in self._concerns(text))
+
+    def test_gap_explains_that_no_action_is_needed(self):
+        """It resolves when ONS publish, not through anything in this repo."""
+        text = build_digest(FakeReader(self._published(dt.date(2026, 2, 1))), _config(),
+                            period_start=AUGUST, period_end=AUGUST_END)
+        assert "no action is needed here" in text
+
+    def test_published_series_covering_the_period_is_not_flagged(self):
+        text = build_digest(FakeReader(self._published(AUGUST)), _config(),
+                            period_start=AUGUST, period_end=AUGUST_END)
+        assert not any("Published ONS series ends" in c for c in self._concerns(text))
 
 
 class TestQueriesUseTheView:
