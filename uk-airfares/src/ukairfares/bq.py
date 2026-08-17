@@ -105,6 +105,40 @@ class BigQueryWriter:
             )
         return [dict(row) for row in self._client.query(sql, job_config=job_config).result()]
 
+    def ensure_dataset(self, project: str, dataset: str, location: str) -> None:
+        """Create the dataset if absent. Idempotent.
+
+        Done here rather than left as a manual setup step because the DDL below
+        fails with an unhelpful "not found" if the dataset is missing, and that
+        is a poor first experience. Location is fixed at creation and cannot be
+        changed afterwards, so it is explicit rather than defaulted by the API.
+        """
+        bigquery = self._bigquery
+        ref = f"{project}.{dataset}"
+        try:
+            existing = self._client.get_dataset(ref)
+        except Exception:  # noqa: BLE001 - NotFound, but the type is client-specific
+            obj = bigquery.Dataset(ref)
+            obj.location = location
+            obj.description = (
+                "UK air fares nowcasting: append-only fare panel and reconstructed "
+                "ONS sub-indices. Never UPDATE or DELETE."
+            )
+            self._client.create_dataset(obj, exists_ok=True)
+            log.info("created dataset %s in %s", ref, location)
+            return
+
+        if existing.location and existing.location.upper() != location.upper():
+            # Not fatal -- the pipeline works fine either way -- but silently
+            # writing UK data to a different region is worth saying out loud.
+            log.warning(
+                "dataset %s is in %s, not the configured %s. Dataset location "
+                "cannot be changed after creation.",
+                ref, existing.location, location,
+            )
+        else:
+            log.info("dataset %s already exists", ref)
+
     def ensure_tables(self, project: str, dataset: str) -> None:
         """Apply the DDL. Idempotent -- every statement is CREATE ... IF NOT EXISTS."""
         for path in sorted(SQL_DIR.glob("*.sql")):

@@ -418,3 +418,22 @@ class TestRunPull:
         assert all(r["price_gbp"] >= r["price_cheapest_gbp"] for r in priced)
         # The two rules must actually differ somewhere, or the distinction is moot.
         assert any(r["price_gbp"] > r["price_cheapest_gbp"] for r in priced)
+
+
+class TestBigQueryLocation:
+    def test_defaults_to_london(self, monkeypatch):
+        monkeypatch.setenv("DRY_RUN", "1")
+        monkeypatch.setenv("FARE_PROVIDER", "mock")
+        assert Config.from_env().location == "europe-west2"
+
+    def test_location_is_configurable(self, monkeypatch):
+        monkeypatch.setenv("DRY_RUN", "1")
+        monkeypatch.setenv("FARE_PROVIDER", "mock")
+        monkeypatch.setenv("BQ_LOCATION", "US")
+        assert Config.from_env().location == "US"
+
+    def test_table_refs_are_fully_qualified(self):
+        cfg = _dry_config(project="proj", dataset="ds", dry_run=False)
+        assert cfg.scrapes_ref == "proj.ds.airfare_scrapes"
+        assert cfg.index_ref == "proj.ds.reconstructed_index"
+        assert cfg.table_ref("ons_published_index") == "proj.ds.ons_published_index"

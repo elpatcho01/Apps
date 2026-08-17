@@ -68,6 +68,10 @@ class Config:
     dry_run: bool
     scrapes_table: str
     index_table: str
+    #: BigQuery dataset location. Fixed at dataset creation and immutable
+    #: afterwards, so it is set explicitly rather than left to the API default
+    #: (which is the US). europe-west2 is London.
+    location: str = "europe-west2"
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -117,6 +121,7 @@ class Config:
             index_table=os.environ.get(
                 "BQ_INDEX_TABLE", "reconstructed_index"
             ).strip(),
+            location=os.environ.get("BQ_LOCATION", "europe-west2").strip(),
         )
 
     def table_ref(self, table: str) -> str:

@@ -32,13 +32,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        BigQueryWriter(config.project).ensure_tables(config.project, config.dataset)
+        writer = BigQueryWriter(config.project)
+        writer.ensure_dataset(config.project, config.dataset, config.location)
+        writer.ensure_tables(config.project, config.dataset)
     except Exception as exc:  # noqa: BLE001
-        print(f"::error::failed to apply DDL: {exc}", flush=True)
-        log.exception("failed to apply DDL")
+        print(f"::error::failed to prepare BigQuery: {exc}", flush=True)
+        log.exception("failed to prepare BigQuery")
         return 1
 
-    log.info("tables ready in %s.%s", config.project, config.dataset)
+    log.info("dataset and tables ready in %s.%s", config.project, config.dataset)
     return 0
 
 

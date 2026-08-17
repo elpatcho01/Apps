@@ -130,12 +130,18 @@ ONS's published sub-indices.
 ```bash
 export GCP_PROJECT=your-project
 export BQ_DATASET=airfares
+export BQ_LOCATION=europe-west2   # London. Immutable once the dataset exists.
 python -m ukairfares.ensure_tables
 ```
 
-Creates `airfare_scrapes` (partitioned by `scrape_date`, clustered by
-`haul_category, route`) and `reconstructed_index` (partitioned by
-`index_month`). Both are **append-only** — see [Invariants](#invariants).
+Creates the dataset if absent, then `airfare_scrapes` (partitioned by
+`scrape_date`, clustered by `haul_category, route`), `reconstructed_index` and
+`ons_published_index`. All **append-only** — see [Invariants](#invariants).
+Idempotent, so the workflows run it before every job.
+
+You need a GCP project with **billing enabled** (BigQuery requires a billing
+account even to use the free tier) and the BigQuery API switched on. Usage here
+is ~20 MB/year against a 10 GB free allowance, so expect a £0 bill.
 
 ### 2. GitHub secrets
 
@@ -154,7 +160,7 @@ this dataset only.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 259 tests, no network
+python -m pytest                                    # 262 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -451,7 +457,7 @@ uk-airfares/
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   └── providers/      base.py · travelpayouts.py · mock.py
-└── tests/              259 tests, no network required
+└── tests/              262 tests, no network required
 ```
 
 ## Non-goals
