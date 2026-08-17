@@ -352,8 +352,14 @@ class SerpApiHotelsProvider(AccommodationProvider):
         of pinned properties, which is a cost decision rather than a technical
         one.
         """
+        # NOT a separate engine. SerpApi returns property details from the same
+        # `google_hotels` engine when a `property_token` is supplied -- the
+        # first probe guessed at an engine named
+        # "google_hotels_property_details" and got an error back, which is
+        # exactly the kind of thing a probe exists to establish cheaply.
         params = {
-            "engine": "google_hotels_property_details",
+            "engine": "google_hotels",
+            "q": property_token,
             "property_token": property_token,
             "check_in_date": check_in.isoformat(),
             "check_out_date": check_out.isoformat(),

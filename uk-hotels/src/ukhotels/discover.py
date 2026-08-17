@@ -244,6 +244,11 @@ def discover(
             summary["detail_probe"] = {
                 "property_token": probe_token,
                 "top_level_keys": sorted(detail)[:40],
+                # The first probe reported only that the payload had one key,
+                # "error", and not what the error said -- which made it
+                # inconclusive and cost a whole round trip. A diagnostic that
+                # cannot report its own failure is not a diagnostic.
+                "error_text": str(detail.get("error"))[:400] if detail.get("error") else None,
                 "has_free_cancellation": "free_cancellation" in json.dumps(detail),
                 "has_board_or_breakfast": any(
                     word in json.dumps(detail).lower()
