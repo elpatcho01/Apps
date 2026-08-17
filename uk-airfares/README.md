@@ -105,6 +105,13 @@ would compare against something ONS never publish.
 The workbook itself is one sheet per year, transposed (months across columns,
 series down rows), with the category label merged across its window rows.
 
+**Coverage stops at February 2025.** The newest ad hoc release located runs
+January 2017 – February 2025. Since collection starts in late 2026, **there is
+currently no overlap to validate against** — see
+[Validation](#validation). These are *ad hoc* releases, published on request, so
+the fix is to ask ONS (cpi@ons.gov.uk) for an updated vintage covering 2026,
+or FOI it.
+
 **Basis confirmed:** every January is exactly 100 and each year restarts from
 there — `annual_january_100`, not chain-linked. That resolves the ambiguity the
 `detect_basis` helper was written to settle.
@@ -220,7 +227,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 267 tests, no network
+python -m pytest                                    # 272 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -517,7 +524,7 @@ uk-airfares/
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   └── providers/      base.py · travelpayouts.py · mock.py
-└── tests/              267 tests, no network required
+└── tests/              272 tests, no network required
 ```
 
 ## Non-goals

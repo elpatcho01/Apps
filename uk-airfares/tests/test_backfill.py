@@ -161,3 +161,66 @@ class TestBuildRows:
         assert all(r["release_label"] == "2716" for r in rows)
         assert all(r["run_id"] == "run-1" for r in rows)
         assert all(r["is_current"] is True for r in rows)
+
+
+class TestReleaseDiscovery:
+    """Ranking releases correctly is not cosmetic.
+
+    A production run picked ad hoc 14287 (coverage ending January 2022) over
+    2716 (ending February 2025) because the old reference series sorts above
+    the new one numerically. Three years of the target series were silently
+    lost. Rank by the coverage period in the slug instead.
+    """
+
+    SLUGS = {
+        "13727": "/economy/inflationandpriceindices/adhocs/13727domesticeuropeanandlonghaulairfaresconsumerpricessubindicesjanuary2017toaugust2021",
+        "14097": "/economy/inflationandpriceindices/adhocs/14097domesticeuropeanandlonghaulairfaresconsumerpricessubindicesjanuary2017tonovember2021",
+        "14287": "/economy/inflationandpriceindices/adhocs/14287domesticeuropeanandlonghaulairfaresconsumerpricessubindicesjanuary2017tojanuary2022",
+        "2032": "/economy/inflationandpriceindices/adhocs/2032domesticeuropeanandlonghaulairfaresconsumerpricessubindicesjanuary2022tomarch2024",
+        "2362": "/economy/inflationandpriceindices/adhocs/2362domesticeuropeanandlonghaulairfaresconsumerpricessubindicesjanuary2017tojuly2024",
+        "2716": "/economy/inflationandpriceindices/adhocs/2716domesticeuropeanandlonghaulairfaresconsumerpricessubindicesjanuary2017tofebruary2025",
+    }
+
+    def test_reads_coverage_end_from_the_slug(self):
+        from ukairfares.onsweights import _coverage_end
+
+        assert _coverage_end(self.SLUGS["2716"]) == (2025, 2)
+        assert _coverage_end(self.SLUGS["14287"]) == (2022, 1)
+        assert _coverage_end(self.SLUGS["2032"]) == (2024, 3)
+
+    def test_newest_coverage_wins_despite_a_lower_reference_number(self):
+        from ukairfares.onsweights import _coverage_end
+
+        best = max(self.SLUGS.values(), key=_coverage_end)
+        assert "2716" in best
+        assert "february2025" in best
+
+    def test_old_five_digit_refs_do_not_win(self):
+        from ukairfares.onsweights import _coverage_end
+
+        # The exact failure seen in production.
+        assert _coverage_end(self.SLUGS["2716"]) > _coverage_end(self.SLUGS["14287"])
+
+    def test_unreadable_slug_sorts_last(self):
+        from ukairfares.onsweights import _coverage_end
+
+        assert _coverage_end("/economy/.../adhocs/999someotherrelease") == (0, 0)
+
+    def test_discovery_picks_the_widest_coverage(self):
+        import requests
+        from ukairfares.onsweights import discover_latest_release
+
+        html = "".join(f'<a href="{h}">x</a>' for h in self.SLUGS.values())
+
+        class FakeResp:
+            status_code = 200
+            text = html
+
+            def raise_for_status(self):
+                pass
+
+        class FakeSession:
+            def get(self, *a, **k):
+                return FakeResp()
+
+        assert "2716" in discover_latest_release(FakeSession())

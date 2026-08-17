@@ -191,14 +191,36 @@ def discover_latest_release(session: requests.Session) -> str | None:
     )
     if not hrefs:
         return None
-    # Ad hoc URLs are prefixed with an incrementing reference number; the
-    # highest is the most recent vintage.
-    def ref(href: str) -> int:
-        m = re.search(r"/adhocs/(\d+)", href)
-        return int(m.group(1)) if m else -1
 
-    best = max(hrefs, key=ref)
+    best = max(hrefs, key=_coverage_end)
+    if _coverage_end(best) == (0, 0):
+        log.warning("could not read a coverage period from any release slug")
+        return None
     return f"{ONS_BASE}{best}"
+
+
+def _coverage_end(href: str) -> tuple[int, int]:
+    """Latest month covered by a release, read from its URL slug.
+
+    Slugs end with the coverage period, e.g.
+    ".../2716domesticeuropeanandlonghaulairfaresconsumerpricessubindices
+       january2017tofebruary2025".
+
+    Ranking by the coverage period rather than the ad hoc reference number is
+    deliberate and was learned the hard way: ONS restarted their ad hoc
+    numbering, so the old series (13727, 14097, 14287) sorts *above* the newer
+    one (2032, 2362, 2716) numerically. A production run picked 14287 -- which
+    stops at January 2022 -- over 2716, which runs to February 2025. The
+    coverage period is the only field in the URL that actually means what we
+    need it to mean.
+
+    Returns (year, month), or (0, 0) if the slug carries no readable period.
+    """
+    match = re.search(r"to([a-z]+)(20\d{2})(?:/|$)", href, flags=re.IGNORECASE)
+    if not match:
+        return (0, 0)
+    month = _MONTH_NAMES.get(match.group(1).lower())
+    return (int(match.group(2)), month) if month else (0, 0)
 
 
 def _iter_sheets(workbook) -> Iterable[tuple[str, list[list[Any]]]]:
