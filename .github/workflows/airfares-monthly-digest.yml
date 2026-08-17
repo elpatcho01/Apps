@@ -95,6 +95,24 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
+      # The DDL is idempotent, so this is nearly free -- and without it this
+      # workflow silently depends on a pull having run first at a commit new
+      # enough to contain whatever the digest queries.
+      #
+      # That is not hypothetical. `sql/006` added the `current_scrapes` view, the
+      # digest and export both read it, and the first live run of each returned
+      # NotFound for every panel query: the most recent pull predated the view,
+      # and `ensure_tables` only applies the SQL present in the checkout it runs
+      # from. The data was in BigQuery the whole time; the lens over it had never
+      # been created. Running the DDL here makes the workflow self-sufficient
+      # instead of ordering-dependent.
+      - name: Ensure BigQuery tables and views exist
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: python -m ukairfares.ensure_tables
+
       # continue-on-error, deliberately: see the header. Reaching the commit step
       # matters more than this step's exit code. The module already degrades
       # per-section, so a hard failure here means something unusual enough that a
