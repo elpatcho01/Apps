@@ -108,6 +108,8 @@ def _base_row(
         "raw_response": None,
         "ons_rule_time_delta_minutes": None,
         "n_quotes": 0,
+        "n_quotes_considered": 0,
+        "candidate_basis": None,
         "selected_airline": None,
         "selected_departure_ts": None,
         "quote_found_at": None,
@@ -198,6 +200,8 @@ def _row_from_result(row: dict[str, Any], result, target_time: dt.time) -> dict[
     if sel.cheapest is not None:
         row["price_cheapest_gbp"] = sel.cheapest.price
     row["ons_rule_time_delta_minutes"] = sel.ons_rule_time_delta_minutes
+    row["n_quotes_considered"] = sel.n_considered
+    row["candidate_basis"] = sel.candidate_basis
     return row
 
 

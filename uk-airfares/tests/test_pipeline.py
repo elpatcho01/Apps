@@ -489,3 +489,94 @@ class TestMockWriteGuard:
             provider=provider, routes=panel.routes_by_haul("domestic"),
         )
         assert summary["ok"] == 8
+
+
+class TestCandidateFiltering:
+    """Reproduces the day-one failure exactly.
+
+    The ONS target-time rule is price-blind, so over a raw metasearch result
+    set it selected connecting itineraries priced at 20-70x the direct fare.
+    """
+
+    def _q(self, price, hour, minute=0, transfers=0, airline="BA"):
+        return FareQuote(
+            price=Decimal(str(price)), currency="GBP",
+            departure_at=dt.datetime(2026, 9, 15, hour, minute),
+            return_at=None, transfers=transfers, airline=airline,
+        )
+
+    def test_rejects_the_lgw_edi_swiss_connection(self):
+        # Observed live: SWISS 09:25 at £4,841 beat a £72 direct because it
+        # departed nearer 09:00. SWISS does not fly Gatwick to Edinburgh.
+        quotes = [
+            self._q(72, 7, 10, transfers=0, airline="easyJet"),
+            self._q(115, 9, 40, transfers=0, airline="British Airways"),
+            self._q(4841, 9, 25, transfers=1, airline="SWISS"),
+        ]
+        sel = selection.select(quotes, target_time=dt.time(9, 0))
+        assert sel.ons_rule.airline == "British Airways"
+        assert sel.ons_rule.price == Decimal("115")
+        assert sel.candidate_basis == "direct_only"
+        assert sel.n_quotes == 3 and sel.n_considered == 2
+
+    def test_rejects_the_lhr_abz_air_france_connection(self):
+        quotes = [
+            self._q(135, 8, 0, transfers=0, airline="British Airways"),
+            self._q(3215, 8, 55, transfers=1, airline="Air France"),
+        ]
+        sel = selection.select(quotes, target_time=dt.time(9, 0))
+        assert sel.ons_rule.airline == "British Airways"
+
+    def test_outlier_cap_catches_an_absurd_direct_fare(self):
+        quotes = [
+            self._q(60, 6, 0), self._q(80, 14, 0),
+            self._q(5000, 9, 5),  # nominally direct, plainly not a real fare
+        ]
+        sel = selection.select(quotes, target_time=dt.time(9, 0))
+        assert sel.ons_rule.price != Decimal("5000")
+        assert "outlier_capped" in sel.candidate_basis
+
+    def test_genuine_saver_versus_flexible_spread_survives(self):
+        # 2.3x was observed live on LHR-EDI and is a real fare difference.
+        quotes = [self._q(115, 6, 30), self._q(263, 10, 0)]
+        sel = selection.select(quotes, target_time=dt.time(9, 0))
+        assert sel.ons_rule.price == Decimal("263")
+        assert "outlier_capped" not in sel.candidate_basis
+
+    def test_connection_only_route_is_flagged_not_dropped(self):
+        quotes = [self._q(700, 8, 0, transfers=1), self._q(750, 11, 0, transfers=2)]
+        sel = selection.select(quotes, target_time=dt.time(9, 0))
+        assert sel.candidate_basis.startswith("no_direct_available")
+        assert sel.ons_rule is not None
+
+    def test_both_rules_use_the_same_filtered_set(self):
+        quotes = [
+            self._q(72, 7, 10, transfers=0),
+            self._q(4841, 9, 25, transfers=1),
+        ]
+        sel = selection.select(quotes, target_time=dt.time(9, 0))
+        # Cheapest must not be drawn from a pool the ONS rule cannot see.
+        assert sel.cheapest.price == Decimal("72")
+        assert sel.ons_rule.price == Decimal("72")
+        assert sel.spread == Decimal("0")
+
+    def test_missing_transfer_counts_do_not_wipe_the_set(self):
+        quotes = [
+            FareQuote(price=Decimal("100"), currency="GBP",
+                      departure_at=dt.datetime(2026, 9, 15, 9, 0),
+                      return_at=None, transfers=None),
+        ]
+        sel = selection.select(quotes)
+        assert sel.ons_rule is not None
+        assert sel.candidate_basis.startswith("no_direct_available")
+
+    def test_row_records_the_filter_decision(self):
+        writer = DryRunWriter()
+        run_pull(
+            _dry_config(), scrape_date=dt.date(2026, 9, 8), writer=writer,
+            provider=MockProvider(haul_of={r.code: r.haul for r in panel.PANEL}),
+        )
+        priced = [r for r in writer.written if r["price_gbp"] is not None]
+        assert priced
+        assert all(r["candidate_basis"] for r in priced)
+        assert all(r["n_quotes_considered"] <= r["n_quotes"] for r in priced)

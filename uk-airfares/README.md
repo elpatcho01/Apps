@@ -79,6 +79,22 @@ true gap, which is 28–35 days for a "1 month" window and never exactly 30.
 own methodology table lists return legs, and the ONS FOI is explicit that return
 flights are included in the price. Priced as a return.
 
+**Candidates are filtered to comparable products before the rule is applied.**
+The ONS target-time rule is price-blind by design — it takes whichever flight
+departs nearest the target, whatever it costs. Day one of live collection showed
+why that is only safe over a comparable candidate set:
+
+```
+LGW-EDI  £4,841  SWISS       09:25   (cheapest direct £72)
+LHR-ABZ  £3,215  Air France  08:55   (cheapest direct £135)
+```
+
+SWISS does not fly Gatwick–Edinburgh; that is LGW–Zurich–EDI. Google Flights
+lists such constructed routings alongside direct services, and the rule grabbed
+them for departing near 09:00. Selection now takes **direct services only**
+where any exist, with an outlier cap (default 5× the cheapest) behind it.
+`candidate_basis` and `n_quotes_considered` record what was filtered, per row.
+
 **Both selection rules are stored.** A cheapest-of-day rule silently migrates
 between a 06:10 departure one month and a 21:45 the next, so much of the
 resulting "price change" is just the time-of-day fare curve moving underneath
