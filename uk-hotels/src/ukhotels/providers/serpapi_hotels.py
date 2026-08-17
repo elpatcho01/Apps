@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -132,6 +133,67 @@ def _decimal(value: Any) -> Decimal | None:
         log.debug("unparseable price %r", value)
         return None
     return price if price > 0 else None
+
+
+def parse_hotel_class(item: dict[str, Any]) -> float | None:
+    """Star rating, from whichever field actually carries it.
+
+    THE BUG THIS REPLACES, because it is an easy one to reintroduce:
+
+        _float(item.get("hotel_class") or item.get("extracted_hotel_class"))
+
+    Google Hotels returns `hotel_class` as a *display string* -- "4-star hotel"
+    -- and `extracted_hotel_class` as the number. The string is truthy, so `or`
+    short-circuits on it and the numeric field is never read; `_float` then
+    cannot parse "4-star hotel" and returns None. The first live run produced
+    238 properties across twelve cities with every single one unrated, and since
+    an unrated property is outside every tier, the entire panel was rejected.
+
+    So: the numeric field first, and only then a number pulled out of the
+    string. Both are tried because neither is guaranteed present.
+    """
+    extracted = item.get("extracted_hotel_class")
+    if isinstance(extracted, (int, float)) and not isinstance(extracted, bool):
+        return float(extracted)
+
+    raw = item.get("hotel_class")
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return float(raw)
+    if isinstance(raw, str):
+        match = re.search(r"(\d+(?:\.\d+)?)", raw)
+        if match:
+            return float(match.group(1))
+    return None
+
+
+def parse_free_cancellation(item: dict[str, Any]) -> bool | None:
+    """Whether the returned rate is free-cancellation, from wherever it lives.
+
+    Also None for all 238 properties on the first live run. Unlike the star
+    rating that may not be a parsing bug -- the engine may simply not expose it
+    on the properties list -- so this looks in every plausible place rather than
+    assuming one, and still returns None when genuinely absent.
+
+    None is not "no": it means unknown, and `selection` excludes unknowns rather
+    than guessing, because a series that silently blends refundable and
+    non-refundable rates carries a 30-40% contamination nobody can unpick later.
+    """
+    for key in ("free_cancellation", "free_cancellation_available"):
+        value = item.get(key)
+        if isinstance(value, bool):
+            return value
+
+    # A date being present is itself the signal: a rate cancellable until some
+    # date is a free-cancellation rate.
+    if item.get("free_cancellation_until_date"):
+        return True
+
+    # Per-source rates can carry it where the property summary does not.
+    for price in item.get("prices") or []:
+        if isinstance(price, dict) and isinstance(price.get("free_cancellation"), bool):
+            return price["free_cancellation"]
+
+    return None
 
 
 def _float(value: Any) -> float | None:
@@ -297,9 +359,7 @@ class SerpApiHotelsProvider(AccommodationProvider):
 
         before_taxes = _decimal(rate.get("extracted_before_taxes_fees"))
 
-        free_cancellation = item.get("free_cancellation")
-        if free_cancellation is not None:
-            free_cancellation = bool(free_cancellation)
+        free_cancellation = parse_free_cancellation(item)
 
         return PropertyQuote(
             property_token=str(token),
@@ -307,7 +367,7 @@ class SerpApiHotelsProvider(AccommodationProvider):
             price=price,
             price_before_taxes=before_taxes,
             currency=currency,
-            hotel_class=_float(item.get("hotel_class") or item.get("extracted_hotel_class")),
+            hotel_class=parse_hotel_class(item),
             property_type=(item.get("type") or None),
             free_cancellation=free_cancellation,
             overall_rating=_float(item.get("overall_rating")),

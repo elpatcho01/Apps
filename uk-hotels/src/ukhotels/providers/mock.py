@@ -39,7 +39,7 @@ _SHAPE: tuple[tuple[float | None, str], ...] = (
     (4.5, "hotel"),
     (5.0, "hotel"),           # outside both tiers
     (None, "hotel"),          # unrated
-    (4.0, "vacation_rental"), # right class, wrong product
+    (4.0, "vacation rental"), # right class, wrong product
     (2.0, "hotel"),           # below the tiers
 )
 

@@ -128,6 +128,12 @@ def discover(
         "property_type": collections.Counter(),
         "free_cancellation": collections.Counter(),
         "price_present": collections.Counter(),
+        # The keys the provider actually puts on a property object. This is what
+        # distinguishes "our parser looks in the wrong place" from "the engine
+        # does not return this at all" -- a distinction that otherwise costs a
+        # payload download to make, and which decides whether a missing field is
+        # a bug or a methodology limitation.
+        "raw_property_keys": collections.Counter(),
     }
 
     for location in panel.LOCATIONS:
@@ -167,6 +173,8 @@ def discover(
             survey["property_type"][repr(quote.property_type)] += 1
             survey["free_cancellation"][repr(quote.free_cancellation)] += 1
             survey["price_present"][repr(quote.price is not None)] += 1
+            for key in (quote.raw or {}):
+                survey["raw_property_keys"][key] += 1
 
         sets = selection.comparable_sets(
             result.quotes,
@@ -221,7 +229,8 @@ def discover(
             out.extend(kept)
 
     summary["field_survey"] = {
-        field: dict(counter.most_common(12)) for field, counter in survey.items()
+        field: dict(counter.most_common(40 if field == "raw_property_keys" else 12))
+        for field, counter in survey.items()
     }
 
     thin = [k for k, v in summary["cells"].items() if v["pinned"] < 3]

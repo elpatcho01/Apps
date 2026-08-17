@@ -93,9 +93,13 @@ def test_discover_surfaces_which_filter_rejected_what(mock_env, capsys, tmp_path
 
     survey = summary["field_survey"]
     assert set(survey) == {
-        "hotel_class", "property_type", "free_cancellation", "price_present"
+        "hotel_class", "property_type", "free_cancellation", "price_present",
+        "raw_property_keys",
     }
+    # The raw-key census is what tells a reader whether a missing field is our
+    # parser looking in the wrong place or the engine not returning it at all.
+    assert "property_token" in survey["raw_property_keys"]
     # The survey counts raw provider values, so it sees what the filter rejects
     # -- including the unrated and five-star properties no tier accepts.
     assert "None" in survey["hotel_class"]
-    assert "'vacation_rental'" in survey["property_type"]
+    assert "'vacation rental'" in survey["property_type"]
