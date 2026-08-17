@@ -1,0 +1,186 @@
+name: Accommodation collection
+
+# COLLECTION HAPPENS SIX WEEKS BEFORE THE MONTH IT MEASURES.
+#
+# This is the single most counter-intuitive thing about this pipeline and the
+# reason the schedule looks nothing like the air-fares one. ONS price this item
+# six weeks in advance of the stay, for two nights per CPI month: one in index
+# week, one the Thursday after. So to reconstruct August we must have collected
+# in late June and early July.
+#
+# The due dates cannot be expressed in cron. They depend on which Tuesday of the
+# month turns out to be index day -- and ONS withhold that until the following
+# month's bulletin -- so both hypotheses are live, giving four to six due dates
+# per CPI month scattered across two calendar months. The job therefore runs
+# daily and asks the calendar module whether anything is due, which keeps one
+# definition of the schedule in Python rather than two that can drift apart.
+#
+# A run on a day with nothing due exits 0 having written nothing. That is the
+# expected case most days, not a failure.
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      scrape_date:
+        description: "Override collection date (YYYY-MM-DD). Blank = today."
+        required: false
+        type: string
+      dry_run:
+        description: "Run without writing to BigQuery"
+        required: false
+        type: boolean
+        default: false
+      tolerance_days:
+        description: "Price nights due within N days, to recover a slipped run."
+        required: false
+        type: string
+        default: "0"
+      force:
+        description: "Run even if nothing is due today"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: hotels-collect
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  decide:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.gate.outputs.should_run }}
+      due: ${{ steps.gate.outputs.due }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Asks the calendar module rather than reimplementing it in shell. The
+      # arithmetic (six-week lead, two nights, two index-day hypotheses, two
+      # alignment readings) is not something to maintain in two places.
+      - id: gate
+        name: Is anything due today?
+        working-directory: uk-hotels
+        env:
+          FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+          OVERRIDE: ${{ inputs.scrape_date }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as dt, os, sys
+          sys.path.insert(0, "src")
+          from ukhotels.onscal import index_months_in_scope, is_collection_day
+
+          override = (os.environ.get("OVERRIDE") or "").strip()
+          day = dt.date.fromisoformat(override) if override else dt.date.today()
+          forced = os.environ.get("FORCED", "").lower() == "true"
+          due = is_collection_day(day)
+          months = ", ".join(m.isoformat() for m in index_months_in_scope(day))
+          print(f"should_run={'true' if (due or forced) else 'false'}")
+          print(f"due={due}")
+          if due:
+              print(f"::notice::{day} is a collection day for index month(s): {months}")
+          elif forced:
+              print(f"::notice::nothing due on {day}; running anyway (force)")
+          else:
+              print(f"::notice::nothing due on {day}; skipping")
+          PY
+
+  collect:
+    needs: decide
+    if: needs.decide.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Keyless auth via Workload Identity Federation. Service-account JSON keys
+      # are blocked by the iam.disableServiceAccountKeyCreation org policy
+      # (Google's secure-by-default for new projects), and WIF is the
+      # recommended alternative regardless: GitHub mints a short-lived OIDC
+      # token per run, so there is no long-lived credential to leak or rotate.
+      # Requires `permissions: id-token: write`, set at the top of this file.
+      - name: Authenticate to Google Cloud
+        if: ${{ !inputs.dry_run }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Ensure BigQuery tables exist
+        if: ${{ !inputs.dry_run }}
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: python -m ukhotels.ensure_tables
+
+      - name: Collect rates
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          # Switch sources by setting the HOTEL_PROVIDER repository variable --
+          # no code or workflow edit needed.
+          HOTEL_PROVIDER: ${{ vars.HOTEL_PROVIDER || 'serpapi' }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          HOTEL_MARKET: uk
+          HOTEL_CURRENCY: GBP
+          # The methodology knobs. Changing either of the first two mid-series
+          # puts a step change into the index, so treat them as set-once.
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
+          COLLECTION_ALIGNMENT: ${{ vars.COLLECTION_ALIGNMENT || 'per_night' }}
+          # A run that mostly failed is not a usable vintage -- exit non-zero so
+          # it is visible in the Actions UI rather than quietly written.
+          FAILURE_THRESHOLD: "0.34"
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          PYTHONPATH: src
+        run: |
+          python -m ukhotels.pull \
+            ${{ inputs.scrape_date && format('--scrape-date {0}', inputs.scrape_date) || '' }} \
+            --tolerance-days "${{ inputs.tolerance_days || '0' }}" \
+            | tee run-summary.json
+
+      - name: Publish run summary
+        if: always()
+        run: |
+          {
+            echo "### Accommodation collection"
+            echo ""
+            if [ -s run-summary.json ]; then
+              echo '```json'
+              cat run-summary.json
+              echo '```'
+            else
+              echo "No summary produced — the run failed before completing."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collect-summary-${{ github.run_id }}
+          path: uk-hotels/run-summary.json
+          if-no-files-found: ignore
+          retention-days: 30

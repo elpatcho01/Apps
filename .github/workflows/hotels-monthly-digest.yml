@@ -1,0 +1,218 @@
+name: Accommodation monthly digest
+
+# This workflow exists for two reasons, and the second is why it commits its
+# output instead of just uploading an artifact.
+#
+# 1. SOMETHING TO READ. Once a month, summarise the previous month: how much was
+#    collected, how healthy it looked, what churned, what was reconstructed,
+#    what needs attention. The point of the pipeline is that it can be walked
+#    away from, and that only works if coming back is a two-minute read.
+#
+# 2. KEEPING THE OTHER SCHEDULES ALIVE. GitHub disables scheduled workflows in a
+#    repository after 60 days of inactivity, and **workflow runs do not count as
+#    activity -- only repository commits do**. A pipeline that runs itself
+#    flawlessly and is never committed to gets switched off around day 60, with
+#    one notification email that is easy to miss. Committing the digest is a
+#    real commit on a monthly cadence, so the clock never gets close.
+#
+#    The stakes are higher here than for air fares. A missed collection day is a
+#    stay night that can never be priced: the rate was a quote six weeks ahead
+#    of a night that has now passed, and nobody retains it. And because this
+#    item's collection calendar is only four to six days per CPI month, losing
+#    two months of schedule loses most of two months of index.
+#
+# That is why the failure posture here is inverted relative to collection and
+# reconciliation. Those fail loudly and early. This one must always reach its
+# commit step: the digest module turns query failures into notes in the report
+# rather than exceptions, so a broken BigQuery yields a report that *says so* --
+# and still commits, and still resets the clock. The run still ends red (last
+# step), so the failure is visible; it just is not allowed to skip the commit on
+# its way out.
+#
+# Runs on the 2nd, so the previous month is complete and its mid-month
+# reconciliation has already happened.
+
+on:
+  schedule:
+    - cron: "0 7 2 * *"
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "Month to report on (YYYY-MM). Blank = last month."
+        required: false
+        type: string
+      commit:
+        description: "Commit the report (leave on — this is what keeps the schedules alive)."
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: hotels-digest
+  cancel-in-progress: false
+
+permissions:
+  contents: write      # to push the report commit
+  id-token: write      # for Workload Identity Federation
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      # Full history, not the default shallow clone: this job rebases onto the
+      # branch before pushing, and rebasing a shallow checkout is a known source
+      # of "shallow update not allowed" failures.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Resolved once so the generate step, the placeholder step and the commit
+      # message all name the same month, instead of each re-deriving it.
+      - name: Resolve target month
+        id: month
+        env:
+          MONTH_INPUT: ${{ inputs.month }}
+          # `date -d 'last month'` is wrong on the 31st (it can skip a month), so
+          # anchor to the 1st of this month and step back a day.
+          TZ: UTC
+        run: |
+          MONTH="${MONTH_INPUT:-$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%Y-%m)}"
+          echo "month=${MONTH}" >> "$GITHUB_OUTPUT"
+          echo "Reporting on ${MONTH}"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      # continue-on-error, deliberately: see the header. Reaching the commit step
+      # matters more than this step's exit code. The module already degrades
+      # per-section, so a hard failure here means something unusual enough that a
+      # stub saying "digest generation failed" is the right thing to commit.
+      - name: Generate digest
+        id: generate
+        continue-on-error: true
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
+          PYTHONPATH: src
+        run: python -m ukhotels.digest --month "${{ steps.month.outputs.month }}"
+
+      # BigQuery is only reachable from inside a workflow run: service-account
+      # keys are blocked by the iam.disableServiceAccountKeyCreation org policy,
+      # and the WIF token that replaced them is minted from GitHub's OIDC
+      # provider and exists nowhere else. So the data is exported here, where
+      # the credential already is, and committed as JSON that anything can read
+      # without cloud access.
+      #
+      # Aggregates only, never raw rows: git keeps every version of everything,
+      # so an export that grew with the panel would make every future clone pay
+      # for it.
+      - name: Export analytics JSON
+        id: export
+        continue-on-error: true
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          RATE_BASIS: ${{ vars.RATE_BASIS || 'free_cancellation' }}
+          TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
+          PYTHONPATH: src
+        run: python -m ukhotels.export
+
+      - name: Warn if the export failed
+        if: steps.export.outcome == 'failure'
+        run: |
+          echo "::warning::Analytics export failed; the digest and its commit are \
+          unaffected. See the export step's log."
+
+      - name: Write a placeholder if generation failed
+        if: steps.generate.outcome == 'failure'
+        env:
+          MONTH: ${{ steps.month.outputs.month }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "::warning::Digest generation failed; committing a placeholder so the \
+          60-day inactivity clock still resets. See this step's log."
+          mkdir -p reports
+          cat > "reports/${MONTH}.md" <<EOF
+          # Accommodation digest — ${MONTH}
+
+          **Digest generation failed.** Note that this says nothing about
+          collection itself, which may well have run normally all month — it is
+          the report that could not be built. The error is in the workflow run:
+
+          <${RUN_URL}>
+
+          Committed regardless: GitHub disables scheduled workflows after 60 days
+          without repository commits, and this commit resets that clock. Losing
+          the schedules would lose stay nights that cannot be re-priced.
+          EOF
+
+      - name: Publish to run summary
+        if: always()
+        env:
+          MONTH: ${{ steps.month.outputs.month }}
+        run: |
+          if [ -s "reports/${MONTH}.md" ]; then
+            cat "reports/${MONTH}.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No report produced for ${MONTH}." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # The commit — the part that actually resets the clock.
+      #
+      # `git diff --cached --quiet` covers the re-run case: regenerating an
+      # identical report stages nothing, and `git commit` with an empty index
+      # exits non-zero, which would fail the job for no reason. Worth being
+      # explicit that an unchanged report also resets nothing, so the value comes
+      # from each month's first run, not from re-runs.
+      - name: Commit the report
+        if: always() && inputs.commit != false
+        env:
+          MONTH: ${{ steps.month.outputs.month }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          if git diff --cached --quiet; then
+            echo "::notice::Report for ${MONTH} unchanged; nothing to commit."
+            exit 0
+          fi
+          git commit -m "Accommodation digest for ${MONTH}" \
+                     -m "Generated by the monthly digest workflow. This commit also resets GitHub's 60-day scheduled-workflow inactivity timer."
+          for delay in 0 2 4 8 16; do
+            if [ "$delay" -gt 0 ]; then
+              echo "::warning::push failed; retrying in ${delay}s"
+              sleep "$delay"
+            fi
+            if git pull --rebase origin "${GITHUB_REF_NAME}" \
+               && git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "::notice::Digest for ${MONTH} committed and pushed."
+              exit 0
+            fi
+          done
+          echo "::error::could not push the digest commit after 5 attempts"
+          exit 1
+
+      # Surfaced last, so the run shows red in the Actions UI without having
+      # skipped the commit on the way there.
+      - name: Fail the run if the digest could not be generated
+        if: steps.generate.outcome == 'failure'
+        run: |
+          echo "::error::Digest generation failed for ${{ steps.month.outputs.month }} (a placeholder was committed)."
+          exit 1

@@ -1,0 +1,71 @@
+name: Accommodation CI
+
+# The `!` exclusion rather than a `paths-ignore` block: GitHub rejects a workflow
+# using both `paths` and `paths-ignore` on the same event, so an exclusion inside
+# `paths` is the only way to express "this subtree, minus one directory". Order
+# matters — later patterns win.
+#
+# What is excluded and why: the monthly digest workflow commits
+# uk-hotels/reports/YYYY-MM.md every month, largely to keep GitHub's 60-day
+# scheduled-workflow inactivity clock from expiring. Those commits change no
+# code, so testing them is noise, and a red CI run on a generated report would
+# misrepresent the state of the pipeline.
+on:
+  push:
+    paths:
+      - "uk-hotels/**"
+      - "!uk-hotels/reports/**"
+      - ".github/workflows/hotels-*.yml"
+  pull_request:
+    paths:
+      - "uk-hotels/**"
+      - "!uk-hotels/reports/**"
+      - ".github/workflows/hotels-*.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      # The whole suite runs with no network and no credentials. That is a
+      # deliberate constraint, not a happy accident: a test that needs the
+      # provider is a test that stops running the day the key expires.
+      - name: Run tests
+        run: python -m pytest
+
+      - name: End-to-end dry run against the mock provider
+        env:
+          DRY_RUN: "1"
+          HOTEL_PROVIDER: mock
+          PYTHONPATH: src
+        run: |
+          # 2026-06-30 is exactly six weeks before the 2nd Tuesday of August
+          # 2026, so it is a real collection day for the August index month.
+          python -m ukhotels.pull --scrape-date 2026-06-30 --dry-run-out /tmp/dry.ndjson
+          test -s /tmp/dry.ndjson
+          echo "rows: $(wc -l < /tmp/dry.ndjson)"
+
+      - name: A day with nothing due must collect nothing, and cleanly
+        env:
+          DRY_RUN: "1"
+          HOTEL_PROVIDER: mock
+          PYTHONPATH: src
+        run: |
+          # The collection calendar is sparse -- four to six days per CPI month
+          # -- so an idle scheduled run is the expected case and must exit 0.
+          python -m ukhotels.pull --scrape-date 2026-06-15 --dry-run-out /tmp/idle.ndjson
+          test ! -s /tmp/idle.ndjson || (echo "expected no rows" && exit 1)

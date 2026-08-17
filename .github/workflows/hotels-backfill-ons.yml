@@ -1,0 +1,116 @@
+name: Accommodation ONS published-series backfill
+
+# Loads ONS's own published values -- the validation answer key -- into
+# `ons_published_index` from two independent sources:
+#
+#   * the published CPI item-class time series (11.2.0.1, 11.2.0.2, 11.2),
+#     national, 2015 = 100, decades of history, machine-readable JSON;
+#   * the ad hoc release "Hotel overnight stays booked in advance", regional,
+#     January 2025 = 100, and the closest match to what we reconstruct.
+#
+# On its own monthly schedule rather than inside the reconciliation workflow.
+# Reconciliation retries daily across the 15th-25th waiting for the bulletin,
+# and this table is append-only with one vintage per run, so attaching the
+# backfill there would write ten near-identical vintages of the same months
+# every month. Once a month is plenty: ONS republish the ad hoc release a few
+# times a year at most.
+#
+# Revisions are handled by vintaging, not overwriting -- if ONS revise a past
+# value, a new vintage lands alongside the old one and `fetched_ts` orders them,
+# so a figure we scored against last month is never silently rewritten.
+
+on:
+  schedule:
+    - cron: "0 6 3 * *"
+  workflow_dispatch:
+    inputs:
+      release_url:
+        description: "Ad hoc release page URL. Blank = pinned default."
+        required: false
+        type: string
+      discover:
+        description: "Search ONS for a newer release first (ranked by coverage period)"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: hotels-backfill
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Ensure BigQuery tables exist
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: python -m ukhotels.ensure_tables
+
+      # The summary reports coverage AS LOADED -- row counts and distinct months
+      # counted from the rows, never the coverage period quoted in the release
+      # title. On the sibling project a release titled 2007-2026 actually loaded
+      # 2016-01 to 2026-02, and only counting caught it.
+      - name: Backfill published values
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: |
+          python -m ukhotels.backfill \
+            ${{ inputs.release_url && format('--release-url {0}', inputs.release_url) || '' }} \
+            ${{ (inputs.discover == false) && '' || '--discover' }} \
+            | tee backfill-summary.json
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "### ONS published-series backfill"
+            echo ""
+            echo "_Coverage below is counted from the rows that actually loaded, "
+            echo "not quoted from the release title._"
+            echo ""
+            if [ -s backfill-summary.json ]; then
+              echo '```json'
+              cat backfill-summary.json
+              echo '```'
+            else
+              echo "No summary produced — the run failed before completing."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ons-backfill-${{ github.run_id }}
+          path: uk-hotels/backfill-summary.json
+          if-no-files-found: ignore
+          retention-days: 90
