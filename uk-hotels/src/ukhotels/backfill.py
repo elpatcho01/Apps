@@ -676,7 +676,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = Config.from_env()
     except ConfigError as exc:
-        print(f"::error::configuration error: {exc}", flush=True)
+        print(f"::error::configuration error: {exc}", file=sys.stderr, flush=True)
         return 2
 
     sources = tuple(s.strip() for s in args.sources.split(",") if s.strip())
@@ -688,12 +688,12 @@ def main(argv: list[str] | None = None) -> int:
             discover=args.discover,
         )
     except Exception as exc:  # noqa: BLE001
-        print(f"::error::backfill failed: {exc}", flush=True)
+        print(f"::error::backfill failed: {exc}", file=sys.stderr, flush=True)
         log.exception("backfill failed")
         return 1
 
     for source, err in summary["errors"].items():
-        print(f"::warning::backfill source '{source}' failed: {err}", flush=True)
+        print(f"::warning::backfill source '{source}' failed: {err}", file=sys.stderr, flush=True)
 
     print(json.dumps(summary, indent=2))
     return 0

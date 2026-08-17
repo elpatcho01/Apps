@@ -555,11 +555,11 @@ def main(argv: list[str] | None = None) -> int:
         )
     except WeightsParseError as exc:
         # Loud, with the evidence needed to fix it in one pass.
-        print(f"::error::could not parse ONS weights: {exc}", flush=True)
+        print(f"::error::could not parse ONS weights: {exc}", file=sys.stderr, flush=True)
         log.error("%s", exc)
         return 1
     except requests.RequestException as exc:
-        print(f"::error::could not fetch ONS weights: {exc}", flush=True)
+        print(f"::error::could not fetch ONS weights: {exc}", file=sys.stderr, flush=True)
         log.error("%s", exc)
         return 1
 

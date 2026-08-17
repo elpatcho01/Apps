@@ -129,6 +129,9 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
           PYTHONPATH: src
         run: |
+          # Without this, the exit status is tee's, not the command's, so a
+          # non-zero exit is silently swallowed and the run reports green.
+          set -o pipefail
           python -m ukairfares.pull \
             ${{ inputs.scrape_date && format('--scrape-date {0}', inputs.scrape_date) || '' }} \
             | tee run-summary.json

@@ -50,7 +50,7 @@ HAULS = ("domestic", "european", "long_haul")
 
 
 def _gha_notice(level: str, message: str) -> None:
-    print(f"::{level}::{message}", flush=True)
+    print(f"::{level}::{message}", file=sys.stderr, flush=True)
 
 
 def build_rows(

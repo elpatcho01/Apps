@@ -33,6 +33,7 @@ sample's history is in git: when it changed, and to what.
 from __future__ import annotations
 
 import argparse
+import collections
 import datetime as dt
 import json
 import logging
@@ -108,10 +109,25 @@ def discover(
         "probe_check_in": check_in.isoformat(),
         "provider": provider.name,
         "per_cell": per_cell,
+        "rate_basis": config.rate_basis,
         "cells": {},
         "errors": {},
         "added": 0,
         "retired": 0,
+    }
+
+    # A census of the field values the provider actually returned, before any
+    # filtering. When a cell comes back with properties returned but none
+    # comparable, this is what says which control rejected them -- and it does
+    # so without anyone having to download and read a payload. The first live
+    # run needed exactly this and did not have it: 18-20 properties per city,
+    # zero comparable, and no way to tell whether the cause was the star rating,
+    # the property type or the cancellation basis.
+    survey: dict[str, collections.Counter] = {
+        "hotel_class": collections.Counter(),
+        "property_type": collections.Counter(),
+        "free_cancellation": collections.Counter(),
+        "price_present": collections.Counter(),
     }
 
     for location in panel.LOCATIONS:
@@ -145,6 +161,12 @@ def discover(
                 json.dumps(result.raw_payload, indent=1, default=str), encoding="utf-8"
             )
             log.info("wrote a sample raw payload to %s", dump_raw)
+
+        for quote in result.quotes:
+            survey["hotel_class"][repr(quote.hotel_class)] += 1
+            survey["property_type"][repr(quote.property_type)] += 1
+            survey["free_cancellation"][repr(quote.free_cancellation)] += 1
+            survey["price_present"][repr(quote.price is not None)] += 1
 
         sets = selection.comparable_sets(
             result.quotes,
@@ -183,8 +205,24 @@ def discover(
                 "pinned": len(kept),
                 "comparable_available": comparable.n_considered,
                 "returned": comparable.n_returned,
+                # Which control rejected what. `returned` high and
+                # `comparable_available` zero is only actionable with this.
+                "dropped": {
+                    "property_type": comparable.n_dropped_property_type,
+                    "tier": comparable.n_dropped_tier,
+                    "rate_basis": comparable.n_dropped_rate_basis,
+                    "outlier": comparable.n_dropped_outlier,
+                    "other_tier": comparable.n_other_tier,
+                },
+                # False means the counts do not account for everything the
+                # provider returned, i.e. this breakdown cannot be trusted.
+                "counts_reconcile": comparable.reconciles(),
             }
             out.extend(kept)
+
+    summary["field_survey"] = {
+        field: dict(counter.most_common(12)) for field, counter in survey.items()
+    }
 
     thin = [k for k, v in summary["cells"].items() if v["pinned"] < 3]
     if thin:
@@ -251,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = Config.from_env()
     except ConfigError as exc:
-        print(f"::error::configuration error: {exc}", flush=True)
+        print(f"::error::configuration error: {exc}", file=sys.stderr, flush=True)
         return 2
 
     existing = panel.load_property_panel(args.out)
@@ -269,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"::warning::could not read churned properties ({type(exc).__name__}); "
                 "continuing without substitutions",
+                file=sys.stderr,
                 flush=True,
             )
 
@@ -281,13 +320,20 @@ def main(argv: list[str] | None = None) -> int:
             dump_raw=args.dump_raw,
         )
     except Exception as exc:  # noqa: BLE001
-        print(f"::error::discovery failed: {exc}", flush=True)
+        print(f"::error::discovery failed: {exc}", file=sys.stderr, flush=True)
         log.exception("discovery failed")
         return 1
 
     if args.dry_run_panel:
+        # stderr, not stdout: the workflow pipes stdout through `tee` into
+        # smoke-summary.json, and a human-readable table ahead of the JSON makes
+        # that file unparseable. It only survived the first live run because
+        # zero properties were discovered, so nothing was printed before it.
         for prop in sorted(properties, key=lambda p: (p.location, p.tier, p.property_name)):
-            print(f"{prop.location:26} {prop.tier:9} {prop.property_token:24} {prop.property_name}")
+            print(
+                f"{prop.location:26} {prop.tier:9} {prop.property_token:24} {prop.property_name}",
+                file=sys.stderr,
+            )
     else:
         path = panel.write_property_panel(properties, args.out)
         summary["path"] = str(path)
@@ -298,11 +344,12 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"::warning::{cell} has fewer than 3 pinned properties; matched-sample "
             "relatives for it will be refused",
+            file=sys.stderr,
             flush=True,
         )
     if summary["errors"]:
         for code, err in summary["errors"].items():
-            print(f"::warning::discovery failed for {code}: {err}", flush=True)
+            print(f"::warning::discovery failed for {code}: {err}", file=sys.stderr, flush=True)
     if not properties:
         print("::error::no properties discovered at all", flush=True)
         return 1

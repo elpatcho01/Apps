@@ -252,20 +252,20 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = Config.from_env()
     except ConfigError as exc:
-        print(f"::error::configuration error: {exc}", flush=True)
+        print(f"::error::configuration error: {exc}", file=sys.stderr, flush=True)
         return 2
 
     try:
         path = run_export(config, out_path=args.out)
     except Exception as exc:  # noqa: BLE001
-        print(f"::error::export failed: {exc}", flush=True)
+        print(f"::error::export failed: {exc}", file=sys.stderr, flush=True)
         log.exception("export failed")
         return 1
 
     data = json.loads(path.read_text(encoding="utf-8"))
     if data["errors"]:
         for name, err in data["errors"].items():
-            print(f"::warning::export section '{name}' failed: {err}", flush=True)
+            print(f"::warning::export section '{name}' failed: {err}", file=sys.stderr, flush=True)
 
     print(str(path))
     return 0

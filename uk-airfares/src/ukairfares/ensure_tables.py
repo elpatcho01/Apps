@@ -24,7 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = Config.from_env()
     except ConfigError as exc:
-        print(f"::error::configuration error: {exc}", flush=True)
+        print(f"::error::configuration error: {exc}", file=sys.stderr, flush=True)
         return 2
 
     if config.dry_run:
@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         writer.ensure_dataset(config.project, config.dataset, config.location)
         writer.ensure_tables(config.project, config.dataset)
     except Exception as exc:  # noqa: BLE001
-        print(f"::error::failed to prepare BigQuery: {exc}", flush=True)
+        print(f"::error::failed to prepare BigQuery: {exc}", file=sys.stderr, flush=True)
         log.exception("failed to prepare BigQuery")
         return 1
 

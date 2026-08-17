@@ -285,11 +285,11 @@ def main(argv: list[str] | None = None) -> int:
             release_url=args.release_url, discover=args.discover, path=args.out
         )
     except WeightsParseError as exc:
-        print(f"::warning::{exc}", flush=True)
+        print(f"::warning::{exc}", file=sys.stderr, flush=True)
         log.warning("%s", exc)
         return 1
     except Exception as exc:  # noqa: BLE001
-        print(f"::error::weights fetch failed: {exc}", flush=True)
+        print(f"::error::weights fetch failed: {exc}", file=sys.stderr, flush=True)
         log.exception("weights fetch failed")
         return 1
 

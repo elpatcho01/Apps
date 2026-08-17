@@ -32,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = Config.from_env()
     except ConfigError as exc:
-        print(f"::error::configuration error: {exc}", flush=True)
+        print(f"::error::configuration error: {exc}", file=sys.stderr, flush=True)
         return 2
 
     if config.dry_run:

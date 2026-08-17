@@ -151,7 +151,7 @@ class NoCollectionYet(Exception):
 
 
 def _gha_notice(level: str, message: str) -> None:
-    print(f"::{level}::{message}", flush=True)
+    print(f"::{level}::{message}", file=sys.stderr, flush=True)
 
 
 def _geometric_mean(values: Iterable[float]) -> float | None:

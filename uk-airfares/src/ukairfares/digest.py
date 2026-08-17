@@ -361,13 +361,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = Config.from_env()
     except ConfigError as exc:
-        print(f"::error::configuration error: {exc}", flush=True)
+        print(f"::error::configuration error: {exc}", file=sys.stderr, flush=True)
         return 2
 
     try:
         path = run_digest(config, month=args.month, out_dir=args.out_dir)
     except Exception as exc:  # noqa: BLE001
-        print(f"::error::digest failed: {exc}", flush=True)
+        print(f"::error::digest failed: {exc}", file=sys.stderr, flush=True)
         log.exception("digest failed")
         return 1
 

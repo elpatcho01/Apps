@@ -92,6 +92,9 @@ jobs:
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
           PYTHONPATH: src
         run: |
+          # Without this, the exit status is tee's, not the command's, so a
+          # non-zero exit is silently swallowed and the run reports green.
+          set -o pipefail
           python -m ukairfares.reconcile \
             ${{ inputs.index_month && format('--index-month {0}', inputs.index_month) || '' }} \
             ${{ inputs.index_day && format('--index-day {0}', inputs.index_day) || '' }} \

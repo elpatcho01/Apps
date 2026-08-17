@@ -54,7 +54,7 @@ RETRY_BACKOFF_SECONDS = 5.0
 
 def _gha_notice(level: str, message: str) -> None:
     """Emit a GitHub Actions annotation so problems surface in the run UI."""
-    print(f"::{level}::{message}", flush=True)
+    print(f"::{level}::{message}", file=sys.stderr, flush=True)
 
 
 def choose_ordinal(scrape_date: dt.date) -> int:

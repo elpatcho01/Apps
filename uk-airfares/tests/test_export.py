@@ -172,7 +172,12 @@ class TestRunExport:
             lambda config, out_path=None: _write_partial(out_path or tmp_path / "x.json"),
         )
         assert export.main(["--out", str(tmp_path / "x.json")]) == 0
-        assert "::warning::" in capsys.readouterr().out
+        captured = capsys.readouterr()
+        # stderr, not stdout: these workflows pipe stdout through `tee` into a
+        # .json artifact, and an annotation line inside it makes the file
+        # unparseable. GitHub reads workflow commands from both streams.
+        assert "::warning::" in captured.err
+        assert "::warning::" not in captured.out
 
 
 def _write_partial(path):

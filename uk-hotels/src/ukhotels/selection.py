@@ -111,9 +111,26 @@ class ComparableSet:
     #: counts here mean the provider is mostly serving the other basis and the
     #: cell is thinner than the property count suggests.
     n_dropped_rate_basis: int
+    #: Outside every tier: unrated, below 3-star, or above 4.5-star.
     n_dropped_tier: int
     n_dropped_property_type: int
     n_dropped_outlier: int
+    #: In a DIFFERENT tier, so counted in that cell rather than lost. Without
+    #: this the per-cell counts do not reconcile against `n_returned` and a
+    #: reader has to guess where the difference went -- which makes the whole
+    #: breakdown untrustworthy exactly when it is being relied on.
+    n_other_tier: int = 0
+
+    def reconciles(self) -> bool:
+        """Do the counts account for every property the provider returned?"""
+        return self.n_returned == (
+            self.n_considered
+            + self.n_dropped_property_type
+            + self.n_dropped_tier
+            + self.n_dropped_rate_basis
+            + self.n_dropped_outlier
+            + self.n_other_tier
+        )
 
     @property
     def cheapest(self) -> PropertyQuote | None:
@@ -184,6 +201,7 @@ def comparable_sets(
 
     out: dict[StarTier, ComparableSet] = {}
     for tier, pool in by_tier.items():
+        n_other_tier = sum(len(p) for t, p in by_tier.items() if t != tier)
         on_basis = [q for q in pool if _matches_rate_basis(q, rate_basis)]
         n_dropped_rate_basis = len(pool) - len(on_basis)
 
@@ -215,6 +233,7 @@ def comparable_sets(
             n_dropped_tier=n_dropped_tier,
             n_dropped_property_type=n_dropped_property_type,
             n_dropped_outlier=n_dropped_outlier,
+            n_other_tier=n_other_tier,
         )
     return out
 

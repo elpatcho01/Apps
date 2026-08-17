@@ -123,6 +123,9 @@ jobs:
           TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
           PYTHONPATH: src
         run: |
+          # Without this, the exit status is tee's, not the command's, so a
+          # non-zero exit is silently swallowed and the run reports green.
+          set -o pipefail
           python -m ukhotels.discover \
             --per-cell "${{ inputs.per_cell || '5' }}" \
             ${{ (inputs.substitute == false) && '' || '--substitute' }} \

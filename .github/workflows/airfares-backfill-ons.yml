@@ -80,6 +80,9 @@ jobs:
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
           PYTHONPATH: src
         run: |
+          # Without this, the exit status is tee's, not the command's, so a
+          # non-zero exit is silently swallowed and the run reports green.
+          set -o pipefail
           python -m ukairfares.backfill \
             ${{ inputs.release_url && format('--release-url {0}', inputs.release_url) || '' }} \
             ${{ (inputs.discover == false) && '' || '--discover' }} \

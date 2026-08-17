@@ -422,21 +422,21 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = Config.from_env()
     except ConfigError as exc:
-        print(f"::error::configuration error: {exc}", flush=True)
+        print(f"::error::configuration error: {exc}", file=sys.stderr, flush=True)
         return 2
 
     try:
         report = run_validate(config, series_source=args.series_source)
     except Exception as exc:  # noqa: BLE001
-        print(f"::error::validation failed: {exc}", flush=True)
+        print(f"::error::validation failed: {exc}", file=sys.stderr, flush=True)
         log.exception("validation failed")
         return 1
 
     print(json.dumps(report, indent=2, default=str))
     if report["verdict"] == "INSUFFICIENT_DATA":
-        print(f"::notice::{report['reason']}", flush=True)
+        print(f"::notice::{report['reason']}", file=sys.stderr, flush=True)
     for blocker in report.get("blockers", []):
-        print(f"::warning::{blocker}", flush=True)
+        print(f"::warning::{blocker}", file=sys.stderr, flush=True)
     # Always exit 0: "not enough data yet" is the expected state for months and
     # is not a pipeline failure.
     return 0
