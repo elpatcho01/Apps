@@ -84,6 +84,7 @@ def discover(
     substitutions: dict[tuple[str, str], list[str]] | None = None,
     reference_date: dt.date | None = None,
     dump_raw: pathlib.Path | None = None,
+    probe_details: bool = False,
 ) -> tuple[list[PanelProperty], dict[str, Any]]:
     """Draw (or top up) the pinned sample. Returns the panel and a summary.
 
@@ -136,6 +137,8 @@ def discover(
         "raw_property_keys": collections.Counter(),
     }
 
+    probe_token: str | None = None
+
     for location in panel.LOCATIONS:
         try:
             result = provider.search(
@@ -175,6 +178,8 @@ def discover(
             survey["price_present"][repr(quote.price is not None)] += 1
             for key in (quote.raw or {}):
                 survey["raw_property_keys"][key] += 1
+            if probe_token is None and quote.property_token:
+                probe_token = quote.property_token
 
         sets = selection.comparable_sets(
             result.quotes,
@@ -228,6 +233,30 @@ def discover(
             }
             out.extend(kept)
 
+    # One call, to settle whether the detail endpoint carries the two controls
+    # the list view lacks. Reports the keys it returns rather than assuming.
+    if probe_details and probe_token and hasattr(provider, "property_details"):
+        try:
+            detail = provider.property_details(
+                probe_token, check_in=check_in, check_out=check_out,
+                adults=panel.ADULTS, currency=config.currency,
+            )
+            summary["detail_probe"] = {
+                "property_token": probe_token,
+                "top_level_keys": sorted(detail)[:40],
+                "has_free_cancellation": "free_cancellation" in json.dumps(detail),
+                "has_board_or_breakfast": any(
+                    word in json.dumps(detail).lower()
+                    for word in ("breakfast", "board basis", "room_type", "bed_type")
+                ),
+                "n_prices": len(detail.get("prices") or []),
+                "price_keys": sorted(
+                    {k for p in (detail.get("prices") or []) if isinstance(p, dict) for k in p}
+                ),
+            }
+        except Exception as exc:  # noqa: BLE001 - a probe must never break discovery
+            summary["detail_probe"] = {"error": f"{type(exc).__name__}: {exc}"}
+
     summary["field_survey"] = {
         field: dict(counter.most_common(40 if field == "raw_property_keys" else 12))
         for field, counter in survey.items()
@@ -279,6 +308,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Print the panel that would be written without writing it.",
     )
     parser.add_argument(
+        "--probe-details",
+        action="store_true",
+        help=(
+            "Spend ONE extra call on the property-details endpoint and report "
+            "which fields it carries. Answers whether cancellation terms and "
+            "board basis are obtainable at all."
+        ),
+    )
+    parser.add_argument(
         "--dump-raw",
         type=pathlib.Path,
         default=None,
@@ -327,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             existing=existing,
             substitutions=substitutions,
             dump_raw=args.dump_raw,
+            probe_details=args.probe_details,
         )
     except Exception as exc:  # noqa: BLE001
         print(f"::error::discovery failed: {exc}", file=sys.stderr, flush=True)

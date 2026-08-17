@@ -48,6 +48,11 @@ on:
         required: false
         type: boolean
         default: false
+      probe_details:
+        description: "Spend 1 extra call probing whether the details endpoint carries cancellation/board."
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: hotels-smoke
@@ -108,6 +113,7 @@ jobs:
           python -m ukhotels.discover \
             --per-cell "${{ inputs.per_cell || '5' }}" \
             --dump-raw raw-payload.json \
+            ${{ inputs.probe_details && '--probe-details' || '' }} \
             ${{ inputs.write_panel && '' || '--dry-run-panel' }} \
             | tee smoke-summary.json
 

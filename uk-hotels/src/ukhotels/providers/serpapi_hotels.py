@@ -334,6 +334,42 @@ class SerpApiHotelsProvider(AccommodationProvider):
         )
         return SearchResult(quotes=quotes, raw_payload=payload, source_api=self.name)
 
+    def property_details(
+        self, property_token: str, *, check_in: dt.date, check_out: dt.date,
+        adults: int = 2, currency: str = "GBP",
+    ) -> dict[str, Any]:
+        """Fetch one property's detail payload, for probing what it carries.
+
+        The properties list does not include `free_cancellation` -- confirmed
+        from a raw-key census over 240 live properties, where the field appears
+        on none of them. Every property does carry a
+        `serpapi_property_details_link`, so the question is whether that second
+        endpoint exposes cancellation terms and board basis, which would restore
+        two comparability controls the list view cannot.
+
+        This exists to answer that for the price of one call. It is NOT wired
+        into collection: doing so would multiply the per-day quota by the number
+        of pinned properties, which is a cost decision rather than a technical
+        one.
+        """
+        params = {
+            "engine": "google_hotels_property_details",
+            "property_token": property_token,
+            "check_in_date": check_in.isoformat(),
+            "check_out_date": check_out.isoformat(),
+            "adults": adults,
+            "currency": currency.upper(),
+            "gl": self._market,
+            "hl": self._language,
+            "api_key": self._api_key,
+        }
+        resp = self._session.get(BASE_URL, params=params, timeout=self._timeout)
+        try:
+            payload = resp.json()
+        except ValueError as exc:
+            raise ProviderError(f"non-JSON detail response: {exc}") from exc
+        return redact(payload, self._api_key)
+
     def _to_quote(self, item: Any, currency: str) -> PropertyQuote | None:
         if not isinstance(item, dict):
             return None
