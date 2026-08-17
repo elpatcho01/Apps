@@ -488,6 +488,12 @@ pipeline works before `SCORED`.
 
 ## Invariants
 
+- **Query `current_scrapes`, audit `airfare_scrapes`.** A date can carry several
+  runs (a retry, a re-run, a double-click). The `current_scrapes` view exposes
+  the latest run per date — one coherent vintage — and matches what
+  reconciliation uses. Analysis queries should use it; a query against the raw
+  table averages across every run for that date, which on 2026-08-17 produced a
+  £870 "domestic fare" by pooling two buggy runs with one clean one.
 - **`airfare_scrapes` is never UPDATEd and never DELETEd from.** Every pull is a
   new vintage. If a price looks wrong the fix is another row, not an edit — the
   whole point is to be able to reconstruct what we believed on any past date,

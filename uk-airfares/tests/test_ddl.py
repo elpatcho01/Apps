@@ -136,3 +136,47 @@ class TestPanelQueryDeduplicates:
 
         sql = PANEL_QUERY.format(table="p.d.airfare_scrapes")
         assert "status = 'ok'" in sql and "price_gbp IS NOT NULL" in sql
+
+
+class TestCurrentScrapesView:
+    """The alternative to deleting superseded runs.
+
+    Three runs landed for 2026-08-17, two of them carrying a selection bug. The
+    append-only invariant means they stay; the view is what stops a naive query
+    averaging across them.
+    """
+
+    def _view_sql(self) -> str:
+        path = next(f for f in SQL_FILES if "current_scrapes" in f.name)
+        return path.read_text()
+
+    def test_view_exists(self):
+        assert any("current_scrapes" in f.name for f in SQL_FILES)
+
+    def test_is_a_view_not_a_table_copy(self):
+        sql = self._view_sql().upper()
+        assert "CREATE OR REPLACE VIEW" in sql
+        assert "CREATE TABLE" not in sql
+
+    def test_selects_one_run_per_date(self):
+        sql = self._view_sql()
+        assert "PARTITION BY scrape_date ORDER BY scrape_ts DESC" in sql
+        assert "WHERE rn = 1" in sql
+
+    def test_matches_the_reconcile_semantics(self):
+        """View and reconciliation must agree on which vintage is current."""
+        from ukairfares.reconcile import PANEL_QUERY
+
+        panel_sql = PANEL_QUERY.format(table="p.d.airfare_scrapes")
+        # Both pick the latest run for the date, by scrape_ts.
+        assert "ORDER BY scrape_ts DESC" in panel_sql
+        assert "ORDER BY scrape_ts DESC" in self._view_sql()
+
+    def test_does_not_filter_status(self):
+        """Coverage analysis needs error and no_data rows, so the view keeps them."""
+        assert "status" not in self._view_sql()
+
+    def test_view_is_still_non_destructive(self):
+        sql = self._view_sql().upper()
+        for forbidden in ("DROP TABLE", "DELETE FROM", "TRUNCATE"):
+            assert forbidden not in sql
