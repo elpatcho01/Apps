@@ -117,6 +117,94 @@ for haul, ma, label, win, cls in SERIES:
     for i in range(12):
         table.append((label, win, MN[i], med[i], lo[i], hi[i], ns[i]))
 
+# --- Today's collection -------------------------------------------------------
+# One day deep, so nothing here is a trend. These are diagnostics: is the
+# selection rule picking comparable products, and is the target-time rule
+# actually constraining the choice?
+CLS = {("domestic",1):"dom", ("european",1):"eur", ("european",3):"eur",
+       ("long_haul",1):"lh", ("long_haul",3):"lh", ("long_haul",6):"lh"}
+LBL = {"domestic":"Domestic", "european":"European", "long_haul":"Long haul"}
+dbs = sorted(d["daily_by_series"], key=lambda r: (r["haul_category"], r["months_ahead"]))
+routes = d["latest_routes"]
+cov = d["coverage"]
+tot_ok = sum(r["ok"] for r in dbs)
+tot_nd = sum(r["no_data"] for r in dbs)
+tot_er = sum(r["errors"] for r in dbs)
+
+def pct_above(r):
+    c = r["mean_cheapest_gbp"]
+    return None if not c else (r["mean_price_gbp"] - c) / c * 100
+
+# Bar geometry, shared by both diagnostic charts.
+BW, BH, BL, BR2 = 470, 26, 106, 78
+def bars(rows, val, vmax, fmt, thresh=None, tlabel="", aria=""):
+    W = BW - BL - BR2
+    out = []
+    for i, r in enumerate(rows):
+        v = val(r) or 0
+        y = i * BH + 5
+        w = max(1.5, min(v, vmax) / vmax * W)
+        out.append(
+            f'<text class="bl" x="{BL-9}" y="{y+13.5}">{LBL[r["haul_category"]]} '
+            f'{r["months_ahead"]}m</text>'
+            f'<rect class="btr" x="{BL}" y="{y+3}" width="{W}" height="{BH-11}" rx="2.5"/>'
+            f'<rect class="bar {CLS[(r["haul_category"], r["months_ahead"])]}" x="{BL}" '
+            f'y="{y+3}" width="{w:.1f}" height="{BH-11}" rx="2.5"/>'
+            f'<text class="bv" x="{BL+W+7}" y="{y+13.5}">{fmt(r)}</text>')
+    base = len(rows) * BH + 2
+    out.append(f'<line class="bax" x1="{BL}" x2="{BL}" y1="0" y2="{base}"/>')
+    if thresh is not None:
+        tx = BL + thresh / vmax * W
+        out.append(f'<line class="thr" x1="{tx:.1f}" x2="{tx:.1f}" y1="0" y2="{base}"/>'
+                   f'<text class="thl" x="{tx:.1f}" y="{base+15}">{tlabel}</text>')
+    return (f'<svg viewBox="0 0 {BW} {base+22}" role="img" aria-label="{aria}">'
+            + "".join(out) + "</svg>")
+
+# Label is the percentage alone: the absolute fares are in the table above, and a
+# "40%  £122 vs £87" label overruns the viewBox and gets clipped.
+gap_svg = bars(dbs, pct_above, 60, lambda r: f'{pct_above(r):.0f}%',
+               aria="Percent by which the ONS-rule fare exceeds the cheapest comparable fare, per series.")
+mins_svg = bars(dbs, lambda r: r["mean_mins_off_target"], 240,
+                lambda r: f'{r["mean_mins_off_target"]:.0f} min', thresh=180, tlabel="180 min",
+                aria="Average minutes between the selected departure and the 09:00 target, per series.")
+
+srow = "".join(
+    f'<tr><td><span class="dot {CLS[(r["haul_category"], r["months_ahead"])]}"></span>'
+    f'{LBL[r["haul_category"]]}</td>'
+    f'<td>{r["months_ahead"]} month{"s" if r["months_ahead"] > 1 else ""}</td>'
+    f'<td class=n>{r["ok"]}</td><td class=n>{r["no_data"]}</td><td class=n>{r["errors"]}</td>'
+    f'<td class=n>£{r["mean_price_gbp"]:.0f}</td><td class=n>£{r["median_price_gbp"]:.0f}</td>'
+    f'<td class=n>£{r["geomean_price_gbp"]:.0f}</td>'
+    f'<td class=n>{r["mean_considered"]:.1f} / {r["mean_quotes"]:.1f}</td></tr>'
+    for r in dbs)
+
+money = lambda v: f"£{v:.0f}" if v else "—"
+rrow = "".join(
+    f'<tr><td class="mono">{r["route"]}</td><td class=n>{r["months_ahead"]}m</td>'
+    f'<td class="mono">{r["departure_date"]}</td>'
+    f'<td class=n>{money(r["price_gbp"])}</td>'
+    f'<td class=n>{money(r["price_cheapest_gbp"])}</td>'
+    f'<td>{r["selected_airline"] or "—"}</td>'
+    f'<td class="mono">{(r["selected_departure_ts"] or "")[11:16] or "—"}</td>'
+    f'<td class=n>{r["ons_rule_time_delta_minutes"] if r["ons_rule_time_delta_minutes"] is not None else "—"}</td>'
+    f'<td class="cb">{(r["candidate_basis"] or "—").replace("_", " ")}</td>'
+    f'<td class="st {r["status"]}">{r["status"]}</td></tr>'
+    for r in sorted(routes, key=lambda r: (r["haul_category"], r["route"], r["months_ahead"])))
+
+n_nodirect = sum(1 for r in routes if (r["candidate_basis"] or "") == "no_direct_available")
+worst_mins = max(dbs, key=lambda r: r["mean_mins_off_target"] or 0)
+nd_routes = ", ".join(sorted({r["route"] for r in routes if r["status"] == "no_data"})) or "none"
+
+# Flattened for the f-string below: `{d[key]}` inside an f-string reads `key` as a
+# name, not a string, so subscripts would each need nested quotes.
+day       = cov.get("panel_last_day", "—")
+n_queries = cov.get("panel_rows", 0)
+dom_mean  = dbs[0]["mean_price_gbp"] if dbs else 0
+dom_geo   = dbs[0]["geomean_price_gbp"] if dbs else 0
+wm_label  = LBL[worst_mins["haul_category"]]
+wm_win    = worst_mins["months_ahead"]
+wm_mins   = worst_mins["mean_mins_off_target"] or 0
+
 CW = 9
 cells = "".join(
     f'<rect class="cell {"on" if k in present else "off"}" x="{i*CW}" y="0" '
@@ -257,6 +345,24 @@ td.n{{text-align:right;font-family:ui-monospace,Menlo,monospace;
  font-variant-numeric:tabular-nums}}
 tr:last-child td{{border-bottom:none}}
 td.pm{{font-weight:600}} td.dv{{font-weight:600}}
+.bars{{background:var(--surf);border:1px solid var(--line);border-radius:5px;
+ padding:16px 14px 8px;box-shadow:var(--shadow);overflow-x:auto}}
+.bars svg{{display:block;width:100%;height:auto;min-width:430px}}
+.bl{{font:500 11.5px ui-monospace,Menlo,monospace;fill:var(--ink2);text-anchor:end}}
+.bv{{font:600 11.5px ui-monospace,Menlo,monospace;fill:var(--ink2);
+ font-variant-numeric:tabular-nums}}
+.btr{{fill:var(--chipbg)}} .bax{{stroke:var(--rule);stroke-width:1}}
+.bar.dom{{fill:var(--dom)}} .bar.eur{{fill:var(--eur)}} .bar.lh{{fill:var(--lh)}}
+.thr{{stroke:var(--crit);stroke-width:1.5;stroke-dasharray:3 3}}
+.thl{{font:600 10.5px ui-monospace,Menlo,monospace;fill:var(--crit);text-anchor:middle}}
+.two{{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}}
+.two h3{{font-size:15px;font-weight:640;margin:0 0 4px}}
+.two p{{font-size:13.5px;color:var(--ink2);margin:0 0 12px;line-height:1.5}}
+td.cb{{font:500 12px ui-monospace,Menlo,monospace;color:var(--muted);white-space:nowrap}}
+td.st{{font:600 11px ui-monospace,Menlo,monospace;text-transform:uppercase;
+ letter-spacing:.05em}}
+td.st.ok{{color:var(--good)}} td.st.no_data{{color:var(--warn)}}
+td.mono{{font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}}
 .note{{border-left:3px solid var(--rule);padding:2px 0 2px 16px;color:var(--ink2);
  font-size:15px;max-width:66ch}}
 .note.warn{{border-left-color:var(--warn)}}
@@ -287,7 +393,79 @@ footer{{margin-top:58px;padding-top:22px;border-top:1px solid var(--line);
 </header>
 
 <section>
- <h2><span class="num">01</span>The shape of the target</h2>
+ <h2><span class="num">01</span>Today&rsquo;s collection</h2>
+ <p class="lede">One collection date, {day}, taken from the latest
+ run for that date &mdash; earlier runs the same day are superseded, not averaged
+ in. Departures target the 3rd Tuesday of each month ahead, the hypothesis until
+ ONS confirm August&rsquo;s index day in the September bulletin.</p>
+ <div class="tiles">
+  <div class="tile"><span class="v">{tot_ok}</span><span class="k">fares collected, of {n_queries} queries</span></div>
+  <div class="tile{" flag" if tot_nd else ""}"><span class="v">{tot_nd}</span><span class="k">no fares returned &mdash; {nd_routes}</span></div>
+  <div class="tile"><span class="v">{tot_er}</span><span class="k">errors</span></div>
+  <div class="tile"><span class="v">{n_nodirect}</span><span class="k">queries with no direct service</span></div>
+ </div>
+ <div class="tblwrap" style="margin-top:14px"><table>
+  <thead><tr><th>Series</th><th>Window</th><th style="text-align:right">Ok</th>
+   <th style="text-align:right">No data</th><th style="text-align:right">Err</th>
+   <th style="text-align:right">Mean</th><th style="text-align:right">Median</th>
+   <th style="text-align:right">Geomean</th>
+   <th style="text-align:right">Considered / seen</th></tr></thead>
+  <tbody>{srow}</tbody></table></div>
+ <p class="note" style="margin-top:18px"><strong>Mean and geometric mean differ
+ materially</strong> &mdash; domestic £{dom_mean:.0f} against
+ £{dom_geo:.0f}. ONS use a Jevons (geometric) elementary
+ aggregate for most CPI items, so which one is applied changes the index by more
+ than a rounding error. All three are stored per row for exactly this reason.</p>
+</section>
+
+<section>
+ <h2><span class="num">02</span>Two diagnostics on the selection rule</h2>
+ <p class="lede">The ONS rule takes the flight departing closest to a fixed
+ target time, whatever it costs. Both charts ask whether that rule is behaving:
+ the first, what it costs against the cheapest comparable fare; the second,
+ whether the target time is constraining the choice at all.</p>
+ <div class="two">
+  <div>
+   <h3>Cost of the target-time rule</h3>
+   <p>How far the selected fare sits above the cheapest direct alternative for the
+   same query. The three pre-fix runs earlier today read 882% on domestic; this is
+   the same metric after filtering to comparable products.</p>
+   <div class="bars">{gap_svg}</div>
+  </div>
+  <div>
+   <h3>Distance from the 09:00 target</h3>
+   <p>Average gap between the selected departure and the target time. Past roughly
+   three hours the rule is not really selecting on time any more &mdash; it is
+   taking whatever exists.</p>
+   <div class="bars">{mins_svg}</div>
+  </div>
+ </div>
+ <p class="note crit" style="margin-top:20px"><strong>Long haul is barely
+ constrained by the target time.</strong> {wm_label}
+ {wm_win}m averages
+ <strong>{wm_mins:.0f} minutes</strong> from 09:00 &mdash;
+ over three hours. Long-haul departures cluster at times set by arrival slots and
+ night-flight rules, so on many routes nothing departs near 09:00 at all. Our
+ 09:00 constant is a stand-in: ONS do not publish theirs. This is the first real
+ evidence that the target should differ by haul, and because every row keeps its
+ raw API response, it can be re-derived later without re-collecting.</p>
+</section>
+
+<section>
+ <h2><span class="num">03</span>Every route, today</h2>
+ <p class="lede">The full panel for {day}. &ldquo;Off target&rdquo;
+ is minutes from 09:00; &ldquo;basis&rdquo; records what the candidate filter did
+ before the rule was applied.</p>
+ <div class="tblwrap" style="max-height:520px;overflow-y:auto"><table>
+  <thead><tr><th>Route</th><th style="text-align:right">Win</th><th>Departs</th>
+   <th style="text-align:right">ONS rule</th><th style="text-align:right">Cheapest</th>
+   <th>Airline</th><th>Time</th><th style="text-align:right">Off target</th>
+   <th>Basis</th><th>Status</th></tr></thead>
+  <tbody>{rrow}</tbody></table></div>
+</section>
+
+<section>
+ <h2><span class="num">04</span>The shape of the target</h2>
  <div class="tiles">
   <div class="tile"><span class="v">{len(present)}</span><span class="k">months published, of {len(allm)} in span</span></div>
   <div class="tile flag"><span class="v">{len(missing)}</span><span class="k">months missing — all six series</span></div>
@@ -297,7 +475,7 @@ footer{{margin-top:58px;padding-top:22px;border-top:1px solid var(--line);
 </section>
 
 <section>
- <h2><span class="num">02</span>Seasonal profile, one panel per series</h2>
+ <h2><span class="num">05</span>Seasonal profile, one panel per series</h2>
  <p class="lede">Every January is reset to exactly 100, so this is a
  <em>within-year</em> index, not a long-run level. A continuous 2016–2026 line
  would be eleven sawtooth resets hiding the actual signal — so each panel shows
@@ -315,7 +493,7 @@ footer{{margin-top:58px;padding-top:22px;border-top:1px solid var(--line);
 </section>
 
 <section>
- <h2><span class="num">03</span>The peak is not in the same month for every series</h2>
+ <h2><span class="num">06</span>The peak is not in the same month for every series</h2>
  <p class="lede">Domestic and both European windows peak in <strong>August</strong>.
  Long-haul 1-month and 6-month peak in <strong>December</strong>. Summer holidays
  against Christmas travel — which means any seasonal adjustment or sanity check
@@ -328,7 +506,7 @@ footer{{margin-top:58px;padding-top:22px;border-top:1px solid var(--line);
 </section>
 
 <section>
- <h2><span class="num">04</span>Nine months are simply absent</h2>
+ <h2><span class="num">07</span>Nine months are simply absent</h2>
  <p class="lede">Identical gaps across all six series: 2020-04, 05, 06, 2020-11,
  and 2021-02 through 06. Those are the UK lockdown windows. With almost no
  flights to price, ONS suspended collection and imputed the item rather than
@@ -350,7 +528,7 @@ footer{{margin-top:58px;padding-top:22px;border-top:1px solid var(--line);
 </section>
 
 <section>
- <h2><span class="num">05</span>The most recent published month</h2>
+ <h2><span class="num">08</span>The most recent published month</h2>
  <p class="lede">February 2026 is the last month ONS have published. Because
  January is the base, the February value <em>is</em> the January-to-February
  change — compared here against the typical February of prior years. A positive difference means fares rose more
@@ -363,16 +541,15 @@ footer{{margin-top:58px;padding-top:22px;border-top:1px solid var(--line);
 </section>
 
 <section>
- <h2><span class="num">06</span>Where our own collection stands</h2>
- {panel_state}
+ <h2><span class="num">09</span>Where validation stands</h2>
  <p class="note"><strong>Collection began 2026-08-17.</strong> The published
  series ends 2026-02, six months earlier, so the overlap between what we collect
  and what we can check against is currently <strong>zero months</strong>.
  Validation correctly reports <code>INSUFFICIENT_DATA</code> and will keep doing
- so until ONS release a newer vintage — which the monthly backfill workflow
+ so until ONS release a newer vintage &mdash; which the monthly backfill workflow
  discovers automatically. Nothing to fix; something to wait for.</p>
  <details>
-  <summary>Full seasonal table — 72 rows, median and range per series and month</summary>
+  <summary>Full seasonal table &mdash; 72 rows, median and range per series and month</summary>
   <div class="tblwrap" style="margin-top:12px;max-height:440px;overflow-y:auto">
   <table><thead><tr><th>Series</th><th>Window</th><th>Month</th>
    <th style="text-align:right">Median</th><th style="text-align:right">Min</th>
