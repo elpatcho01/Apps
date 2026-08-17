@@ -121,30 +121,29 @@ def expected_queries_per_run() -> int:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Weights:
-    """ONS sub-index weights for one year."""
+    """ONS sub-index weights for one year, keyed by (haul, advance window).
+
+    ONS publish six series and weight each one separately; the split across a
+    category's windows is not even (long-haul 1-month carries ~0.056 while its
+    3- and 6-month windows carry ~0.251 each), so it must be read rather than
+    derived. Within a year the six weights sum to 1.
+    """
 
     year: int
-    domestic: float
-    european: float
-    long_haul: float
+    by_series: dict[tuple[HaulCategory, int], float]
     is_placeholder: bool
 
-    def get(self, haul: HaulCategory) -> float:
-        return {
-            "domestic": self.domestic,
-            "european": self.european,
-            "long_haul": self.long_haul,
-        }[haul]
+    def get(self, haul: HaulCategory, months_ahead: int) -> float | None:
+        return self.by_series.get((haul, months_ahead))
 
-    def normalised(self) -> dict[HaulCategory, float]:
-        total = self.domestic + self.european + self.long_haul
+    def haul_total(self, haul: HaulCategory) -> float:
+        return sum(w for (h, _), w in self.by_series.items() if h == haul)
+
+    def normalised(self) -> dict[tuple[HaulCategory, int], float]:
+        total = sum(self.by_series.values())
         if total <= 0:
             raise ValueError(f"weights for {self.year} sum to {total}")
-        return {
-            "domestic": self.domestic / total,
-            "european": self.european / total,
-            "long_haul": self.long_haul / total,
-        }
+        return {k: v / total for k, v in self.by_series.items()}
 
 
 def load_weights(
@@ -155,53 +154,53 @@ def load_weights(
 ) -> Weights:
     """Load ONS sub-index weights for `year`.
 
-    Falls back to the most recent earlier year on file, which is the correct
-    behaviour for CPI weights (they are set annually and carried forward).
+    Falls back to the most recent earlier year on file, which is correct for CPI
+    weights -- they are set annually and carried forward.
 
     Raises if the only thing on file is the placeholder and `allow_placeholder`
-    is False -- so that a validation run cannot silently report an aggregate
-    built on made-up weights.
+    is False, so a validation run cannot silently report an aggregate built on
+    made-up weights.
     """
     path = path or WEIGHTS_PATH
     if not path.exists():
         raise FileNotFoundError(
-            f"{path} missing. Populate it from the ONS ad hoc release "
-            "'Domestic, European and long-haul airfares consumer prices sub-indices'."
+            f"{path} missing. Run `python -m ukairfares.onsweights` to fetch it "
+            "from the ONS ad hoc release."
         )
 
-    rows: list[Weights] = []
+    by_year: dict[int, dict[tuple[str, int], float]] = {}
+    placeholder_years: set[int] = set()
     with path.open(newline="", encoding="utf-8") as fh:
-        # Strip the explanatory comment block before parsing: csv.DictReader
-        # would otherwise take the first '#' line as the header row.
         lines = [ln for ln in fh if not ln.lstrip().startswith("#")]
         for row in csv.DictReader(lines):
             if not (row.get("year") or "").strip():
                 continue
-            rows.append(
-                Weights(
-                    year=int(row["year"]),
-                    domestic=float(row["domestic"]),
-                    european=float(row["european"]),
-                    long_haul=float(row["long_haul"]),
-                    is_placeholder=row.get("is_placeholder", "").strip().lower()
-                    in {"1", "true", "yes"},
-                )
-            )
-    if not rows:
+            y = int(row["year"])
+            by_year.setdefault(y, {})[
+                (row["haul_category"].strip(), int(row["months_ahead"]))
+            ] = float(row["weight"])
+            if (row.get("is_placeholder", "") or "").strip().lower() in {"1", "true", "yes"}:
+                placeholder_years.add(y)
+
+    if not by_year:
         raise ValueError(f"no weight rows in {path}")
 
-    rows.sort(key=lambda w: w.year)
-    chosen = rows[0]
-    for w in rows:
-        if w.year <= year:
-            chosen = w
+    chosen_year = min(by_year)
+    for y in sorted(by_year):
+        if y <= year:
+            chosen_year = y
         else:
             break
 
-    if chosen.is_placeholder and not allow_placeholder:
+    is_placeholder = chosen_year in placeholder_years
+    if is_placeholder and not allow_placeholder:
         raise ValueError(
             f"weights for {year} are placeholders, not real ONS figures. "
-            f"Populate {path} from the ONS ad hoc release, or pass "
+            f"Run `python -m ukairfares.onsweights` to populate {path}, or pass "
             "allow_placeholder=True if you are deliberately running a smoke test."
         )
-    return chosen
+    return Weights(
+        year=chosen_year,
+        by_series=dict(by_year[chosen_year]),
+        is_placeholder=is_placeholder,
+    )

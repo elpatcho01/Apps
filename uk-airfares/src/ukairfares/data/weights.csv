@@ -1,17 +1,18 @@
-# ONS air fares sub-index weights (CPI item 07.3.3, "Passenger transport by air").
+# ONS air fare sub-index weights (CPI item 07.3.3).
 #
-# THESE ARE PLACEHOLDERS. They are equal thirds, not ONS figures, and any code
-# path that matters refuses to use them unless explicitly forced
-# (see panel.load_weights).
+# THESE ARE PLACEHOLDERS. Equal sixths, not ONS figures. Any code path that
+# matters refuses them unless explicitly forced (see panel.load_weights).
 #
-# To populate with real data:
-#   1. Search the ONS site for "Domestic, European and long-haul airfares
-#      consumer prices sub-indices" and open the most recent ad hoc release.
-#      (As of writing, the latest located was Jan 2017 - Feb 2025, ref 2716.)
-#   2. That release contains both the sub-indices and the annual weights.
-#   3. Add one row per year below and set is_placeholder=false.
+# To populate with the real figures:
+#   python -m ukairfares.onsweights --discover
 #
-# Weights are relative shares within item 07.3.3; they are normalised before
-# use, so either raw parts-per-1000 or percentages work.
-year,domestic,european,long_haul,is_placeholder
-2017,1,1,1,true
+# One row per (year, haul category, advance window). ONS weight each of the six
+# published series separately -- the split across a category's windows is NOT
+# even -- and within a year they sum to 1.
+year,haul_category,months_ahead,weight,is_placeholder
+2017,domestic,1,0.166667,true
+2017,european,1,0.166667,true
+2017,european,3,0.166667,true
+2017,long_haul,1,0.166667,true
+2017,long_haul,3,0.166667,true
+2017,long_haul,6,0.166667,true

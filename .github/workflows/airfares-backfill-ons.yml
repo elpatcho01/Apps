@@ -85,10 +85,26 @@ jobs:
             ${{ (inputs.discover == false) && '' || '--discover' }} \
             | tee backfill-summary.json
 
+      # Allowed to fail. The sub-index backfill above is the valuable work and
+      # has already been written by this point; weights only affect the weighted
+      # "all" aggregate, and every reconstructed row carries
+      # weights_are_placeholder so the degradation is visible rather than
+      # silent. Failing the whole job here would report a successful backfill as
+      # a red run.
       - name: Refresh weights from the same release
+        id: weights
+        continue-on-error: true
         env:
           PYTHONPATH: src
         run: python -m ukairfares.onsweights --discover
+
+      - name: Warn if weights could not be refreshed
+        if: steps.weights.outcome == 'failure'
+        run: |
+          echo "::warning::Sub-indices loaded, but ONS weights could not be \
+          parsed. The weighted aggregate will be skipped and rows flagged \
+          weights_are_placeholder. Run 'python -m ukairfares.onsweights --dump' \
+          to inspect the workbook layout." 
 
       - name: Publish summary
         if: always()

@@ -105,12 +105,16 @@ would compare against something ONS never publish.
 The workbook itself is one sheet per year, transposed (months across columns,
 series down rows), with the category label merged across its window rows.
 
-**Coverage stops at February 2025.** The newest ad hoc release located runs
-January 2017 – February 2025. Since collection starts in late 2026, **there is
-currently no overlap to validate against** — see
-[Validation](#validation). These are *ad hoc* releases, published on request, so
-the fix is to ask ONS (cpi@ons.gov.uk) for an updated vintage covering 2026,
-or FOI it.
+**Coverage runs 2007–2026.** Once discovery ranked releases by coverage period
+rather than reference number, it found a release spanning **2007 to 2026** —
+far wider than the Jan 2017–Feb 2025 vintage originally pinned, and crucially it
+reaches the period the panel will be collecting in. Confirm what actually landed
+with the coverage query in [Backfilling](#backfilling-onss-published-series).
+
+**Weights are per series too.** Six weights per year, one per (haul × window),
+summing to 1. The split across a category's windows is *not* even — long-haul
+1-month carries ~0.056 while its 3- and 6-month windows carry ~0.251 each — so
+it has to be read from the file, never derived.
 
 **Basis confirmed:** every January is exactly 100 and each year restarts from
 there — `annual_january_100`, not chain-linked. That resolves the ambiguity the

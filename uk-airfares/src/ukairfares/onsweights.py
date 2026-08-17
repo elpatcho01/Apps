@@ -228,59 +228,42 @@ def _iter_sheets(workbook) -> Iterable[tuple[str, list[list[Any]]]]:
         yield sheet.title, [list(row) for row in sheet.iter_rows(values_only=True)]
 
 
-def _find_weight_sheet(sheets: Sequence[tuple[str, list[list[Any]]]]):
-    """Prefer a sheet named for weights; otherwise any sheet that parses."""
-    named = [s for s in sheets if "weight" in _norm(s[0])]
-    return named + [s for s in sheets if s not in named]
-
-
-def _find_header(
-    rows: list[list[Any]], key: str = "year"
-) -> tuple[int, dict[str, int]] | None:
-    """Locate the header row and map category -> column index.
-
-    `key` selects whether the leading column holds years (weights sheet) or
-    monthly periods (sub-index sheet).
-    """
-    key_patterns = _YEAR_PATTERNS if key == "year" else _MONTH_PATTERNS
-    coerce = _as_year if key == "year" else _as_month
-
-    for idx, row in enumerate(rows[:40]):
-        cells = [_norm(c) for c in row]
-        if not any(cells):
-            continue
-        columns: dict[str, int] = {}
-        for category, patterns in _CATEGORY_PATTERNS.items():
-            for col, cell in enumerate(cells):
-                if cell and any(re.search(p, cell) for p in patterns):
-                    columns.setdefault(category, col)
-                    break
-        if len(columns) != 3:
-            continue
-        key_col = next(
-            (c for c, cell in enumerate(cells) if any(re.search(p, cell) for p in key_patterns)),
-            None,
-        )
-        if key_col is None:
-            # No explicit header for the key column: fall back to the first
-            # column not claimed by a category, provided it actually holds
-            # values of the expected kind.
-            claimed = set(columns.values())
-            for c in range(len(cells)):
-                if c in claimed:
-                    continue
-                if any(coerce(r[c]) for r in rows[idx + 1 : idx + 15] if c < len(r)):
-                    key_col = c
-                    break
-        if key_col is None:
-            continue
-        columns[key] = key_col
-        return idx, columns
-    return None
+def _year_columns(row: list[Any]) -> dict[int, int]:
+    """Map column index -> year from a header row of years."""
+    out: dict[int, int] = {}
+    for col, cell in enumerate(row):
+        year = _as_year(cell)
+        if year is not None:
+            out[col] = year
+    return out
 
 
 def parse_weights(xlsx_bytes: bytes) -> list[dict[str, Any]]:
-    """Extract validated weight rows from the release workbook."""
+    """Extract ONS sub-index weights from the release.
+
+    LAYOUT (confirmed against the real workbook, Aug 2026):
+
+        sheet "Weights"
+          | 2007-2026 airfares weights |         |        |        |
+          |                            |         | 2026   | 2025   |
+          | Domestic                   | 1 month | 0.0286 | 0.0271 |
+          | European                   | 1 month | 0.2068 | 0.2077 |
+          |                            | 3 month | 0.2068 | 0.2077 |
+          | Long-haul                  | 1 month | 0.0558 | 0.0558 |
+          |                            | 3 month | 0.2510 | 0.2509 |
+          |                            | 6 month | 0.2510 | 0.2509 |
+
+    Two things to note:
+
+    * **Weights are per (haul, advance window), not per haul.** Six weights,
+      matching the six published series, and they sum to 1.0 within a year. A
+      category weight is not simply split evenly across its windows -- long-haul
+      1-month carries 0.056 while its 3- and 6-month windows carry 0.251 each --
+      so the split has to be read, not derived.
+    * **Transposed, with years descending across columns.** As with the
+      sub-index sheets, the category label is merged and blank on continuation
+      rows, so it is carried forward.
+    """
     try:
         import openpyxl
     except ImportError as exc:  # pragma: no cover
@@ -291,35 +274,51 @@ def parse_weights(xlsx_bytes: bytes) -> list[dict[str, Any]]:
     workbook = openpyxl.load_workbook(io.BytesIO(xlsx_bytes), data_only=True, read_only=True)
     sheets = list(_iter_sheets(workbook))
 
-    for title, rows in _find_weight_sheet(sheets):
-        found = _find_header(rows)
-        if not found:
+    for title, rows in sheets:
+        if "weight" not in _norm(title):
             continue
-        header_idx, columns = found
-        out: list[dict[str, Any]] = []
-        seen: set[int] = set()
-        for row in rows[header_idx + 1 :]:
-            if not row or columns["year"] >= len(row):
-                continue
-            year = _as_year(row[columns["year"]])
-            if year is None or year in seen:
-                continue
-            values = {}
-            for category in ("domestic", "european", "long_haul"):
-                col = columns[category]
-                value = _as_number(row[col]) if col < len(row) else None
-                if value is None or value <= 0:
-                    values = {}
-                    break
-                values[category] = value
-            if not values:
-                continue
-            seen.add(year)
-            out.append({"year": year, **values})
 
-        if len(out) >= 2:
-            log.info("parsed %d weight rows from sheet %r", len(out), title)
-            return sorted(out, key=lambda r: r["year"])
+        years: dict[int, int] = {}
+        category: str | None = None
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            if not row:
+                continue
+            if not years:
+                found = _year_columns(list(row))
+                # A real header names several years, not one stray number.
+                if len(found) >= 3:
+                    years = found
+                continue
+
+            category = _as_category(row[0]) or category
+            window = _as_window(row[1]) if len(row) > 1 else None
+            if category is None or window is None:
+                continue
+
+            for col, year in years.items():
+                if col >= len(row):
+                    continue
+                value = _as_number(row[col])
+                if value is None or value <= 0:
+                    continue
+                out.append(
+                    {
+                        "year": year,
+                        "haul_category": category,
+                        "months_ahead": window,
+                        "weight": value,
+                    }
+                )
+
+        if len(out) >= 6:
+            log.info(
+                "parsed %d weights across %d years from sheet %r",
+                len(out), len(years), title,
+            )
+            return sorted(
+                out, key=lambda r: (r["year"], r["haul_category"], r["months_ahead"])
+            )
 
     raise WeightsParseError(
         "could not locate a weights table. Workbook structure:\n" + describe(sheets)
@@ -477,18 +476,20 @@ def write_weights_csv(rows: list[dict[str, Any]], path: pathlib.Path, source_url
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
         fh.write(
-            "# ONS air fares sub-index weights (CPI item 07.3.3).\n"
+            "# ONS air fare sub-index weights (CPI item 07.3.3).\n"
             f"# Fetched automatically from {source_url}\n"
             f"# on {dt.date.today().isoformat()} by ukairfares.onsweights.\n"
-            "# Weights are normalised before use, so raw parts or percentages both work.\n"
+            "# One row per (year, haul category, advance window). ONS weight each\n"
+            "# of the six published series separately; within a year they sum to 1.\n"
         )
         writer = csv.DictWriter(
-            fh, fieldnames=["year", "domestic", "european", "long_haul", "is_placeholder"]
+            fh,
+            fieldnames=["year", "haul_category", "months_ahead", "weight", "is_placeholder"],
         )
         writer.writeheader()
         for row in rows:
             writer.writerow({**row, "is_placeholder": "false"})
-    log.info("wrote %d rows to %s", len(rows), path)
+    log.info("wrote %d weight rows to %s", len(rows), path)
 
 
 def fetch(

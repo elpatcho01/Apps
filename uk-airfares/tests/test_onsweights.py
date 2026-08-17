@@ -39,12 +39,38 @@ def workbook_bytes(sheets: dict[str, list[list]]) -> bytes:
     return buf.getvalue()
 
 
-CANONICAL = [
-    ["Year", "Domestic", "European", "Long-haul"],
-    [2023, 12.0, 48.0, 40.0],
-    [2024, 11.0, 47.0, 42.0],
-    [2025, 10.5, 46.5, 43.0],
-]
+#: The real ONS weights layout, confirmed from a production workbook dump:
+#: sheet named "Weights", years DESCENDING across columns, and one row per
+#: (haul category, advance window) -- six series, not three. The category label
+#: is merged and blank on continuation rows. Within a year the six sum to 1.
+REAL_WEIGHTS = {
+    2026: {("Domestic", 1): 0.028575, ("European", 1): 0.206781,
+           ("European", 3): 0.206781, ("Long-haul", 1): 0.055786,
+           ("Long-haul", 3): 0.251039, ("Long-haul", 6): 0.251039},
+    2025: {("Domestic", 1): 0.027145, ("European", 1): 0.207669,
+           ("European", 3): 0.207669, ("Long-haul", 1): 0.055752,
+           ("Long-haul", 3): 0.250883, ("Long-haul", 6): 0.250883},
+    2024: {("Domestic", 1): 0.026447, ("European", 1): 0.202040,
+           ("European", 3): 0.202040, ("Long-haul", 1): 0.056947,
+           ("Long-haul", 3): 0.256263, ("Long-haul", 6): 0.256263},
+}
+
+
+def weights_sheet(years=(2026, 2025, 2024)):
+    rows = [["2007-2026 airfares weights"] + [None] * len(years),
+            [None, None] + list(years)]
+    prev = None
+    for cat, window in (("Domestic", 1), ("European", 1), ("European", 3),
+                        ("Long-haul", 1), ("Long-haul", 3), ("Long-haul", 6)):
+        label = cat if cat != prev else None
+        prev = cat
+        rows.append([label, f"{window} month"] + [REAL_WEIGHTS[y][(cat, window)] for y in years])
+    return rows
+
+
+#: Kept for the sub-index tests, which assert a weights sheet is not mistaken
+#: for a series.
+CANONICAL = weights_sheet()
 
 
 class TestCoercion:
@@ -72,143 +98,116 @@ class TestCoercion:
 
 
 class TestParseWeights:
-    def test_canonical_layout(self):
-        rows = parse_weights(workbook_bytes({"Weights": CANONICAL}))
-        assert len(rows) == 3
-        assert rows[0] == {"year": 2023, "domestic": 12.0, "european": 48.0, "long_haul": 40.0}
+    def test_parses_the_real_layout(self):
+        rows = parse_weights(workbook_bytes({"Weights": weights_sheet()}))
+        assert len(rows) == 3 * 6  # 3 years x 6 series
 
-    def test_prefers_sheet_named_weights(self):
-        sheets = {
-            "Sub-indices": [["Year", "Domestic", "European", "Long-haul"], [2023, 99, 99, 99]],
-            "Weights": CANONICAL,
+    def test_extracts_all_six_series(self):
+        rows = parse_weights(workbook_bytes({"Weights": weights_sheet()}))
+        series = {(r["haul_category"], r["months_ahead"]) for r in rows}
+        assert series == {
+            ("domestic", 1), ("european", 1), ("european", 3),
+            ("long_haul", 1), ("long_haul", 3), ("long_haul", 6),
         }
-        rows = parse_weights(workbook_bytes(sheets))
-        assert rows[0]["domestic"] == 12.0
 
-    def test_tolerates_title_rows_above_the_header(self):
-        sheets = {"Weights": [
-            ["Domestic, European and long-haul airfares"], [], ["Table 2: Weights"], [],
-            *CANONICAL,
-        ]}
-        assert len(parse_weights(workbook_bytes(sheets))) == 3
+    def test_weights_sum_to_one_within_a_year(self):
+        rows = parse_weights(workbook_bytes({"Weights": weights_sheet()}))
+        for year in (2026, 2025, 2024):
+            total = sum(r["weight"] for r in rows if r["year"] == year)
+            assert total == pytest.approx(1.0, abs=1e-3)
 
-    def test_tolerates_column_reordering(self):
-        sheets = {"Weights": [
-            ["Long haul", "Year", "Domestic", "European"],
-            [40.0, 2023, 12.0, 48.0],
-            [42.0, 2024, 11.0, 47.0],
-        ]}
-        rows = parse_weights(workbook_bytes(sheets))
-        assert rows[0] == {"year": 2023, "domestic": 12.0, "european": 48.0, "long_haul": 40.0}
+    def test_window_split_is_not_even(self):
+        """Long-haul 1-month is ~0.056 while 3- and 6-month are ~0.251 each."""
+        rows = parse_weights(workbook_bytes({"Weights": weights_sheet()}))
+        lh = {r["months_ahead"]: r["weight"] for r in rows
+              if r["year"] == 2026 and r["haul_category"] == "long_haul"}
+        assert lh[3] > 4 * lh[1]
 
-    def test_tolerates_short_haul_naming(self):
-        sheets = {"Weights": [
-            ["Year", "Domestic", "Short-haul", "Longhaul"],
-            [2023, 12.0, 48.0, 40.0],
-            [2024, 11.0, 47.0, 42.0],
-        ]}
-        assert len(parse_weights(workbook_bytes(sheets))) == 2
+    def test_carries_the_category_label_forward(self):
+        rows = parse_weights(workbook_bytes({"Weights": weights_sheet()}))
+        threes = {r["haul_category"] for r in rows if r["months_ahead"] == 3}
+        assert threes == {"european", "long_haul"}
 
-    def test_infers_year_column_without_a_year_header(self):
-        sheets = {"Weights": [
-            ["", "Domestic", "European", "Long-haul"],
-            [2023, 12.0, 48.0, 40.0],
-            [2024, 11.0, 47.0, 42.0],
-        ]}
-        rows = parse_weights(workbook_bytes(sheets))
-        assert [r["year"] for r in rows] == [2023, 2024]
+    def test_years_read_from_the_header(self):
+        rows = parse_weights(workbook_bytes({"Weights": weights_sheet()}))
+        assert {r["year"] for r in rows} == {2024, 2025, 2026}
 
-    def test_skips_footnote_rows(self):
-        sheets = {"Weights": [
-            *CANONICAL,
-            ["Source: ONS", None, None, None],
-            ["Note: weights are parts per 1000", None, None, None],
-        ]}
-        assert len(parse_weights(workbook_bytes(sheets))) == 3
+    def test_output_is_sorted(self):
+        rows = parse_weights(workbook_bytes({"Weights": weights_sheet()}))
+        keys = [(r["year"], r["haul_category"], r["months_ahead"]) for r in rows]
+        assert keys == sorted(keys)
 
-    def test_output_is_year_sorted(self):
-        sheets = {"Weights": [
-            ["Year", "Domestic", "European", "Long-haul"],
-            [2025, 10.5, 46.5, 43.0],
-            [2023, 12.0, 48.0, 40.0],
-            [2024, 11.0, 47.0, 42.0],
-        ]}
-        assert [r["year"] for r in parse_weights(workbook_bytes(sheets))] == [2023, 2024, 2025]
+    def test_finds_the_sheet_among_others(self):
+        from tests.test_backfill import year_sheet
 
-    def test_duplicate_years_take_the_first(self):
-        sheets = {"Weights": [
-            ["Year", "Domestic", "European", "Long-haul"],
-            [2023, 12.0, 48.0, 40.0],
-            [2023, 99.0, 99.0, 99.0],
-            [2024, 11.0, 47.0, 42.0],
-        ]}
-        rows = parse_weights(workbook_bytes(sheets))
-        assert len(rows) == 2 and rows[0]["domestic"] == 12.0
+        sheets = {"2019": year_sheet(2019), "Weights": weights_sheet()}
+        assert len(parse_weights(workbook_bytes(sheets))) == 18
 
 
 class TestParseWeightsRejects:
-    """A wrong weight silently corrupts every aggregate, so refusing is correct."""
+    """A wrong weight silently corrupts every aggregate, so refusing is right."""
 
-    def test_missing_a_category(self):
-        sheets = {"Weights": [["Year", "Domestic", "European"], [2023, 12.0, 48.0]]}
+    def test_no_weights_sheet(self):
+        from tests.test_backfill import year_sheet
+
         with pytest.raises(WeightsParseError):
-            parse_weights(workbook_bytes(sheets))
+            parse_weights(workbook_bytes({"2019": year_sheet(2019)}))
 
-    def test_negative_and_zero_weights_rejected(self):
-        sheets = {"Weights": [
-            ["Year", "Domestic", "European", "Long-haul"],
-            [2023, -12.0, 48.0, 40.0],
-            [2024, 0, 47.0, 42.0],
-        ]}
+    def test_too_few_year_columns_to_be_a_header(self):
+        sheet = [["Weights"], [None, None, 2026], ["Domestic", "1 month", 0.5]]
         with pytest.raises(WeightsParseError):
-            parse_weights(workbook_bytes(sheets))
+            parse_weights(workbook_bytes({"Weights": sheet}))
 
-    def test_single_row_is_not_enough(self):
-        sheets = {"Weights": [["Year", "Domestic", "European", "Long-haul"], [2023, 12, 48, 40]]}
-        with pytest.raises(WeightsParseError):
-            parse_weights(workbook_bytes(sheets))
-
-    def test_unrecognisable_workbook_dumps_structure(self):
-        sheets = {"Data": [["alpha", "beta"], [1, 2]]}
-        with pytest.raises(WeightsParseError, match="sheet 'Data'"):
-            parse_weights(workbook_bytes(sheets))
+    def test_unrecognisable_sheet_dumps_structure(self):
+        with pytest.raises(WeightsParseError, match="sheet 'Weights'"):
+            parse_weights(workbook_bytes({"Weights": [["alpha", "beta"], [1, 2]]}))
 
     def test_describe_shows_cells(self):
-        wb = openpyxl.load_workbook(io.BytesIO(workbook_bytes({"Weights": CANONICAL})))
+        wb = openpyxl.load_workbook(io.BytesIO(workbook_bytes({"Weights": weights_sheet()})))
         text = describe([(s.title, [list(r) for r in s.iter_rows(values_only=True)])
                          for s in wb.worksheets])
         assert "Domestic" in text and "Weights" in text
 
 
 class TestWriteCsv:
+    def _rows(self):
+        return parse_weights(workbook_bytes({"Weights": weights_sheet()}))
+
     def test_roundtrips_through_load_weights(self, tmp_path):
-        rows = parse_weights(workbook_bytes({"Weights": CANONICAL}))
         path = tmp_path / "weights.csv"
-        write_weights_csv(rows, path, "https://example.invalid/release.xlsx")
+        write_weights_csv(self._rows(), path, "https://example.invalid/x.xlsx")
 
-        w = panel.load_weights(2024, path=path)
-        assert w.year == 2024 and w.is_placeholder is False
-        assert w.domestic == 11.0
-        assert pytest.approx(sum(w.normalised().values())) == 1.0
+        w = panel.load_weights(2025, path=path)
+        assert w.year == 2025 and w.is_placeholder is False
+        assert w.get("domestic", 1) == pytest.approx(0.027145)
+        assert w.get("long_haul", 6) == pytest.approx(0.250883)
+        assert sum(w.normalised().values()) == pytest.approx(1.0)
 
-    def test_written_weights_are_not_placeholders(self, tmp_path):
-        rows = parse_weights(workbook_bytes({"Weights": CANONICAL}))
+    def test_haul_total_sums_its_windows(self, tmp_path):
         path = tmp_path / "weights.csv"
-        write_weights_csv(rows, path, "https://example.invalid/release.xlsx")
-        # The default (strict) path must now accept them.
-        assert panel.load_weights(2025, path=path).domestic == 10.5
+        write_weights_csv(self._rows(), path, "u")
+        w = panel.load_weights(2026, path=path)
+        assert w.haul_total("european") == pytest.approx(2 * 0.206781, abs=1e-5)
+
+    def test_unknown_series_returns_none(self, tmp_path):
+        path = tmp_path / "weights.csv"
+        write_weights_csv(self._rows(), path, "u")
+        assert panel.load_weights(2026, path=path).get("domestic", 6) is None
 
     def test_carries_forward_to_later_years(self, tmp_path):
-        rows = parse_weights(workbook_bytes({"Weights": CANONICAL}))
         path = tmp_path / "weights.csv"
-        write_weights_csv(rows, path, "u")
-        assert panel.load_weights(2030, path=path).year == 2025
+        write_weights_csv(self._rows(), path, "u")
+        assert panel.load_weights(2030, path=path).year == 2026
+
+    def test_written_weights_are_not_placeholders(self, tmp_path):
+        path = tmp_path / "weights.csv"
+        write_weights_csv(self._rows(), path, "u")
+        assert panel.load_weights(2026, path=path).is_placeholder is False
 
     def test_records_provenance(self, tmp_path):
-        rows = parse_weights(workbook_bytes({"Weights": CANONICAL}))
         path = tmp_path / "weights.csv"
-        write_weights_csv(rows, path, "https://example.invalid/release.xlsx")
-        assert "https://example.invalid/release.xlsx" in path.read_text()
+        write_weights_csv(self._rows(), path, "https://ons/x.xlsx")
+        assert "https://ons/x.xlsx" in path.read_text()
 
 
 def all_three_hauls():

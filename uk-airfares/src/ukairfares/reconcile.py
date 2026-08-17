@@ -276,9 +276,22 @@ def _weighted_aggregates(
         if weights is None:
             continue
         shares = weights.normalised()
-        value = sum(
-            float(by_haul[h]["reconstructed_value"]) * shares[h] for h in HAULS
-        )
+        parts = [
+            (float(by_haul[h]["reconstructed_value"]), shares.get((h, window)))
+            for h in HAULS
+        ]
+        if any(share is None for _, share in parts):
+            log.debug(
+                "no weight for window %s in %s; skipping weighted aggregate",
+                window, weights.year,
+            )
+            continue
+        total_share = sum(share for _, share in parts)
+        if total_share <= 0:
+            continue
+        # Re-normalise across the hauls present at this window, so the aggregate
+        # is a proper weighted mean of what it actually covers.
+        value = sum(v * share for v, share in parts) / total_share
         template = by_haul["long_haul"]
         out.append(
             {
