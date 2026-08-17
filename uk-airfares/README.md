@@ -227,7 +227,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 272 tests, no network
+python -m pytest                                    # 282 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -524,7 +524,7 @@ uk-airfares/
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   └── providers/      base.py · travelpayouts.py · mock.py
-└── tests/              272 tests, no network required
+└── tests/              282 tests, no network required
 ```
 
 ## Non-goals
