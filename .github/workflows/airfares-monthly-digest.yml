@@ -108,6 +108,31 @@ jobs:
           PYTHONPATH: src
         run: python -m ukairfares.digest --month "${{ steps.month.outputs.month }}"
 
+      # BigQuery is only reachable from inside a workflow run: service-account
+      # keys are blocked by the iam.disableServiceAccountKeyCreation org policy,
+      # and the WIF token that replaced them is minted from GitHub's OIDC
+      # provider and exists nowhere else. So the data is exported here, where the
+      # credential already is, and committed as JSON that anything can read
+      # without cloud access -- a notebook, a dashboard, an assistant.
+      #
+      # Aggregates only, never raw rows: git keeps every version of everything,
+      # so an export that grows with the panel would make every future clone pay
+      # for it. See the module docstring.
+      - name: Export analytics JSON
+        id: export
+        continue-on-error: true
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: python -m ukairfares.export
+
+      - name: Warn if the export failed
+        if: steps.export.outcome == 'failure'
+        run: |
+          echo "::warning::Analytics export failed; the digest and its commit are \
+          unaffected. See the export step's log."
+
       - name: Write a placeholder if generation failed
         if: steps.generate.outcome == 'failure'
         env:

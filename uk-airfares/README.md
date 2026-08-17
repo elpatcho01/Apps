@@ -280,6 +280,9 @@ PYTHONPATH=src python -m ukairfares.validate
 
 # Write the monthly digest to reports/YYYY-MM.md
 PYTHONPATH=src python -m ukairfares.digest --month 2026-08
+
+# Export analytics JSON to reports/data/analytics.json
+PYTHONPATH=src python -m ukairfares.export
 ```
 
 ### Schedules
@@ -349,6 +352,46 @@ and collect August's index-day fares in October.
 Committing the digest is a real commit on a monthly cadence, so the counter never
 gets past ~30 days. The report that tells you the pipeline is healthy is the same
 thing keeping it alive.
+
+### Getting the data out of BigQuery
+
+`reports/data/analytics.json`, written by the same workflow, is the export for
+anything that wants to read the numbers without cloud access — a notebook, a
+dashboard, an assistant.
+
+It exists because **BigQuery cannot be queried from outside a workflow run.**
+Service-account JSON keys are blocked by the
+`iam.disableServiceAccountKeyCreation` org policy — Google's secure default, and
+not worth weakening for convenience — and the Workload Identity Federation path
+that replaced them mints a short-lived token from GitHub's OIDC provider, which
+only exists inside a running job. The network reaches
+`bigquery.googleapis.com` fine; the credential is the wall, and it is deliberate.
+So the data leaves the same way it arrived: through a workflow.
+
+What it contains:
+
+| Section | Contents |
+|---|---|
+| `coverage` | Row/day/month counts and date ranges for both panel and published series |
+| `published_series` | Every current ONS published value — the validation target |
+| `daily_by_series` | One row per (day × haul × window): counts, mean/median/geomean fare, minutes off target |
+| `latest_routes` | Per-route detail for the most recent collection date only |
+| `reconstructions` | Every current reconstruction, all variants |
+
+**Aggregates only, never raw observation rows.** Git keeps every version of
+everything, so an export that grew with the panel — which gains ~44 rows a day
+forever, each carrying a `raw_response` blob — would make every future clone pay
+for it. And an export that could be mistaken for the panel would eventually be
+treated as the panel; `airfare_scrapes` stays the single source of truth, with
+`schema_version` and `generated_ts` on the export so a stale copy is recognisable.
+
+Panel sections read `current_scrapes`, so a number here and the same number in
+the digest come from the same rows by construction. Output is `sort_keys`'d, so a
+month with no new data produces a byte-identical file and therefore no commit —
+key ordering must not manufacture a diff.
+
+For fresher data than monthly, dispatch the digest workflow by hand; it exports
+and commits on every run.
 
 ### Why this workflow's failure posture is inverted
 
@@ -615,6 +658,7 @@ uk-airfares/
 │   ├── 005_add_candidate_filter.sql   Migration: selection-pool diagnostics
 │   └── 006_current_scrapes_view.sql   Latest coherent vintage per date
 ├── reports/                           Monthly digests (committed by Actions)
+│   └── data/analytics.json            Analytics export (committed by Actions)
 ├── src/ukairfares/
 │   ├── onscal.py       Index-day calendar arithmetic — the core of the thing
 │   ├── panel.py        Route panel + ONS weight loading
@@ -629,8 +673,9 @@ uk-airfares/
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
+│   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              324 tests, no network required
+└── tests/              336 tests, no network required
 ```
 
 ## Non-goals
