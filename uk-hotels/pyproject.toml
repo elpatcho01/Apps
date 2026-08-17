@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uk-hotel-nowcasting"
+version = "0.1.0"
+description = "Reconstructs ONS CPI accommodation sub-indices from forward-looking nightly rates collected on the ONS methodology."
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31,<3",
+    "google-cloud-bigquery>=3.25,<4",
+    "openpyxl>=3.1,<4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+hotels-pull = "ukhotels.pull:main"
+hotels-reconcile = "ukhotels.reconcile:main"
+hotels-validate = "ukhotels.validate:main"
+hotels-ensure-tables = "ukhotels.ensure_tables:main"
+hotels-backfill = "ukhotels.backfill:main"
+hotels-weights = "ukhotels.onsweights:main"
+hotels-discover = "ukhotels.discover:main"
+hotels-digest = "ukhotels.digest:main"
+hotels-export = "ukhotels.export:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ukhotels = ["data/*.csv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
