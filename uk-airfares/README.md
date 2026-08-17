@@ -15,30 +15,28 @@ GitHub Actions cron. No airline or OTA websites are scraped.
 Three limitations are structural, not bugs, and they bound every number that
 comes out of it.
 
-**1. No adapter has run against its live API yet.** Both the SerpApi and
-Travelpayouts adapters were written from documentation; the development sandbox
-blocks both hosts by egress policy. Parsing is defensive and `raw_response`
-retains every payload so observations can be reprocessed without re-querying,
-but the first production run is the first real test. Same caveat as the ONS
-parsers.
+**1. Only one month of collection exists, and no month is complete.** Collection
+began 2026-08-17. The SerpApi adapter has run live successfully (44/44 rows) and
+`raw_response` retains every payload so observations can be reprocessed without
+re-querying — but **no accuracy claim is possible until a full quarter of
+overlap with ONS's published series exists**, and `validate` returns
+`INSUFFICIENT_DATA` until it does. That is enforced, not advisory. The
+Travelpayouts adapter remains untested against its live API.
 
 **2. Coverage on thin routes and distant dates is unmeasured.** A specific
 Tuesday six months out on, say, LHR–CPT may return nothing. That is recorded as
 a `no_data` row, not an error, so gaps are visible in the panel rather than
 silently absent. Expect long-haul 180-day coverage to be the weakest cell.
 
-**3. Weights are fetched at runtime, and the parser is unverified.**
-`ukairfares.onsweights` downloads the ONS ad hoc release and parses its weights
-sheet, and the monthly workflow runs it before reconciling. But that parser was
-written *without sight of the spreadsheet* — ons.gov.uk is blocked by egress
-policy from the sandbox this was built in — so its layout assumptions are
-inferred, not observed. It is written to fail loudly and dump the workbook
-structure rather than guess (see [Weights](#weights)). Until it has run
-successfully once against the real file, treat weights as unconfirmed: the
-committed `weights.csv` is an equal-thirds placeholder, `load_weights()` refuses
-to return placeholders to the validation path, and every reconstructed row
-carries `weights_are_placeholder` so a placeholder-based aggregate cannot be
-mistaken for a real one.
+**3. The committed `weights.csv` is still a placeholder.** Both ONS parsers have
+now run successfully against the real workbook — the layouts documented below are
+observed, not inferred — but the weights refresh happens in the *ephemeral*
+Actions checkout and is not committed back. So a local run uses placeholders
+unless you run `onsweights --discover` yourself first. The guard rails hold
+regardless: `load_weights()` refuses to hand placeholders to the validation path,
+and every reconstructed row carries `weights_are_placeholder`, so a
+placeholder-based aggregate cannot be mistaken for a real one. Per-haul
+reconstructions do not use weights at all and are unaffected.
 
 The pipeline is designed to make these visible rather than to paper over them.
 
@@ -306,6 +304,16 @@ run" and "fail loudly rather than silently skip". Resolved as:
 | Bad config / missing token | Exit **2** immediately, before querying anything |
 | Bulletin not published yet | Exit **0** with a notice — expected, not an error |
 | Bulletin published but unparseable | Exit **1** — our parser broke, and silence would skip the month forever |
+| Index month predates the panel | Exit **0** with a notice — permanent absence, nothing to fix |
+| Index day missing *during* active collection | Exit **1** — the puller broke |
+
+The last two look identical from inside a failing reconcile (no rows near the
+index day) and are opposite in meaning, so `reconcile` checks `MIN(scrape_date)`
+before deciding which it is. That check exists because the first fortnight would
+otherwise be a wall of red runs: reconcile attempts last month daily from the
+15th–25th, and until collection has a full month behind it that month is always
+older than the panel. Six red runs for an absence you cannot fix is how someone
+learns to ignore Actions email — and the 60-day trap below makes that expensive.
 
 Failures are written to BigQuery as rows, not merely logged. An absent row and a
 failed row are different facts, and only one of them is recoverable later.
@@ -615,7 +623,7 @@ uk-airfares/
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              315 tests, no network required
+└── tests/              320 tests, no network required
 ```
 
 ## Non-goals
