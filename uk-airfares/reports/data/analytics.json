@@ -1,0 +1,4764 @@
+{
+ "coverage": [],
+ "daily_by_series": [],
+ "dataset": "airfares",
+ "errors": {
+  "coverage": "NotFound: 404 Not found: Table cpi-flight-prices:airfares.current_scrapes was not found in location europe-west2; reason: notFound, message: Not found: Table cpi-flight-prices:airfares.current_scrapes was not found in location europe-west2\n\nLocation: europe-west2\nJob ID: fa1477b5-3ece-4460-8208-8fd0c423c5d9\n",
+  "daily_by_series": "NotFound: 404 Not found: Table cpi-flight-prices:airfares.current_scrapes was not found in location europe-west2; reason: notFound, message: Not found: Table cpi-flight-prices:airfares.current_scrapes was not found in location europe-west2\n\nLocation: europe-west2\nJob ID: c4f2ed5d-0c75-47dc-b932-282bcc8b252a\n",
+  "latest_routes": "NotFound: 404 Not found: Table cpi-flight-prices:airfares.current_scrapes was not found in location europe-west2; reason: notFound, message: Not found: Table cpi-flight-prices:airfares.current_scrapes was not found in location europe-west2\n\nLocation: europe-west2\nJob ID: 9c970a5a-10bd-4654-ad5f-45c7c2a779da\n"
+ },
+ "generated_ts": "2026-08-17T09:10:00.964094+00:00",
+ "latest_routes": [],
+ "pipeline_version": "1.0.0",
+ "project": "cpi-flight-prices",
+ "published_series": [
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-02-01",
+   "index_value": 94.541,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-02-01",
+   "index_value": 117.5602,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-02-01",
+   "index_value": 115.5478,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-02-01",
+   "index_value": 93.3654,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-02-01",
+   "index_value": 102.9729,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-02-01",
+   "index_value": 97.8108,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-03-01",
+   "index_value": 104.604,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-03-01",
+   "index_value": 181.3306,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-03-01",
+   "index_value": 139.1598,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-03-01",
+   "index_value": 106.0619,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-03-01",
+   "index_value": 112.6532,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-03-01",
+   "index_value": 111.8416,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-04-01",
+   "index_value": 93.8743,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-04-01",
+   "index_value": 123.8478,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-04-01",
+   "index_value": 112.6522,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-04-01",
+   "index_value": 111.4417,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-04-01",
+   "index_value": 113.407,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-04-01",
+   "index_value": 107.497,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-05-01",
+   "index_value": 90.2291,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-05-01",
+   "index_value": 135.9766,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-05-01",
+   "index_value": 125.3389,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-05-01",
+   "index_value": 111.097,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-05-01",
+   "index_value": 114.8817,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-05-01",
+   "index_value": 105.5404,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-06-01",
+   "index_value": 95.3723,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-06-01",
+   "index_value": 161.283,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-06-01",
+   "index_value": 149.2374,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-06-01",
+   "index_value": 102.8739,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-06-01",
+   "index_value": 119.7958,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-06-01",
+   "index_value": 112.6553,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-07-01",
+   "index_value": 98.5176,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-07-01",
+   "index_value": 164.9703,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-07-01",
+   "index_value": 154.6826,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-07-01",
+   "index_value": 140.7929,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-07-01",
+   "index_value": 172.3098,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-07-01",
+   "index_value": 137.0503,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-08-01",
+   "index_value": 102.1294,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-08-01",
+   "index_value": 213.3216,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-08-01",
+   "index_value": 205.5713,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-08-01",
+   "index_value": 141.2336,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-08-01",
+   "index_value": 163.4801,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-08-01",
+   "index_value": 152.2401,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-09-01",
+   "index_value": 98.1095,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-09-01",
+   "index_value": 155.4896,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-09-01",
+   "index_value": 140.8015,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-09-01",
+   "index_value": 110.3497,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-09-01",
+   "index_value": 127.6758,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-09-01",
+   "index_value": 117.8244,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-10-01",
+   "index_value": 97.5312,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-10-01",
+   "index_value": 131.5503,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-10-01",
+   "index_value": 133.0744,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-10-01",
+   "index_value": 105.7646,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-10-01",
+   "index_value": 114.0086,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-10-01",
+   "index_value": 117.0874,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-11-01",
+   "index_value": 93.8532,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-11-01",
+   "index_value": 110.1914,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-11-01",
+   "index_value": 108.5627,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-11-01",
+   "index_value": 92.7561,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-11-01",
+   "index_value": 107.1959,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-11-01",
+   "index_value": 96.6988,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2016-12-01",
+   "index_value": 98.6238,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-12-01",
+   "index_value": 191.1754,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2016-12-01",
+   "index_value": 145.497,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-12-01",
+   "index_value": 181.0568,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-12-01",
+   "index_value": 159.9135,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2016-12-01",
+   "index_value": 149.6954,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-02-01",
+   "index_value": 102.29,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-02-01",
+   "index_value": 102.79,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-02-01",
+   "index_value": 106.43,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-02-01",
+   "index_value": 83.48,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-02-01",
+   "index_value": 107.42,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-02-01",
+   "index_value": 114.11,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-03-01",
+   "index_value": 100.08,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-03-01",
+   "index_value": 101.21,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-03-01",
+   "index_value": 97.1,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-03-01",
+   "index_value": 83.97,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-03-01",
+   "index_value": 112.76,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-03-01",
+   "index_value": 101.07,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-04-01",
+   "index_value": 130.99,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-04-01",
+   "index_value": 143.46,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-04-01",
+   "index_value": 110.99,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-04-01",
+   "index_value": 106.16,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-04-01",
+   "index_value": 110.38,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-04-01",
+   "index_value": 116.51,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-05-01",
+   "index_value": 105.28,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-05-01",
+   "index_value": 122.99,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-05-01",
+   "index_value": 117.14,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-05-01",
+   "index_value": 93.32,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-05-01",
+   "index_value": 103.72,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-05-01",
+   "index_value": 117.45,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-06-01",
+   "index_value": 108.87,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-06-01",
+   "index_value": 147.45,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-06-01",
+   "index_value": 123.49,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-06-01",
+   "index_value": 94.87,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-06-01",
+   "index_value": 120.64,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-06-01",
+   "index_value": 145.35,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-07-01",
+   "index_value": 125.22,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-07-01",
+   "index_value": 153.36,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-07-01",
+   "index_value": 140.84,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-07-01",
+   "index_value": 136.99,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-07-01",
+   "index_value": 166.81,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-07-01",
+   "index_value": 167.16,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-08-01",
+   "index_value": 119.76,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-08-01",
+   "index_value": 195.33,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-08-01",
+   "index_value": 193.47,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-08-01",
+   "index_value": 131.56,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-08-01",
+   "index_value": 175.66,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-08-01",
+   "index_value": 149.23,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-09-01",
+   "index_value": 116.84,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-09-01",
+   "index_value": 132.07,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-09-01",
+   "index_value": 135.03,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-09-01",
+   "index_value": 99.03,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-09-01",
+   "index_value": 127.52,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-09-01",
+   "index_value": 111.77,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-10-01",
+   "index_value": 109.96,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-10-01",
+   "index_value": 134.04,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-10-01",
+   "index_value": 120.77,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-10-01",
+   "index_value": 96.43,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-10-01",
+   "index_value": 113.26,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-10-01",
+   "index_value": 114.4,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-11-01",
+   "index_value": 107.09,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-11-01",
+   "index_value": 102.08,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-11-01",
+   "index_value": 99.73,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-11-01",
+   "index_value": 84.78,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-11-01",
+   "index_value": 116.04,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-11-01",
+   "index_value": 109.61,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2017-12-01",
+   "index_value": 104.41,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-12-01",
+   "index_value": 196.04,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2017-12-01",
+   "index_value": 143.66,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-12-01",
+   "index_value": 166.69,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-12-01",
+   "index_value": 164.83,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2017-12-01",
+   "index_value": 173.67,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-02-01",
+   "index_value": 96.19,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-02-01",
+   "index_value": 109.19,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-02-01",
+   "index_value": 107.22,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-02-01",
+   "index_value": 90.83,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-02-01",
+   "index_value": 101.16,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-02-01",
+   "index_value": 111.51,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-03-01",
+   "index_value": 95.45,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-03-01",
+   "index_value": 108.29,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-03-01",
+   "index_value": 103.87,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-03-01",
+   "index_value": 94.46,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-03-01",
+   "index_value": 103.82,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-03-01",
+   "index_value": 102.32,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-04-01",
+   "index_value": 103.16,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-04-01",
+   "index_value": 101.13,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-04-01",
+   "index_value": 105.45,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-04-01",
+   "index_value": 101.17,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-04-01",
+   "index_value": 96.79,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-04-01",
+   "index_value": 108.59,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-05-01",
+   "index_value": 98.66,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-05-01",
+   "index_value": 132.73,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-05-01",
+   "index_value": 120.97,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-05-01",
+   "index_value": 111.29,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-05-01",
+   "index_value": 96.14,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-05-01",
+   "index_value": 110.46,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-06-01",
+   "index_value": 107.17,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-06-01",
+   "index_value": 134.65,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-06-01",
+   "index_value": 126.88,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-06-01",
+   "index_value": 115.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-06-01",
+   "index_value": 113.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-06-01",
+   "index_value": 124.25,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-07-01",
+   "index_value": 108.91,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-07-01",
+   "index_value": 156.46,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-07-01",
+   "index_value": 157.24,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-07-01",
+   "index_value": 175.59,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-07-01",
+   "index_value": 153.22,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-07-01",
+   "index_value": 133.56,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-08-01",
+   "index_value": 109.19,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-08-01",
+   "index_value": 201.75,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-08-01",
+   "index_value": 200.39,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-08-01",
+   "index_value": 174.87,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-08-01",
+   "index_value": 165.12,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-08-01",
+   "index_value": 127.02,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-09-01",
+   "index_value": 103.28,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-09-01",
+   "index_value": 129.13,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-09-01",
+   "index_value": 139.44,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-09-01",
+   "index_value": 105.25,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-09-01",
+   "index_value": 112.69,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-09-01",
+   "index_value": 116.17,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-10-01",
+   "index_value": 96.11,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-10-01",
+   "index_value": 124.97,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-10-01",
+   "index_value": 125.92,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-10-01",
+   "index_value": 101.28,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-10-01",
+   "index_value": 112.34,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-10-01",
+   "index_value": 109.94,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-11-01",
+   "index_value": 97.7,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-11-01",
+   "index_value": 93.96,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-11-01",
+   "index_value": 101.41,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-11-01",
+   "index_value": 92.31,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-11-01",
+   "index_value": 117.48,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-11-01",
+   "index_value": 95.99,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2018-12-01",
+   "index_value": 104.61,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-12-01",
+   "index_value": 145.32,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2018-12-01",
+   "index_value": 131.8,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-12-01",
+   "index_value": 162.47,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-12-01",
+   "index_value": 153.22,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2018-12-01",
+   "index_value": 148.73,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-02-01",
+   "index_value": 102.91,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-02-01",
+   "index_value": 118.62,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-02-01",
+   "index_value": 122.84,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-02-01",
+   "index_value": 74.44,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-02-01",
+   "index_value": 103.1,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-02-01",
+   "index_value": 94.31,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-03-01",
+   "index_value": 92.48,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-03-01",
+   "index_value": 116.7,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-03-01",
+   "index_value": 105.28,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-03-01",
+   "index_value": 77.77,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-03-01",
+   "index_value": 100.94,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-03-01",
+   "index_value": 92.01,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-04-01",
+   "index_value": 156.52,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-04-01",
+   "index_value": 136.89,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-04-01",
+   "index_value": 129.46,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-04-01",
+   "index_value": 91.82,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-04-01",
+   "index_value": 122.79,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-04-01",
+   "index_value": 117.11,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-05-01",
+   "index_value": 112.53,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-05-01",
+   "index_value": 142.99,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-05-01",
+   "index_value": 127.61,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-05-01",
+   "index_value": 91.25,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-05-01",
+   "index_value": 117.73,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-05-01",
+   "index_value": 108.26,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-06-01",
+   "index_value": 126.6,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-06-01",
+   "index_value": 170.84,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-06-01",
+   "index_value": 136.45,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-06-01",
+   "index_value": 94.55,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-06-01",
+   "index_value": 107.5,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-06-01",
+   "index_value": 98.14,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-07-01",
+   "index_value": 140.27,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-07-01",
+   "index_value": 149.64,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-07-01",
+   "index_value": 137.98,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-07-01",
+   "index_value": 122.92,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-07-01",
+   "index_value": 156.56,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-07-01",
+   "index_value": 131.05,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-08-01",
+   "index_value": 136.53,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-08-01",
+   "index_value": 224.92,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-08-01",
+   "index_value": 198.65,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-08-01",
+   "index_value": 128.66,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-08-01",
+   "index_value": 154.67,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-08-01",
+   "index_value": 144.31,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-09-01",
+   "index_value": 118.46,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-09-01",
+   "index_value": 138.17,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-09-01",
+   "index_value": 125.97,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-09-01",
+   "index_value": 93.54,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-09-01",
+   "index_value": 107.7,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-09-01",
+   "index_value": 97.85,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-10-01",
+   "index_value": 106.88,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-10-01",
+   "index_value": 136.3,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-10-01",
+   "index_value": 120.27,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-10-01",
+   "index_value": 94.26,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-10-01",
+   "index_value": 111.82,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-10-01",
+   "index_value": 101.24,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-11-01",
+   "index_value": 100.93,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-11-01",
+   "index_value": 123.82,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-11-01",
+   "index_value": 110.9,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-11-01",
+   "index_value": 81.71,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-11-01",
+   "index_value": 104.79,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-11-01",
+   "index_value": 91.27,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2019-12-01",
+   "index_value": 109.38,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-12-01",
+   "index_value": 133.95,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2019-12-01",
+   "index_value": 114.6,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-12-01",
+   "index_value": 124.09,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-12-01",
+   "index_value": 127.18,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2019-12-01",
+   "index_value": 122.07,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2020-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2020-02-01",
+   "index_value": 112.34,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-02-01",
+   "index_value": 109.18,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-02-01",
+   "index_value": 108.3,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-02-01",
+   "index_value": 98.31,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-02-01",
+   "index_value": 99.54,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-02-01",
+   "index_value": 100.06,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2020-03-01",
+   "index_value": 116.57,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-03-01",
+   "index_value": 114.25,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-03-01",
+   "index_value": 115.98,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-03-01",
+   "index_value": 112.35,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-03-01",
+   "index_value": 105.4,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-03-01",
+   "index_value": 102.24,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2020-07-01",
+   "index_value": 127.58,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-07-01",
+   "index_value": 118.7,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-07-01",
+   "index_value": 149.97,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-07-01",
+   "index_value": 150.04,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-07-01",
+   "index_value": 132.77,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-07-01",
+   "index_value": 158.2,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2020-08-01",
+   "index_value": 109.08,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-08-01",
+   "index_value": 122.7,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-08-01",
+   "index_value": 158.78,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-08-01",
+   "index_value": 137.64,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-08-01",
+   "index_value": 138.2,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-08-01",
+   "index_value": 144.41,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2020-09-01",
+   "index_value": 103.59,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-09-01",
+   "index_value": 105.38,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-09-01",
+   "index_value": 116.6,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-09-01",
+   "index_value": 109.73,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-09-01",
+   "index_value": 110.84,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-09-01",
+   "index_value": 114.6,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2020-10-01",
+   "index_value": 95.84,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-10-01",
+   "index_value": 101.91,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-10-01",
+   "index_value": 126.59,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-10-01",
+   "index_value": 109.14,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-10-01",
+   "index_value": 105.75,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-10-01",
+   "index_value": 114.49,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2020-12-01",
+   "index_value": 107.96,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-12-01",
+   "index_value": 118.56,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2020-12-01",
+   "index_value": 125.7,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-12-01",
+   "index_value": 144.24,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-12-01",
+   "index_value": 145.27,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2020-12-01",
+   "index_value": 141.07,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2021-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2021-07-01",
+   "index_value": 142.3,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-07-01",
+   "index_value": 142.3,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-07-01",
+   "index_value": 142.3,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-07-01",
+   "index_value": 142.3,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-07-01",
+   "index_value": 142.3,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-07-01",
+   "index_value": 142.3,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2021-08-01",
+   "index_value": 159.46,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-08-01",
+   "index_value": 179.03,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-08-01",
+   "index_value": 143.93,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-08-01",
+   "index_value": 146.09,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-08-01",
+   "index_value": 143.53,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-08-01",
+   "index_value": 159.57,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2021-09-01",
+   "index_value": 105.51,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-09-01",
+   "index_value": 136.1,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-09-01",
+   "index_value": 128.4,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-09-01",
+   "index_value": 132.89,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-09-01",
+   "index_value": 106.48,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-09-01",
+   "index_value": 119.48,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2021-10-01",
+   "index_value": 106.01,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-10-01",
+   "index_value": 152.91,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-10-01",
+   "index_value": 134.44,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-10-01",
+   "index_value": 115.89,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-10-01",
+   "index_value": 109.38,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-10-01",
+   "index_value": 129.23,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2021-11-01",
+   "index_value": 105.75,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-11-01",
+   "index_value": 141.89,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-11-01",
+   "index_value": 119.27,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-11-01",
+   "index_value": 109.34,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-11-01",
+   "index_value": 103.99,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-11-01",
+   "index_value": 123.84,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2021-12-01",
+   "index_value": 117.23,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-12-01",
+   "index_value": 220.92,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2021-12-01",
+   "index_value": 145.09,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-12-01",
+   "index_value": 230.07,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-12-01",
+   "index_value": 145.61,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2021-12-01",
+   "index_value": 165.84,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-02-01",
+   "index_value": 87.57,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-02-01",
+   "index_value": 110.35,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-02-01",
+   "index_value": 118.11,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-02-01",
+   "index_value": 100.84,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-02-01",
+   "index_value": 109.77,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-02-01",
+   "index_value": 100.65,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-03-01",
+   "index_value": 90.23,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-03-01",
+   "index_value": 123.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-03-01",
+   "index_value": 109.99,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-03-01",
+   "index_value": 108.31,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-03-01",
+   "index_value": 109.84,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-03-01",
+   "index_value": 100.11,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-04-01",
+   "index_value": 117.01,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-04-01",
+   "index_value": 146.02,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-04-01",
+   "index_value": 134.08,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-04-01",
+   "index_value": 118.64,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-04-01",
+   "index_value": 114.22,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-04-01",
+   "index_value": 105.65,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-05-01",
+   "index_value": 89.82,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-05-01",
+   "index_value": 171.91,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-05-01",
+   "index_value": 136.1,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-05-01",
+   "index_value": 114.85,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-05-01",
+   "index_value": 118.97,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-05-01",
+   "index_value": 101.69,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-06-01",
+   "index_value": 120.14,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-06-01",
+   "index_value": 189.71,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-06-01",
+   "index_value": 139.14,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-06-01",
+   "index_value": 119.89,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-06-01",
+   "index_value": 116.15,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-06-01",
+   "index_value": 105.49,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-07-01",
+   "index_value": 171.52,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-07-01",
+   "index_value": 213.04,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-07-01",
+   "index_value": 153.28,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-07-01",
+   "index_value": 174.18,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-07-01",
+   "index_value": 156.29,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-07-01",
+   "index_value": 132.41,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-08-01",
+   "index_value": 180.22,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-08-01",
+   "index_value": 289.25,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-08-01",
+   "index_value": 214.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-08-01",
+   "index_value": 163.3,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-08-01",
+   "index_value": 144.87,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-08-01",
+   "index_value": 115.87,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-09-01",
+   "index_value": 167.15,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-09-01",
+   "index_value": 183.89,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-09-01",
+   "index_value": 138.99,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-09-01",
+   "index_value": 124.63,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-09-01",
+   "index_value": 120.02,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-09-01",
+   "index_value": 111.88,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-10-01",
+   "index_value": 112.36,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-10-01",
+   "index_value": 170.2,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-10-01",
+   "index_value": 140.24,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-10-01",
+   "index_value": 140.26,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-10-01",
+   "index_value": 140.05,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-10-01",
+   "index_value": 124.06,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-11-01",
+   "index_value": 114.26,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-11-01",
+   "index_value": 126.24,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-11-01",
+   "index_value": 118.95,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-11-01",
+   "index_value": 131.52,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-11-01",
+   "index_value": 137.19,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-11-01",
+   "index_value": 124.88,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2022-12-01",
+   "index_value": 135.03,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-12-01",
+   "index_value": 248.15,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2022-12-01",
+   "index_value": 181.81,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-12-01",
+   "index_value": 195.51,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-12-01",
+   "index_value": 221.31,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2022-12-01",
+   "index_value": 190.56,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-02-01",
+   "index_value": 113.0474,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-02-01",
+   "index_value": 106.5927,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-02-01",
+   "index_value": 119.7649,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-02-01",
+   "index_value": 93.8343,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-02-01",
+   "index_value": 102.9897,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-02-01",
+   "index_value": 98.8893,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-03-01",
+   "index_value": 108.2473,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-03-01",
+   "index_value": 136.0235,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-03-01",
+   "index_value": 132.2914,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-03-01",
+   "index_value": 96.2335,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-03-01",
+   "index_value": 103.3574,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-03-01",
+   "index_value": 98.3107,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-04-01",
+   "index_value": 142.3284,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-04-01",
+   "index_value": 142.9958,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-04-01",
+   "index_value": 139.5999,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-04-01",
+   "index_value": 98.7893,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-04-01",
+   "index_value": 100.9814,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-04-01",
+   "index_value": 98.1827,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-05-01",
+   "index_value": 135.3055,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-05-01",
+   "index_value": 205.7228,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-05-01",
+   "index_value": 174.36,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-05-01",
+   "index_value": 109.6475,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-05-01",
+   "index_value": 110.1003,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-05-01",
+   "index_value": 104.1035,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-06-01",
+   "index_value": 150.7275,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-06-01",
+   "index_value": 203.2358,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-06-01",
+   "index_value": 179.2238,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-06-01",
+   "index_value": 108.5953,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-06-01",
+   "index_value": 112.9402,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-06-01",
+   "index_value": 108.246,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-07-01",
+   "index_value": 192.3102,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-07-01",
+   "index_value": 232.4324,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-07-01",
+   "index_value": 222.3862,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-07-01",
+   "index_value": 140.2097,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-07-01",
+   "index_value": 152.5254,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-07-01",
+   "index_value": 141.9502,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-08-01",
+   "index_value": 148.0592,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-08-01",
+   "index_value": 225.9652,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-08-01",
+   "index_value": 225.2156,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-08-01",
+   "index_value": 146.6787,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-08-01",
+   "index_value": 164.1973,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-08-01",
+   "index_value": 122.4876,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-09-01",
+   "index_value": 118.723,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-09-01",
+   "index_value": 187.7216,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-09-01",
+   "index_value": 174.5689,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-09-01",
+   "index_value": 104.6659,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-09-01",
+   "index_value": 106.2644,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-09-01",
+   "index_value": 102.7637,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-10-01",
+   "index_value": 124.3924,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-10-01",
+   "index_value": 140.5175,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-10-01",
+   "index_value": 158.7853,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-10-01",
+   "index_value": 112.2065,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-10-01",
+   "index_value": 119.4267,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-10-01",
+   "index_value": 107.1341,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-11-01",
+   "index_value": 108.79,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-11-01",
+   "index_value": 112.9708,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-11-01",
+   "index_value": 121.6337,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-11-01",
+   "index_value": 100.9052,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-11-01",
+   "index_value": 109.2088,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-11-01",
+   "index_value": 102.2693,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2023-12-01",
+   "index_value": 107.9259,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-12-01",
+   "index_value": 198.079,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2023-12-01",
+   "index_value": 151.4689,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-12-01",
+   "index_value": 160.7469,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-12-01",
+   "index_value": 188.1034,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2023-12-01",
+   "index_value": 166.0771,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-02-01",
+   "index_value": 105.5924,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-02-01",
+   "index_value": 115.9239,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-02-01",
+   "index_value": 113.8312,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-02-01",
+   "index_value": 94.0504,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-02-01",
+   "index_value": 99.6475,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-02-01",
+   "index_value": 102.9222,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-03-01",
+   "index_value": 101.9129,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-03-01",
+   "index_value": 122.2427,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-03-01",
+   "index_value": 117.4442,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-03-01",
+   "index_value": 97.5693,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-03-01",
+   "index_value": 95.7455,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-03-01",
+   "index_value": 98.8005,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-04-01",
+   "index_value": 120.7433,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-04-01",
+   "index_value": 136.4216,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-04-01",
+   "index_value": 133.9243,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-04-01",
+   "index_value": 95.992,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-04-01",
+   "index_value": 96.0402,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-04-01",
+   "index_value": 99.9128,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-05-01",
+   "index_value": 150.0822,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-05-01",
+   "index_value": 166.0497,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-05-01",
+   "index_value": 160.4471,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-05-01",
+   "index_value": 103.3898,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-05-01",
+   "index_value": 110.7289,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-05-01",
+   "index_value": 102.0574,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-06-01",
+   "index_value": 222.1756,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-06-01",
+   "index_value": 169.4994,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-06-01",
+   "index_value": 165.637,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-06-01",
+   "index_value": 104.9102,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-06-01",
+   "index_value": 105.438,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-06-01",
+   "index_value": 108.9987,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-07-01",
+   "index_value": 198.9831,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-07-01",
+   "index_value": 177.5028,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-07-01",
+   "index_value": 179.5907,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-07-01",
+   "index_value": 106.408,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-07-01",
+   "index_value": 136.2494,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-07-01",
+   "index_value": 132.8258,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-08-01",
+   "index_value": 166.749,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-08-01",
+   "index_value": 242.8898,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-08-01",
+   "index_value": 267.2289,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-08-01",
+   "index_value": 131.4018,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-08-01",
+   "index_value": 138.4178,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-08-01",
+   "index_value": 139.6123,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-09-01",
+   "index_value": 154.8136,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-09-01",
+   "index_value": 156.9786,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-09-01",
+   "index_value": 151.4779,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-09-01",
+   "index_value": 92.2777,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-09-01",
+   "index_value": 93.4415,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-09-01",
+   "index_value": 100.3405,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-10-01",
+   "index_value": 130.3544,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-10-01",
+   "index_value": 167.4128,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-10-01",
+   "index_value": 173.8878,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-10-01",
+   "index_value": 97.1228,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-10-01",
+   "index_value": 94.6123,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-10-01",
+   "index_value": 104.3776,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-11-01",
+   "index_value": 107.7276,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-11-01",
+   "index_value": 125.1856,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-11-01",
+   "index_value": 105.5465,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-11-01",
+   "index_value": 93.8996,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-11-01",
+   "index_value": 95.1976,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-11-01",
+   "index_value": 96.9146,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2024-12-01",
+   "index_value": 103.2197,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-12-01",
+   "index_value": 136.5144,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2024-12-01",
+   "index_value": 116.1124,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-12-01",
+   "index_value": 125.3844,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-12-01",
+   "index_value": 114.6522,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2024-12-01",
+   "index_value": 119.6053,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-02-01",
+   "index_value": 109.8021,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-02-01",
+   "index_value": 115.238,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-02-01",
+   "index_value": 107.5059,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-02-01",
+   "index_value": 99.9158,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-02-01",
+   "index_value": 96.7133,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-02-01",
+   "index_value": 106.8464,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-03-01",
+   "index_value": 124.1853,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-03-01",
+   "index_value": 111.4299,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-03-01",
+   "index_value": 116.793,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-03-01",
+   "index_value": 95.8491,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-03-01",
+   "index_value": 100.8022,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-03-01",
+   "index_value": 96.3323,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-04-01",
+   "index_value": 245.8457,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-04-01",
+   "index_value": 177.6727,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-04-01",
+   "index_value": 159.0654,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-04-01",
+   "index_value": 109.1461,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-04-01",
+   "index_value": 100.3091,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-04-01",
+   "index_value": 106.4548,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-05-01",
+   "index_value": 173.6302,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-05-01",
+   "index_value": 155.5793,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-05-01",
+   "index_value": 155.9192,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-05-01",
+   "index_value": 98.102,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-05-01",
+   "index_value": 102.3965,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-05-01",
+   "index_value": 108.4716,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-06-01",
+   "index_value": 208.7884,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-06-01",
+   "index_value": 175.2178,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-06-01",
+   "index_value": 158.4872,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-06-01",
+   "index_value": 100.3801,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-06-01",
+   "index_value": 110.4363,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-06-01",
+   "index_value": 118.1853,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-07-01",
+   "index_value": 290.1863,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-07-01",
+   "index_value": 238.3626,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-07-01",
+   "index_value": 221.9867,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-07-01",
+   "index_value": 124.636,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-07-01",
+   "index_value": 143.2158,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-07-01",
+   "index_value": 132.4372,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-08-01",
+   "index_value": 221.3669,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-08-01",
+   "index_value": 246.3647,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-08-01",
+   "index_value": 251.7218,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-08-01",
+   "index_value": 120.6303,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-08-01",
+   "index_value": 127.3431,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-08-01",
+   "index_value": 140.4745,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-09-01",
+   "index_value": 151.9946,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-09-01",
+   "index_value": 170.0528,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-09-01",
+   "index_value": 171.7721,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-09-01",
+   "index_value": 95.8133,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-09-01",
+   "index_value": 95.4843,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-09-01",
+   "index_value": 104.4668,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-10-01",
+   "index_value": 123.6862,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-10-01",
+   "index_value": 165.9711,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-10-01",
+   "index_value": 172.8317,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-10-01",
+   "index_value": 104.0884,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-10-01",
+   "index_value": 100.5297,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-10-01",
+   "index_value": 111.8733,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-11-01",
+   "index_value": 119.4368,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-11-01",
+   "index_value": 116.5666,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-11-01",
+   "index_value": 115.7174,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-11-01",
+   "index_value": 99.5809,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-11-01",
+   "index_value": 98.1514,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-11-01",
+   "index_value": 99.0519,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2025-12-01",
+   "index_value": 117.2405,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-12-01",
+   "index_value": 156.0658,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2025-12-01",
+   "index_value": 134.2909,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-12-01",
+   "index_value": 136.7277,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-12-01",
+   "index_value": 134.4018,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2025-12-01",
+   "index_value": 128.1127,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2026-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2026-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2026-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2026-01-01",
+   "index_value": 100.0,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2026-01-01",
+   "index_value": 100.0,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2026-01-01",
+   "index_value": 100.0,
+   "months_ahead": 6
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "domestic",
+   "index_month": "2026-02-01",
+   "index_value": 108.867,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2026-02-01",
+   "index_value": 126.7796,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "european",
+   "index_month": "2026-02-01",
+   "index_value": 115.2659,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2026-02-01",
+   "index_value": 98.6567,
+   "months_ahead": 1
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2026-02-01",
+   "index_value": 100.4322,
+   "months_ahead": 3
+  },
+  {
+   "basis": "annual_january_100",
+   "haul_category": "long_haul",
+   "index_month": "2026-02-01",
+   "index_value": 101.0295,
+   "months_ahead": 6
+  }
+ ],
+ "reconstructions": [],
+ "schema_version": 1
+}
