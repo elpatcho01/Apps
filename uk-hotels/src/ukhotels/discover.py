@@ -82,6 +82,7 @@ def discover(
     existing: dict[tuple[str, str], tuple[PanelProperty, ...]] | None = None,
     substitutions: dict[tuple[str, str], list[str]] | None = None,
     reference_date: dt.date | None = None,
+    dump_raw: pathlib.Path | None = None,
 ) -> tuple[list[PanelProperty], dict[str, Any]]:
     """Draw (or top up) the pinned sample. Returns the panel and a summary.
 
@@ -133,6 +134,17 @@ def discover(
                 if key[0] == location.code:
                     out.extend(props)
             continue
+
+        # One payload is enough to diagnose a parser mismatch, and the first
+        # location is as good as any. Already redacted by the provider -- see
+        # `serpapi_hotels.redact` -- which matters because this file is meant to
+        # be uploaded as a workflow artifact or pasted into an issue.
+        if dump_raw is not None and not dump_raw.exists():
+            dump_raw.parent.mkdir(parents=True, exist_ok=True)
+            dump_raw.write_text(
+                json.dumps(result.raw_payload, indent=1, default=str), encoding="utf-8"
+            )
+            log.info("wrote a sample raw payload to %s", dump_raw)
 
         sets = selection.comparable_sets(
             result.quotes,
@@ -219,6 +231,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print the panel that would be written without writing it.",
     )
+    parser.add_argument(
+        "--dump-raw",
+        type=pathlib.Path,
+        default=None,
+        help=(
+            "Write one location's raw provider payload here, for diagnosing a "
+            "parser mismatch. The credential is already scrubbed out of it."
+        ),
+    )
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args(argv)
 
@@ -257,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
             per_cell=args.per_cell,
             existing=existing,
             substitutions=substitutions,
+            dump_raw=args.dump_raw,
         )
     except Exception as exc:  # noqa: BLE001
         print(f"::error::discovery failed: {exc}", flush=True)

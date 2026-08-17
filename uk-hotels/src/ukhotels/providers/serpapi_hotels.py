@@ -82,6 +82,47 @@ _NO_RESULTS_MARKERS = (
 )
 
 
+#: Response keys that echo the request and could carry the credential. Dropped
+#: outright rather than scrubbed, because their value is diagnostic at best.
+_REDACT_KEYS = frozenset({"api_key", "serpapi_api_key", "secret_key"})
+
+#: What a redacted value is replaced with, chosen to be obvious in a diff.
+_REDACTED = "<redacted>"
+
+
+def redact(obj: Any, secret: str | None) -> Any:
+    """Strip the API key out of a payload before it is stored or uploaded.
+
+    WHY THIS IS NOT PARANOIA
+
+    `raw_payload` is written verbatim to `raw_response` in BigQuery, and that
+    table is append-only by design -- there is no delete path, deliberately. So
+    a credential that reaches it is there permanently, in a warehouse whose
+    whole value proposition is that history cannot be rewritten. The same
+    payload is also what gets uploaded as a workflow artifact when the provider
+    smoke test runs, where anyone with read access to the repository can fetch
+    it.
+
+    SerpApi does not appear to echo `api_key` in its responses, but "does not
+    appear to" is not a guarantee worth betting an unrotatable leak on, and the
+    check costs one pass over a dict we are already serialising.
+
+    Removes known credential keys anywhere in the structure, and replaces any
+    string containing the key itself -- which covers the case of the key turning
+    up inside a URL, where it would not be a key/value pair we could match on.
+    """
+    if isinstance(obj, dict):
+        return {
+            k: _REDACTED if k in _REDACT_KEYS else redact(v, secret)
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [redact(v, secret) for v in obj]
+    if isinstance(obj, str) and secret and secret in obj:
+        return obj.replace(secret, _REDACTED)
+    return obj
+
+
 def _decimal(value: Any) -> Decimal | None:
     if value is None:
         return None
@@ -192,6 +233,11 @@ class SerpApiHotelsProvider(AccommodationProvider):
             payload = resp.json()
         except ValueError as exc:
             raise ProviderError(f"non-JSON response for {query}: {exc}") from exc
+
+        # Scrubbed immediately, before anything can hold a reference to the
+        # unredacted form. See `redact`: this payload is stored verbatim in an
+        # append-only table and uploaded as a workflow artifact.
+        payload = redact(payload, self._api_key)
 
         if not isinstance(payload, dict):
             raise ProviderError(
