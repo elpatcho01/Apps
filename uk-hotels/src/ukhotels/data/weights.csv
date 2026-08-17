@@ -1,0 +1,39 @@
+# PLACEHOLDER REGIONAL WEIGHTS -- NOT ONS FIGURES.
+#
+# ONS do not publish regional expenditure weights for CPI item class 11.2.0.1 at
+# the granularity this pipeline aggregates over. Rather than ship invented
+# numbers that look authoritative, these are flagged placeholders: they are
+# proportional to regional population, which is emphatically not the same thing
+# as regional accommodation expenditure (London and the South West both take a
+# far larger share of overnight stays than their populations imply).
+#
+# Every aggregate computed from these rows carries weights_are_placeholder=TRUE
+# all the way through to validation, which downgrades its verdict accordingly.
+# Per-region reconstructions do not use weights at all and are unaffected.
+#
+# Replace by running:  python -m ukhotels.onsweights --discover
+year,region,weight,is_placeholder
+2025,north_east,0.040,true
+2025,north_west,0.110,true
+2025,yorkshire_and_the_humber,0.082,true
+2025,east_midlands,0.073,true
+2025,west_midlands,0.089,true
+2025,east_of_england,0.094,true
+2025,london,0.131,true
+2025,south_east,0.138,true
+2025,south_west,0.085,true
+2025,wales,0.047,true
+2025,scotland,0.082,true
+2025,northern_ireland,0.029,true
+2026,north_east,0.040,true
+2026,north_west,0.110,true
+2026,yorkshire_and_the_humber,0.082,true
+2026,east_midlands,0.073,true
+2026,west_midlands,0.089,true
+2026,east_of_england,0.094,true
+2026,london,0.131,true
+2026,south_east,0.138,true
+2026,south_west,0.085,true
+2026,wales,0.047,true
+2026,scotland,0.082,true
+2026,northern_ireland,0.029,true

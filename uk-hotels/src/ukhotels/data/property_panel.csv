@@ -1,0 +1,17 @@
+# The pinned property sample. EMPTY until discovery has been run.
+#
+# Populate with:  python -m ukhotels.discover --commit
+# (or let the monthly hotels-panel-refresh workflow do it).
+#
+# Keyed on property_token, never on property_name: a rebrand changes the name
+# and keeps the token, and matching on names would read one rebrand as a
+# property leaving and a different one arriving.
+#
+# While this file is empty the collector still runs, in census-only mode: every
+# comparable property is recorded and reconciliation computes matched-sample
+# relatives over whatever is present in both months. That is a usable index.
+# The pinned sample adds the ONS-style fixed-sample variant alongside it.
+#
+# selection_basis is "discovered" for the initial draw, or
+# "substitute_for:<token>" when a property replaced one that left the sample.
+location,tier,property_token,property_name,first_seen,selection_basis
