@@ -62,25 +62,34 @@ def build_rows(
     fetched_ts: dt.datetime,
 ) -> list[dict[str, Any]]:
     """Flatten the parsed series into one row per (month, haul category)."""
-    basis_by_haul = {
-        haul: detect_basis([(r["index_month"], r[haul]) for r in series]) for haul in HAULS
-    }
+    # Basis is detected per series -- each (haul, window) pair is its own
+    # published series and could in principle be based differently.
+    basis_by_series: dict[tuple, str] = {}
+    for key in {(r["haul_category"], r["months_ahead"]) for r in series}:
+        points = [
+            (r["index_month"], r["index_value"])
+            for r in series
+            if (r["haul_category"], r["months_ahead"]) == key
+        ]
+        basis_by_series[key] = detect_basis(points)
+
     rows: list[dict[str, Any]] = []
     for record in series:
-        for haul in HAULS:
-            rows.append(
+        key = (record["haul_category"], record["months_ahead"])
+        rows.append(
                 {
                     "index_month": record["index_month"],
-                    "haul_category": haul,
-                    "index_value": Decimal(f"{record[haul]:.4f}"),
-                    "basis": basis_by_haul[haul],
+                    "haul_category": record["haul_category"],
+                    "months_ahead": record["months_ahead"],
+                    "index_value": Decimal(f"{record['index_value']:.4f}"),
+                    "basis": basis_by_series[key],
                     "release_url": release_url,
                     "release_label": release_label,
                     "fetched_ts": fetched_ts,
                     "is_current": True,
                     "run_id": run_id,
                 }
-            )
+        )
     return rows
 
 
@@ -122,12 +131,14 @@ def run_backfill(
         rows,
     )
 
-    months = [r["index_month"] for r in series]
+    months = sorted({r["index_month"] for r in series})
     bases = sorted({r["basis"] for r in rows})
+    n_series = len({(r["haul_category"], r["months_ahead"]) for r in rows})
     summary = {
         "run_id": run_id,
         "release_url": xlsx_url,
-        "months": len(series),
+        "values": len(series),
+        "series": n_series,
         "rows_written": written,
         "first_month": months[0].isoformat(),
         "last_month": months[-1].isoformat(),

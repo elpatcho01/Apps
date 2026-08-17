@@ -12,21 +12,32 @@ from ukairfares.onsweights import SubIndexParseError, _as_month, parse_subindice
 from tests.test_onsweights import CANONICAL, workbook_bytes
 
 
-def monthly_series(n=30, start=(2017, 1), base=100.0, step=1.0):
-    """A plausible sub-index sheet: header plus n monthly rows."""
-    rows = [["Month", "Domestic", "European", "Long-haul"]]
-    year, month = start
-    for i in range(n):
-        rows.append([
-            dt.datetime(year, month, 1),
-            base + i * step,
-            base + i * step * 1.5,
-            base + i * step * 2.0,
-        ])
-        month += 1
-        if month > 12:
-            month, year = 1, year + 1
+MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+
+#: The real ONS layout, confirmed from a production run's workbook dump:
+#: one sheet per year, months across columns, and each haul category broken
+#: out by advance window -- six series, not three.
+def year_sheet(year, base=100.0, step=2.0, missing=()):
+    rows = [
+        [f"{year} Airfares sub-indices"] + [None] * 12,
+        [None, None] + MONTHS,
+    ]
+    for cat, windows in (("Domestic", [1]), ("European", [1, 3]), ("Long-haul", [1, 3, 6])):
+        for j, w in enumerate(windows):
+            vals = []
+            for m in range(1, 13):
+                if (cat, w, m) in missing:
+                    vals.append("..")
+                else:
+                    vals.append(100.0 if m == 1 else base + m * step + w)
+            # Category label appears only on the first row of each group
+            # (merged in the original), blank on continuation rows.
+            rows.append([cat if j == 0 else None, f"{w}-month"] + vals)
     return rows
+
+
+def workbook_years(years=(2017, 2018, 2019)):
+    return workbook_bytes({str(y): year_sheet(y) for y in years})
 
 
 class TestAsMonth:
@@ -49,87 +60,81 @@ class TestAsMonth:
 
 
 class TestParseSubindices:
-    def test_canonical_sheet(self):
-        rows = parse_subindices(workbook_bytes({"Sub-indices": monthly_series()}))
-        assert len(rows) == 30
-        assert rows[0]["index_month"] == dt.date(2017, 1, 1)
-        assert rows[0]["domestic"] == pytest.approx(100.0)
-        assert rows[0]["long_haul"] == pytest.approx(100.0)
+    def test_parses_the_real_layout(self):
+        rows = parse_subindices(workbook_years())
+        # 3 years x 12 months x 6 series
+        assert len(rows) == 3 * 12 * 6
 
-    def test_output_is_month_sorted(self):
-        rows = parse_subindices(workbook_bytes({"Indices": monthly_series()}))
-        months = [r["index_month"] for r in rows]
-        assert months == sorted(months)
+    def test_extracts_all_six_series(self):
+        rows = parse_subindices(workbook_years())
+        series = {(r["haul_category"], r["months_ahead"]) for r in rows}
+        assert series == {
+            ("domestic", 1),
+            ("european", 1), ("european", 3),
+            ("long_haul", 1), ("long_haul", 3), ("long_haul", 6),
+        }
 
-    def test_prefers_index_sheet_over_weights_sheet(self):
-        sheets = {"Weights": CANONICAL, "Sub-indices": monthly_series()}
+    def test_year_comes_from_the_sheet_name(self):
+        rows = parse_subindices(workbook_years((2021, 2022)))
+        assert {r["index_month"].year for r in rows} == {2021, 2022}
+
+    def test_carries_the_category_label_forward(self):
+        # "European" is blank on its 3-month continuation row.
+        rows = parse_subindices(workbook_years((2019,)))
+        threes = [r for r in rows if r["months_ahead"] == 3]
+        assert {r["haul_category"] for r in threes} == {"european", "long_haul"}
+
+    def test_january_is_the_base(self):
+        rows = parse_subindices(workbook_years((2019,)))
+        jans = [r for r in rows if r["index_month"].month == 1]
+        assert len(jans) == 6
+        assert all(r["index_value"] == pytest.approx(100.0) for r in jans)
+
+    def test_skips_missing_values(self):
+        sheet = year_sheet(2019, missing={("Domestic", 1, 5), ("Domestic", 1, 6)})
+        rows = parse_subindices(workbook_bytes({"2019": sheet}))
+        dom = [r for r in rows if r["haul_category"] == "domestic"]
+        assert len(dom) == 10
+        assert {r["index_month"].month for r in dom} == set(range(1, 13)) - {5, 6}
+
+    def test_output_is_sorted(self):
+        rows = parse_subindices(workbook_years())
+        keys = [(r["index_month"], r["haul_category"], r["months_ahead"]) for r in rows]
+        assert keys == sorted(keys)
+
+    def test_ignores_non_year_sheets(self):
+        sheets = {"Notes": [["some", "preamble"]], "2019": year_sheet(2019)}
         rows = parse_subindices(workbook_bytes(sheets))
-        # The weights sheet is annual with 3 rows; the index sheet is monthly.
-        assert len(rows) == 30
-        assert rows[0]["index_month"] == dt.date(2017, 1, 1)
+        assert {r["index_month"].year for r in rows} == {2019}
 
     def test_does_not_mistake_the_weights_sheet_for_a_series(self):
-        # Weights alone must not parse as a sub-index series.
         with pytest.raises(SubIndexParseError):
             parse_subindices(workbook_bytes({"Weights": CANONICAL}))
-
-    def test_tolerates_string_months(self):
-        rows = [["Period", "Domestic", "European", "Long-haul"]]
-        for i in range(14):
-            rows.append([f"{2017 + i // 12}-{i % 12 + 1:02d}", 100 + i, 100 + i, 100 + i])
-        parsed = parse_subindices(workbook_bytes({"Indices": rows}))
-        assert len(parsed) == 14
-
-    def test_tolerates_title_rows(self):
-        sheets = {"Indices": [
-            ["Domestic, European and long-haul airfares sub-indices"], [],
-            ["January 2017 = 100"], [],
-            *monthly_series(),
-        ]}
-        assert len(parse_subindices(workbook_bytes(sheets))) == 30
-
-    def test_skips_footnotes_and_blanks(self):
-        sheets = {"Indices": [*monthly_series(), [], ["Source: ONS"], ["Note: provisional"]]}
-        assert len(parse_subindices(workbook_bytes(sheets))) == 30
-
-    def test_requires_a_year_of_data(self):
-        # A handful of stray rows is not a monthly series.
-        with pytest.raises(SubIndexParseError):
-            parse_subindices(workbook_bytes({"Indices": monthly_series(n=5)}))
-
-    def test_rejects_missing_category(self):
-        rows = [["Month", "Domestic", "European"]]
-        for i in range(20):
-            rows.append([dt.datetime(2017, 1, 1) + dt.timedelta(days=31 * i), 100, 100])
-        with pytest.raises(SubIndexParseError):
-            parse_subindices(workbook_bytes({"Indices": rows}))
 
     def test_dumps_structure_on_failure(self):
         with pytest.raises(SubIndexParseError, match="sheet 'Mystery'"):
             parse_subindices(workbook_bytes({"Mystery": [["a", "b"], [1, 2]]}))
 
-    def test_ignores_pre_series_years(self):
-        sheets = {"Indices": [
-            ["Month", "Domestic", "European", "Long-haul"],
-            [dt.datetime(1999, 1, 1), 50, 50, 50],
-            *monthly_series()[1:],
-        ]}
-        rows = parse_subindices(workbook_bytes(sheets))
-        assert all(r["index_month"].year >= 2016 for r in rows)
+    def test_rejects_a_sheet_with_too_few_month_columns(self):
+        sheet = [["2019 Airfares"], [None, None, "Jan", "Feb"],
+                 ["Domestic", "1-month", 100, 101]]
+        with pytest.raises(SubIndexParseError):
+            parse_subindices(workbook_bytes({"2019": sheet}))
 
 
 class TestBuildRows:
     def _series(self):
-        return parse_subindices(workbook_bytes({"Indices": monthly_series()}))
+        return parse_subindices(workbook_years())
 
-    def test_one_row_per_month_per_haul(self):
+    def test_one_row_per_parsed_value(self):
         series = self._series()
         rows = build_rows(
             series, release_url="u", release_label="rel",
             run_id="r", fetched_ts=dt.datetime(2026, 8, 16),
         )
-        assert len(rows) == len(series) * 3
+        assert len(rows) == len(series)
         assert {r["haul_category"] for r in rows} == {"domestic", "european", "long_haul"}
+        assert {r["months_ahead"] for r in rows} == {1, 3, 6}
 
     def test_values_are_decimal(self):
         rows = build_rows(
@@ -138,23 +143,11 @@ class TestBuildRows:
         )
         assert all(isinstance(r["index_value"], Decimal) for r in rows)
 
-    def test_detects_chained_basis(self):
-        # monthly_series climbs continuously, so Januaries are not all 100.
+    def test_detects_the_annual_january_100_basis(self):
+        # Confirmed against the real workbook: every January is exactly 100
+        # and each year's sheet restarts from there.
         rows = build_rows(
             self._series(), release_url="u", release_label="rel",
-            run_id="r", fetched_ts=dt.datetime(2026, 8, 16),
-        )
-        assert {r["basis"] for r in rows} == {"chained"}
-
-    def test_detects_annual_january_100_basis(self):
-        sheet = [["Month", "Domestic", "European", "Long-haul"]]
-        for year in (2017, 2018, 2019):
-            for m in range(1, 13):
-                v = 100.0 if m == 1 else 100.0 + m
-                sheet.append([dt.datetime(year, m, 1), v, v, v])
-        series = parse_subindices(workbook_bytes({"Indices": sheet}))
-        rows = build_rows(
-            series, release_url="u", release_label="rel",
             run_id="r", fetched_ts=dt.datetime(2026, 8, 16),
         )
         assert {r["basis"] for r in rows} == {"annual_january_100"}

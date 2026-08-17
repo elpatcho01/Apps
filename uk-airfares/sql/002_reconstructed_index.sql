@@ -9,6 +9,7 @@
 CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.reconstructed_index` (
   index_month          DATE    NOT NULL OPTIONS(description="Partition key. First of the month this reconstruction is for."),
   haul_category        STRING  NOT NULL OPTIONS(description='"domestic" | "european" | "long_haul" | "all" for the weighted aggregate.'),
+  months_ahead         INT64            OPTIONS(description="Advance window: 1, 3 or 6 months. ONS publish each haul category broken out by window -- six series, not three -- so reconstructions are produced at the same granularity to be comparable."),
   confirmed_index_day  DATE    NOT NULL OPTIONS(description="Index day as confirmed in the following month's CPI bulletin methodology section."),
   reconstructed_value  NUMERIC          OPTIONS(description="Headline reconstructed level for the category."),
   n_observations       INT64            OPTIONS(description="Panel rows feeding this value."),

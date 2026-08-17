@@ -304,26 +304,70 @@ def parse_weights(xlsx_bytes: bytes) -> list[dict[str, Any]]:
     )
 
 
-def _find_subindex_sheet(sheets: Sequence[tuple[str, list[list[Any]]]]):
-    """Prefer a sheet named for indices; explicitly deprioritise the weights sheet."""
-    def rank(entry) -> int:
-        title = _norm(entry[0])
-        if "weight" in title:
-            return 2
-        if any(word in title for word in ("index", "indices", "sub-ind", "subind", "series")):
-            return 0
-        return 1
+_WINDOW_PATTERN = re.compile(r"(\d+)\s*[-\s]?month", re.IGNORECASE)
 
-    return sorted(sheets, key=rank)
+_CATEGORY_LABELS = {
+    "domestic": "domestic",
+    "european": "european",
+    "short-haul": "european",
+    "short haul": "european",
+    "long-haul": "long_haul",
+    "long haul": "long_haul",
+    "longhaul": "long_haul",
+}
+
+
+def _as_category(value: Any) -> str | None:
+    text = _norm(value)
+    return _CATEGORY_LABELS.get(text) if text else None
+
+
+def _as_window(value: Any) -> int | None:
+    """Parse "1-month" / "3 month" / "6-month" into months ahead."""
+    match = _WINDOW_PATTERN.search(_norm(value))
+    if not match:
+        return None
+    months = int(match.group(1))
+    return months if months in (1, 3, 6) else None
+
+
+def _month_columns(row: list[Any]) -> dict[int, int]:
+    """Map column index -> month number from a header row of month names."""
+    out: dict[int, int] = {}
+    for col, cell in enumerate(row):
+        name = _norm(cell)
+        if name in _MONTH_NAMES:
+            out[col] = _MONTH_NAMES[name]
+    return out
 
 
 def parse_subindices(xlsx_bytes: bytes) -> list[dict[str, Any]]:
-    """Extract ONS's published monthly sub-index series from the release.
+    """Extract ONS's published sub-index series from the release.
 
-    Same defensive posture as `parse_weights`: locate by searching, validate
-    hard, and refuse rather than guess. This series is the validation *answer
-    key*, so a mis-parse would not merely degrade the output -- it would make
-    every accuracy figure wrong in a direction we could not detect.
+    LAYOUT (confirmed against the real workbook, Aug 2026):
+
+        sheet "2019"
+          | 2019 Airfares sub-indices |         |     |        |  ...
+          |                           |         | Jan | Feb    |  ...
+          | Domestic                  | 1-month | 100 | 102.91 |  ...
+          | European                  | 1-month | 100 | 118.62 |  ...
+          |                           | 3-month | 100 | 122.84 |  ...
+          | Long-haul                 | 1-month | 100 | 74.44  |  ...
+          |                           | 3-month | 100 | 103.10 |  ...
+          |                           | 6-month | 100 | 94.31  |  ...
+
+    Three things about this drive the implementation:
+
+    * **One sheet per year.** The year comes from the sheet name, not the data.
+    * **Transposed.** Months run across columns; series run down rows.
+    * **Six series, not three.** ONS publish each haul category broken out by
+      *advance window* -- domestic at 1 month, European at 1 and 3, long-haul at
+      1, 3 and 6. That is the granularity our own panel already collects at
+      (`months_ahead`), so we can and should compare like with like rather than
+      collapsing the windows together.
+
+    The category cell is blank on continuation rows (merged in the original), so
+    it is carried forward. Missing values appear as ".." and are skipped.
     """
     try:
         import openpyxl
@@ -335,40 +379,64 @@ def parse_subindices(xlsx_bytes: bytes) -> list[dict[str, Any]]:
     workbook = openpyxl.load_workbook(io.BytesIO(xlsx_bytes), data_only=True, read_only=True)
     sheets = list(_iter_sheets(workbook))
 
-    for title, rows in _find_subindex_sheet(sheets):
-        found = _find_header(rows, key="month")
-        if not found:
+    out: list[dict[str, Any]] = []
+    seen: set[tuple] = set()
+    years_parsed: list[int] = []
+
+    for title, rows in sheets:
+        year = _as_year(_norm(title))
+        if year is None or year < MIN_SERIES_YEAR:
             continue
-        header_idx, columns = found
-        out: list[dict[str, Any]] = []
-        seen: set[dt.date] = set()
-        for row in rows[header_idx + 1 :]:
-            if not row or columns["month"] >= len(row):
+
+        months: dict[int, int] = {}
+        category: str | None = None
+        for row in rows:
+            if not row:
                 continue
-            month = _as_month(row[columns["month"]])
-            if month is None or month.year < MIN_SERIES_YEAR or month in seen:
+            if not months:
+                found = _month_columns(list(row))
+                # A real header names most of the year, not one stray cell.
+                if len(found) >= 6:
+                    months = found
                 continue
-            values: dict[str, float] = {}
-            for category in ("domestic", "european", "long_haul"):
-                col = columns[category]
-                value = _as_number(row[col]) if col < len(row) else None
+
+            category = _as_category(row[0]) or category
+            window = _as_window(row[1]) if len(row) > 1 else None
+            if category is None or window is None:
+                continue
+
+            for col, month_num in months.items():
+                if col >= len(row):
+                    continue
+                value = _as_number(row[col])
                 if value is None or value <= 0:
-                    values = {}
-                    break
-                values[category] = value
-            if not values:
-                continue
-            seen.add(month)
-            out.append({"index_month": month, **values})
+                    continue  # ".." and blanks are legitimately missing
+                key = (year, month_num, category, window)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(
+                    {
+                        "index_month": dt.date(year, month_num, 1),
+                        "haul_category": category,
+                        "months_ahead": window,
+                        "index_value": value,
+                    }
+                )
+        if months:
+            years_parsed.append(year)
 
-        # A monthly series spanning years, not a handful of stray rows.
-        if len(out) >= 12:
-            log.info("parsed %d monthly sub-index rows from sheet %r", len(out), title)
-            return sorted(out, key=lambda r: r["index_month"])
+    if len(out) < 12:
+        raise SubIndexParseError(
+            f"parsed only {len(out)} sub-index values from {len(years_parsed)} "
+            f"year sheet(s). Workbook structure:\n" + describe(sheets)
+        )
 
-    raise SubIndexParseError(
-        "could not locate a monthly sub-index table. Workbook structure:\n" + describe(sheets)
+    log.info(
+        "parsed %d sub-index values across %d years (%s)",
+        len(out), len(years_parsed), ", ".join(str(y) for y in sorted(years_parsed)),
     )
+    return sorted(out, key=lambda r: (r["index_month"], r["haul_category"], r["months_ahead"]))
 
 
 def describe(sheets: Sequence[tuple[str, list[list[Any]]]], max_rows: int = 12) -> str:

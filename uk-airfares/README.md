@@ -86,6 +86,33 @@ you. `price_gbp` applies the ONS rule; `price_cheapest_gbp` records the cheapest
 for comparison, and `ons_rule_time_delta_minutes` records how close to the target
 time we actually got.
 
+### ONS publish six series, not three
+
+Confirmed from the real workbook (a production run dumped it). Each haul
+category is broken out by **advance window**:
+
+| Series | Windows published |
+|---|---|
+| Domestic | 1-month |
+| European | 1-month, 3-month |
+| Long-haul | 1-month, 3-month, 6-month |
+
+Six published series in total. Our panel already collects at exactly that
+granularity (`months_ahead`), so reconstructions are produced per
+(haul × window) to be directly comparable — collapsing the windows together
+would compare against something ONS never publish.
+
+The workbook itself is one sheet per year, transposed (months across columns,
+series down rows), with the category label merged across its window rows.
+
+**Basis confirmed:** every January is exactly 100 and each year restarts from
+there — `annual_january_100`, not chain-linked. That resolves the ambiguity the
+`detect_basis` helper was written to settle.
+
+The published data is far more volatile than you might expect: European
+1-month ran 100 → 224.92 within 2019, and long-haul 1-month dipped to 74.44.
+Worth internalising before judging any nowcast's error.
+
 ### One thing that is genuinely unresolved
 
 Whether a fare is attributed to the month it **departs** or the month it was
@@ -193,7 +220,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 262 tests, no network
+python -m pytest                                    # 267 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -490,7 +517,7 @@ uk-airfares/
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   └── providers/      base.py · travelpayouts.py · mock.py
-└── tests/              262 tests, no network required
+└── tests/              267 tests, no network required
 ```
 
 ## Non-goals

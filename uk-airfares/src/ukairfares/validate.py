@@ -58,7 +58,8 @@ MIN_OVERLAP_MONTHS = 3
 SCORE_QUERY = """
 WITH latest_recon AS (
   SELECT *, ROW_NUMBER() OVER (
-    PARTITION BY index_month, haul_category, attribution_rule, selection_rule, agg_method
+    PARTITION BY index_month, haul_category, months_ahead,
+                 attribution_rule, selection_rule, agg_method
     ORDER BY computed_ts DESC
   ) AS rn
   FROM `{table}`
@@ -66,19 +67,22 @@ WITH latest_recon AS (
 ),
 latest_published AS (
   SELECT *, ROW_NUMBER() OVER (
-    PARTITION BY index_month, haul_category ORDER BY fetched_ts DESC
+    PARTITION BY index_month, haul_category, months_ahead ORDER BY fetched_ts DESC
   ) AS rn
   FROM `{published_table}`
   WHERE index_value IS NOT NULL
 )
 SELECT
-  r.index_month, r.haul_category, r.attribution_rule, r.selection_rule, r.agg_method,
+  r.index_month, r.haul_category, r.months_ahead,
+  r.attribution_rule, r.selection_rule, r.agg_method,
   r.reconstructed_value, p.index_value AS published_ons_value, p.basis AS published_basis,
   r.n_observations, r.index_day_exact, r.index_day_offset_days,
   r.weights_are_placeholder, r.source_is_cached
 FROM latest_recon r
 JOIN latest_published p
-  ON r.index_month = p.index_month AND r.haul_category = p.haul_category
+  ON r.index_month = p.index_month
+ AND r.haul_category = p.haul_category
+ AND r.months_ahead = p.months_ahead
 WHERE r.rn = 1 AND p.rn = 1
 ORDER BY r.index_month
 """
@@ -200,6 +204,7 @@ def build_report(rows: list[dict[str, Any]]) -> dict[str, Any]:
     for row in rows:
         key = (
             row["haul_category"],
+            row.get("months_ahead"),
             row["attribution_rule"],
             row["selection_rule"],
             row["agg_method"],

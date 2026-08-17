@@ -164,63 +164,71 @@ def aggregate(
         for index_month in months:
             month_rows = [r for r in rows if r.get(key) == index_month]
             for haul in HAULS:
-                haul_rows = [r for r in month_rows if r["haul_category"] == haul]
-                if not haul_rows:
-                    continue
-                for selection_rule in SELECTION_RULES:
-                    price_col = (
-                        "price_gbp" if selection_rule == "ons_target_time" else "price_cheapest_gbp"
-                    )
-                    prices = [
-                        float(r[price_col]) for r in haul_rows if r.get(price_col) is not None
+                for window in sorted(
+                    {r["months_ahead"] for r in month_rows
+                     if r["haul_category"] == haul and r.get("months_ahead")}
+                ):
+                    haul_rows = [
+                        r for r in month_rows
+                        if r["haul_category"] == haul and r["months_ahead"] == window
                     ]
-                    if not prices:
+                    if not haul_rows:
                         continue
-
-                    mean = statistics.fmean(prices)
-                    median = statistics.median(prices)
-                    geomean = _geometric_mean(prices)
-
-                    for agg_method, value in (
-                        ("mean", mean),
-                        ("median", median),
-                        ("geometric_mean", geomean),
-                    ):
-                        if value is None:
-                            continue
-                        out.append(
-                            {
-                                "index_month": index_month,
-                                "haul_category": haul,
-                                "confirmed_index_day": index_day.index_day,
-                                "reconstructed_value": _quantise(value),
-                                "n_observations": len(prices),
-                                "published_ons_value": None,
-                                "computed_ts": computed_ts,
-                                "attribution_rule": attribution,
-                                "selection_rule": selection_rule,
-                                "agg_method": agg_method,
-                                "mean_fare_gbp": _quantise(mean),
-                                "median_fare_gbp": _quantise(median),
-                                "geomean_fare_gbp": _quantise(geomean),
-                                "index_day_exact": offset_days == 0,
-                                "scrape_date_used": scrape_date_used,
-                                "index_day_offset_days": offset_days,
-                                "n_routes": len({r["route"] for r in haul_rows}),
-                                "n_expected_routes": expected[haul],
-                                "weights_are_placeholder": (
-                                    w.is_placeholder
-                                    if (w := weights_for(index_month.year))
-                                    else None
-                                ),
-                                "source_is_cached": any(
-                                    bool(r.get("is_cached_source")) for r in haul_rows
-                                ),
-                                "pipeline_version": PIPELINE_VERSION,
-                                "is_current": True,
-                                "run_id": run_id,
-                            }
+                    for selection_rule in SELECTION_RULES:
+                        price_col = (
+                            "price_gbp" if selection_rule == "ons_target_time" else "price_cheapest_gbp"
                         )
+                        prices = [
+                            float(r[price_col]) for r in haul_rows if r.get(price_col) is not None
+                        ]
+                        if not prices:
+                            continue
+
+                        mean = statistics.fmean(prices)
+                        median = statistics.median(prices)
+                        geomean = _geometric_mean(prices)
+
+                        for agg_method, value in (
+                            ("mean", mean),
+                            ("median", median),
+                            ("geometric_mean", geomean),
+                        ):
+                            if value is None:
+                                continue
+                            out.append(
+                                {
+                                    "index_month": index_month,
+                                        "haul_category": haul,
+                                    "months_ahead": window,
+                                    "confirmed_index_day": index_day.index_day,
+                                    "reconstructed_value": _quantise(value),
+                                    "n_observations": len(prices),
+                                    "published_ons_value": None,
+                                    "computed_ts": computed_ts,
+                                    "attribution_rule": attribution,
+                                    "selection_rule": selection_rule,
+                                    "agg_method": agg_method,
+                                    "mean_fare_gbp": _quantise(mean),
+                                    "median_fare_gbp": _quantise(median),
+                                    "geomean_fare_gbp": _quantise(geomean),
+                                    "index_day_exact": offset_days == 0,
+                                    "scrape_date_used": scrape_date_used,
+                                    "index_day_offset_days": offset_days,
+                                    "n_routes": len({r["route"] for r in haul_rows}),
+                                    "n_expected_routes": expected[haul],
+                                    "weights_are_placeholder": (
+                                        w.is_placeholder
+                                        if (w := weights_for(index_month.year))
+                                        else None
+                                    ),
+                                    "source_is_cached": any(
+                                        bool(r.get("is_cached_source")) for r in haul_rows
+                                    ),
+                                    "pipeline_version": PIPELINE_VERSION,
+                                    "is_current": True,
+                                    "run_id": run_id,
+                                }
+                            )
 
     out.extend(_weighted_aggregates(out, weights_for, run_id=run_id, computed_ts=computed_ts))
     return out
@@ -238,11 +246,16 @@ def _weighted_aggregates(
     Requires all three hauls to be present for a given combination -- a
     two-thirds aggregate weighted as if it were whole would be misleading, so
     incomplete combinations are skipped rather than partially weighted.
+
+    In practice this means only the 1-month window produces an "all" row: it is
+    the sole advance window ONS collect for every haul category. Domestic has no
+    3- or 6-month series to weight against.
     """
     grouped: dict[tuple, dict[str, dict[str, Any]]] = {}
     for row in haul_rows:
         key = (
             row["index_month"],
+            row.get("months_ahead"),
             row["attribution_rule"],
             row["selection_rule"],
             row["agg_method"],
@@ -250,7 +263,7 @@ def _weighted_aggregates(
         grouped.setdefault(key, {})[row["haul_category"]] = row
 
     out: list[dict[str, Any]] = []
-    for (index_month, attribution, selection_rule, agg_method), by_haul in grouped.items():
+    for (index_month, window, attribution, selection_rule, agg_method), by_haul in grouped.items():
         if set(by_haul) != set(HAULS):
             log.debug(
                 "skipping weighted aggregate for %s/%s: only %s present",
@@ -271,6 +284,7 @@ def _weighted_aggregates(
             {
                 **template,
                 "haul_category": "all",
+                "months_ahead": window,
                 "reconstructed_value": _quantise(value),
                 "n_observations": sum(by_haul[h]["n_observations"] for h in HAULS),
                 "mean_fare_gbp": None,

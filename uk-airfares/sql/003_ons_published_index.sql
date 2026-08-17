@@ -12,7 +12,8 @@
 
 CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.ons_published_index` (
   index_month     DATE      NOT NULL OPTIONS(description="Partition key. First of the month."),
-  haul_category   STRING    NOT NULL OPTIONS(description='"domestic" | "european" | "long_haul" | "all".'),
+  haul_category   STRING    NOT NULL OPTIONS(description='"domestic" | "european" | "long_haul".'),
+  months_ahead    INT64              OPTIONS(description="Advance window the series is for: 1, 3 or 6 months. ONS publish each haul category broken out by window -- six series in total, not three -- so this is part of the key."),
   index_value     NUMERIC            OPTIONS(description="Published index level."),
   basis           STRING             OPTIONS(description='How the series is based: "annual_january_100" or "chained". Detected from the data rather than assumed -- see index.detect_basis.'),
   release_url     STRING             OPTIONS(description="Ad hoc release this vintage came from."),
@@ -22,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.ons_published_index` (
   run_id          STRING             OPTIONS(description="Groups rows written by a single backfill run.")
 )
 PARTITION BY index_month
-CLUSTER BY haul_category
+CLUSTER BY haul_category, months_ahead
 OPTIONS(
   description="ONS published domestic/European/long-haul air fare sub-indices, backfilled from the ONS ad hoc release. The validation target. Append-only; revisions arrive as new vintages."
 );

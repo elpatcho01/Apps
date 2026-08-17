@@ -145,7 +145,15 @@ class BigQueryWriter:
             sql = path.read_text(encoding="utf-8")
             sql = sql.replace("${PROJECT}", project).replace("${DATASET}", dataset)
             log.info("applying %s", path.name)
-            self._client.query(sql).result()
+            # Split on ';' so a migration file with several ALTERs reports which
+            # statement failed rather than failing opaquely as one script.
+            for statement in (s.strip() for s in sql.split(";")):
+                if not statement or all(
+                    line.strip().startswith("--") or not line.strip()
+                    for line in statement.splitlines()
+                ):
+                    continue
+                self._client.query(statement).result()
 
 
 def _to_query_param(bigquery, name: str, value: Any):
