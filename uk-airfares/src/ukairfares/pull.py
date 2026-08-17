@@ -229,6 +229,23 @@ def run_pull(
 
     writer = writer or bq.build_writer(config)
 
+    # Synthetic fares must never reach a real table. `airfare_scrapes` is
+    # append-only by design, so a mock run against production leaves rows that
+    # are not supposed to be deletable -- and they would silently corrupt every
+    # index built afterwards. Easy to do by accident while setting up, hence the
+    # explicit gate rather than a comment in the docs.
+    if getattr(provider, "name", "") == "mock" and not config.dry_run:
+        import os
+
+        if os.environ.get("ALLOW_MOCK_WRITES", "").strip().lower() not in {"1", "true", "yes"}:
+            raise ConfigError(
+                "refusing to write mock (synthetic) fares to "
+                f"{config.scrapes_ref}. Set DRY_RUN=1 to test without writing, "
+                "or ALLOW_MOCK_WRITES=1 if you genuinely intend to seed a "
+                "throwaway dataset with fake data."
+            )
+        log.warning("ALLOW_MOCK_WRITES set -- writing SYNTHETIC fares to %s", config.scrapes_ref)
+
     log.info(
         "run %s | scrape_date=%s | index-day hypothesis: %s Tuesday | %d routes | provider=%s",
         run_id,

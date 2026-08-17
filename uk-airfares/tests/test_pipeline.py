@@ -437,3 +437,55 @@ class TestBigQueryLocation:
         assert cfg.scrapes_ref == "proj.ds.airfare_scrapes"
         assert cfg.index_ref == "proj.ds.reconstructed_index"
         assert cfg.table_ref("ons_published_index") == "proj.ds.ons_published_index"
+
+
+class TestMockWriteGuard:
+    """Synthetic fares must never reach an append-only production table."""
+
+    def _provider_and_writer(self):
+        return (
+            MockProvider(haul_of={r.code: r.haul for r in panel.PANEL}),
+            DryRunWriter(),
+        )
+
+    def test_refuses_mock_writes_to_a_real_table(self):
+        from ukairfares.config import ConfigError
+
+        provider, writer = self._provider_and_writer()
+        with pytest.raises(ConfigError, match="refusing to write mock"):
+            run_pull(
+                _dry_config(dry_run=False), scrape_date=dt.date(2026, 9, 8),
+                writer=writer, provider=provider,
+            )
+        assert writer.written == []
+
+    def test_dry_run_is_always_allowed(self):
+        provider, writer = self._provider_and_writer()
+        summary = run_pull(
+            _dry_config(dry_run=True), scrape_date=dt.date(2026, 9, 8),
+            writer=writer, provider=provider,
+        )
+        assert summary["rows"] == 44
+
+    def test_explicit_override_permits_it(self, monkeypatch):
+        monkeypatch.setenv("ALLOW_MOCK_WRITES", "1")
+        provider, writer = self._provider_and_writer()
+        summary = run_pull(
+            _dry_config(dry_run=False), scrape_date=dt.date(2026, 9, 8),
+            writer=writer, provider=provider,
+        )
+        assert summary["rows"] == 44
+
+    def test_real_providers_are_unaffected(self):
+        from ukairfares.providers.serpapi import SerpApiProvider
+        from tests.test_serpapi import FakeResponse, FakeSession, flight_option
+
+        session = FakeSession(FakeResponse({"best_flights": [flight_option(200, 9)]}))
+        provider = SerpApiProvider("k", session=session)
+        writer = DryRunWriter()
+        summary = run_pull(
+            _dry_config(dry_run=False, provider_name="serpapi"),
+            scrape_date=dt.date(2026, 9, 8), writer=writer,
+            provider=provider, routes=panel.routes_by_haul("domestic"),
+        )
+        assert summary["ok"] == 8
