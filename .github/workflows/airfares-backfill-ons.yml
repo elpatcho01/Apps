@@ -79,14 +79,23 @@ jobs:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
           PYTHONPATH: src
+          DISCOVER: ${{ inputs.discover }}
         run: |
           # Without this, the exit status is tee's, not the command's, so a
           # non-zero exit is silently swallowed and the run reports green.
           set -o pipefail
-          python -m ukairfares.backfill \
-            ${{ inputs.release_url && format('--release-url {0}', inputs.release_url) || '' }} \
-            ${{ (inputs.discover == false) && '' || '--discover' }} \
-            | tee backfill-summary.json
+          # In bash, not a ${{ }} ternary. `cond && '' || '--flag'` is broken:
+          # GitHub's expression language treats an empty string as falsy, so the
+          # `||` branch always wins and --discover could never be switched off.
+          # Empty (a scheduled run, where dispatch defaults do not apply) is
+          # treated as on, matching the declared default.
+          ARGS=()
+          if [ -n "${{ inputs.release_url }}" ]; then
+            ARGS+=(--release-url "${{ inputs.release_url }}")
+          fi
+          if [ "$DISCOVER" != "false" ]; then ARGS+=(--discover); fi
+          echo "::notice::backfill ${ARGS[*]}"
+          python -m ukairfares.backfill "${ARGS[@]}" | tee backfill-summary.json
 
       # Allowed to fail. The sub-index backfill above is the valuable work and
       # has already been written by this point; weights only affect the weighted

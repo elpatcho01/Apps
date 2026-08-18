@@ -106,16 +106,26 @@ jobs:
           RATE_BASIS: ${{ vars.RATE_BASIS || 'any' }}
           TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
           PYTHONPATH: src
+          PER_CELL: ${{ inputs.per_cell || '5' }}
+          WRITE_PANEL: ${{ inputs.write_panel }}
+          PROBE_DETAILS: ${{ inputs.probe_details }}
         run: |
           # Without this, the exit status is tee's, not the command's, so a
           # non-zero exit is silently swallowed and the run reports green.
           set -o pipefail
-          python -m ukhotels.discover \
-            --per-cell "${{ inputs.per_cell || '5' }}" \
-            --dump-raw raw-payload.json \
-            ${{ inputs.probe_details && '--probe-details' || '' }} \
-            ${{ inputs.write_panel && '' || '--dry-run-panel' }} \
-            | tee smoke-summary.json
+
+          # Flags are chosen HERE, in bash, and not in a ${{ }} ternary. The
+          # idiom `${{ cond && '' || '--flag' }}` is broken: GitHub's expression
+          # language is JS-like, so an empty string is falsy and the `||` branch
+          # ALWAYS wins. `write_panel: true` therefore still passed
+          # --dry-run-panel, and the run that was meant to commit the pinned
+          # sample printed it and threw it away instead -- reporting success
+          # throughout, because nothing had actually gone wrong.
+          ARGS=(--per-cell "$PER_CELL" --dump-raw raw-payload.json)
+          if [ "$PROBE_DETAILS" = "true" ]; then ARGS+=(--probe-details); fi
+          if [ "$WRITE_PANEL" != "true" ]; then ARGS+=(--dry-run-panel); fi
+          echo "::notice::discover ${ARGS[*]}"
+          python -m ukhotels.discover "${ARGS[@]}" | tee smoke-summary.json
 
       - name: Publish summary
         if: always()

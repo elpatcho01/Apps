@@ -122,14 +122,22 @@ jobs:
           RATE_BASIS: ${{ vars.RATE_BASIS || 'any' }}
           TAX_BASIS: ${{ vars.TAX_BASIS || 'advertised' }}
           PYTHONPATH: src
+          PER_CELL: ${{ inputs.per_cell || '5' }}
+          SUBSTITUTE: ${{ inputs.substitute }}
         run: |
           # Without this, the exit status is tee's, not the command's, so a
           # non-zero exit is silently swallowed and the run reports green.
           set -o pipefail
-          python -m ukhotels.discover \
-            --per-cell "${{ inputs.per_cell || '5' }}" \
-            ${{ (inputs.substitute == false) && '' || '--substitute' }} \
-            | tee panel-summary.json
+
+          # In bash, not a ${{ }} ternary -- see hotels-provider-smoke for why
+          # `cond && '' || '--flag'` always yields the flag. Here that meant
+          # --substitute could not be switched off. Empty (a scheduled run,
+          # where dispatch defaults do not apply) is treated as on, matching the
+          # declared default.
+          ARGS=(--per-cell "$PER_CELL")
+          if [ "$SUBSTITUTE" != "false" ]; then ARGS+=(--substitute); fi
+          echo "::notice::discover ${ARGS[*]}"
+          python -m ukhotels.discover "${ARGS[@]}" | tee panel-summary.json
 
       - name: Publish summary
         if: always()

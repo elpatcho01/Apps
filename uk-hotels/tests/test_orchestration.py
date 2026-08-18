@@ -80,3 +80,42 @@ def test_table_overrides_are_namespaced(name):
     assert name in config
     assert '"BQ_SCRAPES_TABLE"' not in config
     assert '"BQ_INDEX_TABLE"' not in config
+
+
+def _live_expressions(text: str) -> list[str]:
+    """Workflow expression lines, excluding YAML comments."""
+    return [
+        line for line in text.splitlines()
+        if "${{" in line and not line.lstrip().startswith("#")
+    ]
+
+
+def test_no_workflow_uses_the_empty_string_ternary():
+    """`${{ cond && '' || '--flag' }}` does not do what it looks like.
+
+    GitHub's expression language is JavaScript-like, so `''` is falsy: the `&&`
+    yields an empty string, the `||` sees a falsy left side, and the flag is
+    returned *whatever the condition was*. The flag can never be suppressed.
+
+    This is not theoretical. `write_panel: true` on the smoke-test workflow still
+    passed --dry-run-panel, so the run that was supposed to commit the pinned
+    property sample printed it and discarded it -- and reported success
+    throughout, because from the workflow's point of view nothing failed. Three
+    more instances were found alongside it, one of them in uk-airfares.
+
+    Put the condition in bash, where an empty string is just an empty string.
+    """
+    offenders = []
+    for path in WORKFLOWS:
+        for line in _live_expressions(path.read_text(encoding="utf-8")):
+            if re.search(r"&&\s*''\s*\|\|", line):
+                offenders.append(f"{path.name}: {line.strip()}")
+    assert not offenders, "empty-string ternary in:\n  " + "\n  ".join(offenders)
+
+
+def test_conditional_flags_put_a_non_empty_value_in_the_true_branch():
+    """The safe shape is `cond && '--flag' || ''`, never the reverse."""
+    for path in WORKFLOWS:
+        for line in _live_expressions(path.read_text(encoding="utf-8")):
+            for match in re.finditer(r"&&\s*('(?:[^']*)')\s*\|\|", line):
+                assert match.group(1) != "''", f"{path.name}: {line.strip()}"
