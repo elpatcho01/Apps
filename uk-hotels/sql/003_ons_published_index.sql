@@ -1,6 +1,6 @@
 -- ONS's own published accommodation values: the answer key.
 --
--- Kept in its own table rather than stuffed into reconstructed_index, because
+-- Kept in its own table rather than stuffed into accommodation_reconstructed_index, because
 -- it covers months we never reconstructed and has no attribution rule, sample
 -- rule or aggregation method -- those are properties of *our* method, not of
 -- ONS's published output.
@@ -36,7 +36,7 @@
 -- thing. `methodology_era` records which regime a value belongs to, and
 -- validation refuses to span the breaks.
 
-CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.ons_published_index` (
+CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.accommodation_published_index` (
   index_month     DATE      NOT NULL OPTIONS(description="Partition key. First of the month."),
   location        STRING    NOT NULL OPTIONS(description='ONS region code, or "uk" for a national series.'),
   series_id       STRING             OPTIONS(description='Series identifier where one exists, e.g. "l7ie" for CPI INDEX 11.2.0.1.'),

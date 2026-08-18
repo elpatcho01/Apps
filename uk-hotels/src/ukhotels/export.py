@@ -27,7 +27,7 @@ Aggregates only, never raw observation rows. Two reasons:
      panel. `schema_version` and `generated_ts` are here so a stale copy is
      recognisable as one.
 
-Panel sections read `current_scrapes`, not `accommodation_scrapes`, so
+Panel sections read `accommodation_current_scrapes`, not `accommodation_scrapes`, so
 superseded runs are excluded exactly as they are in reconciliation. A number
 here and the same number in the digest come from the same rows by construction.
 
@@ -165,9 +165,9 @@ def build_export(
 ) -> dict[str, Any]:
     """Assemble the export. Never raises for a query failure."""
     generated = generated or dt.datetime.now(dt.timezone.utc)
-    view = config.table_ref("current_scrapes")
-    churn_view = config.table_ref("property_churn")
-    published = config.table_ref("ons_published_index")
+    view = config.table_ref("accommodation_current_scrapes")
+    churn_view = config.table_ref("accommodation_property_churn")
+    published = config.table_ref("accommodation_published_index")
 
     out: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -197,7 +197,7 @@ def build_export(
         "published_series": lambda: _rows(reader, PUBLISHED_SERIES.format(published=published)),
         "daily_by_region": lambda: _rows(reader, DAILY_BY_REGION.format(view=view)),
         "latest_properties": lambda: _rows(reader, LATEST_PROPERTIES.format(view=view)),
-        "property_churn": lambda: _rows(reader, CHURN.format(churn_view=churn_view)),
+        "accommodation_property_churn": lambda: _rows(reader, CHURN.format(churn_view=churn_view)),
         "reconstructions": lambda: _rows(
             reader, RECONSTRUCTIONS.format(index_table=config.index_ref)
         ),

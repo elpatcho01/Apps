@@ -634,8 +634,8 @@ def run_backfill(
     writer = writer or bq.build_writer(config)
     rows = to_rows(observations, run_id=run_id, fetched_ts=fetched_ts)
     written = writer.append(
-        config.table_ref("ons_published_index") if not config.dry_run
-        else "ons_published_index",
+        config.table_ref("accommodation_published_index") if not config.dry_run
+        else "accommodation_published_index",
         rows,
     )
 

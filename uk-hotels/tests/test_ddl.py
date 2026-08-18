@@ -180,3 +180,61 @@ def test_property_panel_is_written_diff_stably(tmp_path):
     first = path.read_text(encoding="utf-8")
     panel.write_property_panel(list(reversed(props)), path)
     assert path.read_text(encoding="utf-8") == first
+
+
+# --- cross-project namespace ------------------------------------------------
+
+
+def _objects(sql_dir: pathlib.Path) -> set[str]:
+    """Every BigQuery object a project's DDL creates."""
+    pattern = re.compile(r"\$\{PROJECT\}\.\$\{DATASET\}\.([a-z_]+)")
+    return {
+        name
+        for path in sql_dir.glob("*.sql")
+        for name in pattern.findall(path.read_text(encoding="utf-8"))
+    }
+
+
+def test_no_object_name_collides_with_the_air_fares_project():
+    """Both projects live in one repo and may share a BigQuery dataset.
+
+    This is not hypothetical. On 2026-08-18 the accommodation reconciliation
+    failed with `400 Unrecognized name: location` because `reconstructed_index`
+    already existed in the dataset with the AIR FARES schema, so
+    `CREATE TABLE IF NOT EXISTS` did nothing and every hotels query hit the
+    wrong table. Three names collided: reconstructed_index, ons_published_index
+    and current_scrapes.
+
+    The third was the dangerous one. `current_scrapes` is created with
+    CREATE OR REPLACE VIEW, which is emphatically *not* a no-op -- running the
+    accommodation DDL against a shared dataset would have silently repointed the
+    air fares view at `accommodation_scrapes` and broken a live pipeline that was
+    collecting daily. It had not happened yet only because the workflow that
+    applies the DDL had not run since the merge.
+
+    Every accommodation object is therefore prefixed. Sharing a dataset is now
+    safe rather than merely discouraged.
+    """
+    here = pathlib.Path(__file__).resolve().parents[1] / "sql"
+    airfares = here.parents[1] / "uk-airfares" / "sql"
+    if not airfares.is_dir():  # pragma: no cover - sibling project absent
+        pytest.skip("uk-airfares not present in this checkout")
+
+    ours, theirs = _objects(here), _objects(airfares)
+    assert ours, "no objects found in uk-hotels/sql"
+    assert theirs, "no objects found in uk-airfares/sql"
+    assert not (ours & theirs), (
+        f"BigQuery object name(s) shared with uk-airfares: {sorted(ours & theirs)}. "
+        "The two projects may share a dataset; a shared name means one project's "
+        "CREATE IF NOT EXISTS silently binds to the other's table, and a shared "
+        "VIEW name means CREATE OR REPLACE overwrites it outright."
+    )
+
+
+def test_every_accommodation_object_is_namespaced():
+    here = pathlib.Path(__file__).resolve().parents[1] / "sql"
+    for name in _objects(here):
+        assert name.startswith("accommodation_"), (
+            f"{name} is not namespaced; it could collide with a sibling project "
+            "sharing the dataset"
+        )

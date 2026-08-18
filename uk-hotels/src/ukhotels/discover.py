@@ -16,7 +16,7 @@ toward well-reviewed properties. An arbitrary reproducible draw is what is
 wanted, and it is the closest thing available to ONS's random selection.
 
 `--substitute` replaces pinned properties that have stopped appearing. It reads
-the `property_churn` view for properties whose `churn_status` is `left`, draws a
+the `accommodation_property_churn` view for properties whose `churn_status` is `left`, draws a
 replacement from the same cell, and records the substitution in
 `selection_basis` as `substitute_for:<old token>`. Substitutions are never
 silent: a sample that quietly reconstitutes itself is a sample whose history
@@ -298,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "Replace pinned properties that have stopped appearing, read from the "
-            "property_churn view. Requires BigQuery access."
+            "accommodation_property_churn view. Requires BigQuery access."
         ),
     )
     parser.add_argument(
@@ -351,7 +351,7 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             reader = bq.BigQueryWriter(config.project)
-            substitutions = churned_tokens(reader, config.table_ref("property_churn"))
+            substitutions = churned_tokens(reader, config.table_ref("accommodation_property_churn"))
         except Exception as exc:  # noqa: BLE001
             # Substitution is an improvement, not a prerequisite. Failing the
             # whole run because the churn view is unreadable would also skip the

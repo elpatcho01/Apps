@@ -176,7 +176,7 @@ class Config:
             scrapes_table=os.environ.get(
                 "BQ_SCRAPES_TABLE", "accommodation_scrapes"
             ).strip(),
-            index_table=os.environ.get("BQ_INDEX_TABLE", "reconstructed_index").strip(),
+            index_table=os.environ.get("BQ_INDEX_TABLE", "accommodation_reconstructed_index").strip(),
             location=os.environ.get("BQ_LOCATION", "europe-west2").strip(),
         )
 

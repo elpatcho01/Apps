@@ -180,8 +180,8 @@ def build_digest(
 ) -> str:
     """Render the monthly digest as Markdown."""
     generated = generated or dt.datetime.now(dt.timezone.utc)
-    view = config.table_ref("current_scrapes")
-    churn_view = config.table_ref("property_churn")
+    view = config.table_ref("accommodation_current_scrapes")
+    churn_view = config.table_ref("accommodation_property_churn")
     params = {"start": period_start, "end": period_end}
     lines: list[str] = []
     concerns: list[str] = []
@@ -368,7 +368,7 @@ def build_digest(
     pub, err = _safe(
         lambda: reader.query(
             PUBLISHED_COVERAGE.format(
-                published_table=config.table_ref("ons_published_index")
+                published_table=config.table_ref("accommodation_published_index")
             )
         ),
         "published series", concerns,

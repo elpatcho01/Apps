@@ -22,7 +22,7 @@
 -- across all runs and got a misleading answer. That is a query problem, so this
 -- is a query fix.
 --
--- Use `current_scrapes` for analysis and `accommodation_scrapes` for audit.
+-- Use `accommodation_current_scrapes` for analysis and `accommodation_scrapes` for audit.
 -- The definition deliberately matches `reconcile.PANEL_QUERY`: latest *run* per
 -- date, not latest row per observation, so a run is always read as the coherent
 -- snapshot it was collected as. A run that priced eleven of twelve regions
@@ -30,7 +30,7 @@
 -- behaviour -- it is the more recent belief -- and the missing region shows up
 -- as reduced coverage rather than as a silent blend of two vintages.
 
-CREATE OR REPLACE VIEW `${PROJECT}.${DATASET}.current_scrapes` AS
+CREATE OR REPLACE VIEW `${PROJECT}.${DATASET}.accommodation_current_scrapes` AS
 WITH latest_run AS (
   SELECT scrape_date, run_id
   FROM (

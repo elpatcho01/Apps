@@ -96,10 +96,20 @@ jobs:
           OVERRIDE: ${{ inputs.scrape_date }}
         run: |
           set -euo pipefail
+          # stdout is redirected into $GITHUB_OUTPUT, which accepts key=value
+          # lines and NOTHING else -- an annotation there is rejected with
+          # "Unable to process file command 'output' successfully" and fails the
+          # step. That is what took every scheduled collection run red on
+          # 2026-08-18. Annotations therefore go to stderr, the same fix applied
+          # to the Python modules for the same underlying reason: a stream that
+          # is being parsed must carry only what the parser expects.
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import datetime as dt, os, sys
           sys.path.insert(0, "src")
           from ukhotels.onscal import index_months_in_scope, is_collection_day
+
+          def notice(msg):
+              print(f"::notice::{msg}", file=sys.stderr)
 
           override = (os.environ.get("OVERRIDE") or "").strip()
           day = dt.date.fromisoformat(override) if override else dt.date.today()
@@ -109,11 +119,11 @@ jobs:
           print(f"should_run={'true' if (due or forced) else 'false'}")
           print(f"due={due}")
           if due:
-              print(f"::notice::{day} is a collection day for index month(s): {months}")
+              notice(f"{day} is a collection day for index month(s): {months}")
           elif forced:
-              print(f"::notice::nothing due on {day}; running anyway (force)")
+              notice(f"nothing due on {day}; running anyway (force)")
           else:
-              print(f"::notice::nothing due on {day}; skipping")
+              notice(f"nothing due on {day}; skipping")
           PY
 
   collect:

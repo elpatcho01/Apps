@@ -30,7 +30,7 @@ def make_config(**overrides):
         failure_threshold=0.34,
         dry_run=True,
         scrapes_table="accommodation_scrapes",
-        index_table="reconstructed_index",
+        index_table="accommodation_reconstructed_index",
     )
     base.update(overrides)
     return Config(**base)

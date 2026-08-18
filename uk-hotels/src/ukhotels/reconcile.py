@@ -605,7 +605,7 @@ def run_reconcile(
         pinned_expected=pinned_expected,
     )
     written = writer.append(
-        config.index_ref if not config.dry_run else "reconstructed_index", out
+        config.index_ref if not config.dry_run else "accommodation_reconstructed_index", out
     )
 
     summary = {

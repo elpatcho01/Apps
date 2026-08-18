@@ -93,6 +93,19 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
+      # Reconciliation queries tables it does not create, so it needs this too.
+      # Its absence is why the 2026-08-18 run reported a raw BigQuery
+      # `Unrecognized name` instead of the clean "nothing to reconstruct yet"
+      # notice it should have: with no accommodation tables of its own, the
+      # queries bound to whatever else was in the dataset. Idempotent, so
+      # running it here costs nothing.
+      - name: Ensure BigQuery tables exist
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: python -m ukhotels.ensure_tables
+
       # Allowed to fail, and expected to. No regional weights for this item were
       # found in any public ONS source, so this step's usual outcome is a
       # warning and the committed placeholders staying in place. Per-region

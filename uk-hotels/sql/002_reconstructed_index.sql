@@ -21,7 +21,7 @@
 -- is more rows than a single-variant table, but a reconstruction that cannot
 -- say which reading produced it is not evidence of anything.
 
-CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.reconstructed_index` (
+CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.accommodation_reconstructed_index` (
   index_month          DATE    NOT NULL OPTIONS(description="Partition key. First of the CPI month this reconstruction is for."),
   location             STRING  NOT NULL OPTIONS(description='ONS region code, or "all" for the weight-weighted aggregate.'),
   property_tier        STRING           OPTIONS(description='"midscale", "upscale", or "all" when tiers are pooled.'),

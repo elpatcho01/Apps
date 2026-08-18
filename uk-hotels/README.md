@@ -250,7 +250,7 @@ ONS re-price a fixed sample and substitute when one drops out. `discover.py`
 mirrors that: it draws a sample per (region, star tier) **price-blind** (by token
 order — drawing by price would make every later month a comparison against a base
 chosen for being cheap), pins it in `data/property_panel.csv`, and substitutes
-only when the `property_churn` view reports a property has left. Substitutions are
+only when the `accommodation_property_churn` view reports a property has left. Substitutions are
 recorded as `substitute_for:<old token>`, never made silently.
 
 Collection records **every** comparable property, not just the pinned ones, and
@@ -291,7 +291,7 @@ anything.
 
 ## The answer key
 
-Three sources, kept strictly separate in `ons_published_index` via
+Three sources, kept strictly separate in `accommodation_published_index` via
 `series_source`. They are on different bases and different geographies and
 **must never be compared with one another** — doing so is the most obvious way to
 produce a confidently wrong number here.
@@ -368,9 +368,17 @@ PYTHONPATH=src python -m ukhotels.ensure_tables
 
 Creates the dataset if absent, then `accommodation_scrapes` (partitioned by
 `scrape_date`, clustered by `location, stay_night_kind, property_tier`),
-`reconstructed_index`, `ons_published_index`, and the `current_scrapes` and
-`property_churn` views. All **append-only** — see [Invariants](#invariants).
+`accommodation_reconstructed_index`, `accommodation_published_index`, and the `accommodation_current_scrapes` and
+`accommodation_property_churn` views. All **append-only** — see [Invariants](#invariants).
 Idempotent, so the workflows run it before every job.
+
+**Every object is prefixed `accommodation_`, and that prefix is load-bearing.**
+This repo also holds `uk-airfares/`, and if both projects point at the same
+BigQuery dataset an unprefixed name is not merely untidy — it is destructive.
+`CREATE TABLE IF NOT EXISTS` silently binds to the *other* project's table, and
+`CREATE OR REPLACE VIEW` overwrites the other project's view outright. Both
+happened: see the note in `tests/test_ddl.py`. Sharing one dataset between the
+two projects is now safe, and a test enforces that the names stay disjoint.
 
 You need a GCP project with **billing enabled** (BigQuery requires a billing
 account even for the free tier) and the BigQuery API on. Usage here is a few tens
@@ -663,7 +671,7 @@ is still a useful nowcast. It is not a validated one.
 
 ## Invariants
 
-- **Query `current_scrapes`, audit `accommodation_scrapes`.** A date can carry
+- **Query `accommodation_current_scrapes`, audit `accommodation_scrapes`.** A date can carry
   several runs (a retry, a re-run, a double-click). The view exposes the latest
   run per date — one coherent vintage — and matches what reconciliation uses.
 - **`accommodation_scrapes` is never UPDATEd and never DELETEd from.** Every pull
@@ -671,7 +679,7 @@ is still a useful nowcast. It is not a validated one.
   contaminated run stays in the table as the evidence for whatever fix it
   prompted; queries exclude it via the view. There are tests asserting no
   mutating statement exists in any SQL file.
-- **`reconstructed_index` is likewise append-only.** A month legitimately gains
+- **`accommodation_reconstructed_index` is likewise append-only.** A month legitimately gains
   rows over time. `computed_ts` orders vintages; `is_current` marks the latest.
 - **SQL files are submitted whole, never split on `;`.** The column descriptions
   contain semicolons, so a naive split severs string literals and every statement

@@ -399,7 +399,7 @@ def run_validate(
     rows = reader.query(
         SCORE_QUERY.format(
             table=config.index_ref,
-            published_table=config.table_ref("ons_published_index"),
+            published_table=config.table_ref("accommodation_published_index"),
         ),
         {"series_source": series_source},
     )

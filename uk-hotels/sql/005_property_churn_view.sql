@@ -14,7 +14,7 @@
 -- collector is broken, and those are opposite situations that look identical
 -- from a single month's data.
 
-CREATE OR REPLACE VIEW `${PROJECT}.${DATASET}.property_churn` AS
+CREATE OR REPLACE VIEW `${PROJECT}.${DATASET}.accommodation_property_churn` AS
 WITH observed AS (
   SELECT
     location,
@@ -26,13 +26,13 @@ WITH observed AS (
     MAX(index_month_stay)     AS last_month,
     COUNT(DISTINCT index_month_stay) AS months_seen,
     COUNT(*)                  AS observations
-  FROM `${PROJECT}.${DATASET}.current_scrapes`
+  FROM `${PROJECT}.${DATASET}.accommodation_current_scrapes`
   WHERE status = 'ok' AND property_token IS NOT NULL
   GROUP BY location, property_tier, property_token
 ),
 panel_span AS (
   SELECT MAX(index_month_stay) AS latest_month
-  FROM `${PROJECT}.${DATASET}.current_scrapes`
+  FROM `${PROJECT}.${DATASET}.accommodation_current_scrapes`
   WHERE status = 'ok'
 )
 SELECT

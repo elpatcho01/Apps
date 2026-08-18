@@ -37,7 +37,7 @@ one rebrand as a property leaving and a different one arriving.
 
 METHODOLOGY BREAKS
 ------------------
-This item was rebuilt twice in nineteen months (see `ons_published_index`). A
+This item was rebuilt twice in nineteen months (see `accommodation_published_index`). A
 relative spanning a break is not a price movement, it is a change of
 measurement, and `consecutive_pairs` refuses to compute one. That is the same
 discipline the air-fares project applies to its nine missing lockdown months,

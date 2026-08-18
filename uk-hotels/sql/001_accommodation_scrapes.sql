@@ -5,7 +5,7 @@
 -- the whole point is to be able to reconstruct what we believed on any past
 -- date, which is impossible if history is mutable. A contaminated run stays in
 -- the table as the evidence for whatever fix it prompted; queries exclude it
--- via the `current_scrapes` view, they do not delete it.
+-- via the `accommodation_current_scrapes` view, they do not delete it.
 --
 -- GRAIN: one row per
 --   (collection date x location x stay night x property).
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.accommodation_scrapes` (
   status           STRING             OPTIONS(description='"ok" | "no_data" | "error".'),
   error_message    STRING             OPTIONS(description="Populated when status = 'error'. The row is still written, because an absent row and a failed row are different facts."),
   pipeline_version STRING             OPTIONS(description="Version of the collection logic, so methodology changes are traceable across vintages."),
-  run_id           STRING             OPTIONS(description="Groups all rows written by a single pipeline run. The unit `current_scrapes` selects on.")
+  run_id           STRING             OPTIONS(description="Groups all rows written by a single pipeline run. The unit `accommodation_current_scrapes` selects on.")
 )
 PARTITION BY scrape_date
 CLUSTER BY location, stay_night_kind, property_tier
