@@ -83,7 +83,14 @@ def test_table_overrides_are_namespaced(name):
 
 
 def _live_expressions(text: str) -> list[str]:
-    """Workflow expression lines, excluding YAML comments."""
+    """Expression lines, excluding lines that *look* like comments.
+
+    Only safe for prose checks like the two below. A leading `#` is a YAML
+    comment at the top level but plain script text inside a `run:` block, where
+    GitHub still expands every expression on the line -- see
+    test_every_expression_resolves_to_a_real_context, which reads every line
+    precisely because this helper cannot tell the two apart.
+    """
     return [
         line for line in text.splitlines()
         if "${{" in line and not line.lstrip().startswith("#")

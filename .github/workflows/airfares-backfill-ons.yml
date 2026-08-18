@@ -84,7 +84,8 @@ jobs:
           # Without this, the exit status is tee's, not the command's, so a
           # non-zero exit is silently swallowed and the run reports green.
           set -o pipefail
-          # In bash, not a ${{ }} ternary. `cond && '' || '--flag'` is broken:
+          # In bash, not a GitHub expression ternary. The idiom
+          # "cond && '' || '--flag'" is broken:
           # GitHub's expression language treats an empty string as falsy, so the
           # `||` branch always wins and --discover could never be switched off.
           # Empty (a scheduled run, where dispatch defaults do not apply) is

@@ -114,10 +114,10 @@ jobs:
           # non-zero exit is silently swallowed and the run reports green.
           set -o pipefail
 
-          # Flags are chosen HERE, in bash, and not in a ${{ }} ternary. The
-          # idiom `${{ cond && '' || '--flag' }}` is broken: GitHub's expression
-          # language is JS-like, so an empty string is falsy and the `||` branch
-          # ALWAYS wins. `write_panel: true` therefore still passed
+          # Flags are chosen HERE, in bash, not in a GitHub expression
+          # ternary. The idiom "cond && '' || '--flag'" is broken: GitHub's
+          # expression language is JS-like, so an empty string is falsy and the
+          # `||` branch ALWAYS wins. `write_panel: true` therefore still passed
           # --dry-run-panel, and the run that was meant to commit the pinned
           # sample printed it and threw it away instead -- reporting success
           # throughout, because nothing had actually gone wrong.

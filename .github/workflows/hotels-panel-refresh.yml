@@ -129,8 +129,9 @@ jobs:
           # non-zero exit is silently swallowed and the run reports green.
           set -o pipefail
 
-          # In bash, not a ${{ }} ternary -- see hotels-provider-smoke for why
-          # `cond && '' || '--flag'` always yields the flag. Here that meant
+          # In bash, not a GitHub expression ternary -- see
+          # hotels-provider-smoke for why "cond && '' || '--flag'" always
+          # yields the flag regardless of cond. Here that meant
           # --substitute could not be switched off. Empty (a scheduled run,
           # where dispatch defaults do not apply) is treated as on, matching the
           # declared default.
