@@ -1,18 +1,112 @@
-# The pinned property sample. EMPTY until discovery has been run.
-#
-# Populate with:  python -m ukhotels.discover
-# (writing is the default; pass --dry-run-panel to preview without writing.
-#  Or let the monthly hotels-panel-refresh workflow do it and commit the result.)
-#
-# Keyed on property_token, never on property_name: a rebrand changes the name
-# and keeps the token, and matching on names would read one rebrand as a
-# property leaving and a different one arriving.
-#
-# While this file is empty the collector still runs, in census-only mode: every
-# comparable property is recorded and reconciliation computes matched-sample
-# relatives over whatever is present in both months. That is a usable index.
-# The pinned sample adds the ONS-style fixed-sample variant alongside it.
-#
-# selection_basis is "discovered" for the initial draw, or
-# "substitute_for:<token>" when a property replaced one that left the sample.
+# Pinned property sample, discovered from the provider and stable thereafter.
+# Keyed on property_token, never on name -- a rebrand changes the name and not the token.
+# Regenerate with: python -m ukhotels.discover (writing is the default; --dry-run-panel to preview)
 location,tier,property_token,property_name,first_seen,selection_basis
+east_midlands,midscale,ChgI382H15uJhLD2ARoLL2cvMXRjeHRzMHoQAQ,Bestwood Lodge,2026-08-18,discovered
+east_midlands,midscale,ChkI5sfGl9Sz0pe_ARoML2cvMWhjNjF3MXM3EAE,Mama's Inn Boutique Guest House,2026-08-18,discovered
+east_midlands,midscale,ChgIoNnQsKDt2Zz9ARoLL2cvMXRmbTBfMl8QAQ,Premier Inn Nottingham City Centre (Goldsmith Street) hotel,2026-08-18,discovered
+east_midlands,midscale,ChcIjZ2ar82c_L0yGgsvZy8xdmQ3NWZydxAB,Travelodge Nottingham Central,2026-08-18,discovered
+east_midlands,upscale,ChYIgqKh95-_mLlMGgovbS8waGdwZ2RiEAE,Colwick Hall Hotel,2026-08-18,discovered
+east_midlands,upscale,ChgIgr3Ez6Whr7a-ARoLL2cvMXRoeHE0eXgQAQ,Hart's Hotel and Kitchen,2026-08-18,discovered
+east_midlands,upscale,ChgIr9ve5eHQ4-ThARoLL2cvMXY2d252d3QQAQ,Lace Market Hotel Nottingham,2026-08-18,discovered
+east_midlands,upscale,ChcI_JyxmJiNvLRiGgsvZy8xdGZwdHN5NxAB,Roomzzz Aparthotel Nottingham City,2026-08-18,discovered
+east_midlands,upscale,ChgIopSr0ea-loQXGgwvZy8xcTVibTVsY3QQAQ,St James Hotel,2026-08-18,discovered
+east_of_england,midscale,ChcInsfkh7Cgn4cEGgsvZy8xdjNncjR0cBAB,Fairways Guest House Cambridge UK,2026-08-18,discovered
+east_of_england,midscale,ChcIx7LF6IPEo9wvGgsvZy8xdGZxa241ehAB,Rectory Farm,2026-08-18,discovered
+east_of_england,midscale,ChgIlYP9_L31laqiARoLL2cvMXRnNjdjMWoQAQ,Regency House,2026-08-18,discovered
+east_of_england,midscale,ChgIr5361de99aCHARoLL2cvMXRobm4wbnIQAQ,The Waterman (Hotel),2026-08-18,discovered
+east_of_england,midscale,ChgI-ImSieix6rlVGgwvZy8xamt2ZzIxNncQAQ,Travelodge Cambridge Newmarket Road,2026-08-18,discovered
+east_of_england,upscale,ChoI9Jn879m787yUARoNL2cvMTFxMnkxemh4ehAB,Hyatt Centric Cambridge,2026-08-18,discovered
+east_of_england,upscale,ChkItpj5v42WurknGg0vZy8xMWZ0NXdja2s4EAE,"The Fellows House Cambridge, Curio Collection by Hilton",2026-08-18,discovered
+east_of_england,upscale,ChkI89yLrKPyuaktGg0vZy8xMXgweWwydHc1EAE,Wilde Aparthotels Cambridge City Centre,2026-08-18,discovered
+east_of_england,upscale,ChgI2Kyi8-DPx8HyARoLL2cvMXRqczQ1cnAQAQ,YHA Cambridge Hostel,2026-08-18,discovered
+london,midscale,ChgIiM-6n_z91-pZGgwvZy8xeWdiYmJnZDEQAQ,Best Western Greater London Hotel,2026-08-18,discovered
+london,midscale,ChgIgcyH_fiZmNvpARoLL2cvMXRsN241dnoQAQ,Notting Hill Gate Hotel,2026-08-18,discovered
+london,midscale,ChgIidrq5Ojw3Yu8ARoLL2cvMXRmNjlqaGcQAQ,"Shakespeare Hotel London, Paddington",2026-08-18,discovered
+london,midscale,ChcIqsyXsbLfss8SGgsvZy8xdGR5ZjMwbhAB,Smart Hyde Park View,2026-08-18,discovered
+london,midscale,ChgIsOCpkKiY3eraARoLL2cvMXRkZHg3OW4QAQ,"The Rose & Crown, London Bridge (PUBLOVE)",2026-08-18,discovered
+london,upscale,ChkIn_LY7rXzg6WiARoML2cvMXB0eWQ0MDVtEAE,Millennium Hotel London Knightsbridge,2026-08-18,discovered
+london,upscale,ChkIwsae5-_N1oMzGg0vZy8xMWI4MDdoaHE0EAE,Safestay London Kensington Holland Park,2026-08-18,discovered
+london,upscale,ChgI156a1_astokwGgwvZy8xMWgwODRmOXEQAQ,The Belgrave,2026-08-18,discovered
+north_east,midscale,ChcIzqeW8pe38J5GGgsvZy8xdGRuODc0chAB,Clifton House Hotel,2026-08-18,discovered
+north_east,midscale,ChcIqbfyl4e11OJlGgsvZy8xdl93MXk5NhAB,Grainger Hotel,2026-08-18,discovered
+north_east,midscale,ChcIkZeHyIvPspsXGgsvZy8xdGc3OGttZhAB,Kabannas Newcastle,2026-08-18,discovered
+north_east,midscale,ChgI3s6Swq3Z09y1ARoLL2cvMXYycHBzZzcQAQ,Rooms Inn,2026-08-18,discovered
+north_east,midscale,ChgI7qvf_JvUwbrMARoLL2cvMXRkbmtwZ3AQAQ,Travelodge Newcastle Central,2026-08-18,discovered
+north_east,upscale,ChkIupGUnd7hlPQSGg0vZy8xMWhfc3o3M3hyEAE,Great North Hotel,2026-08-18,discovered
+north_east,upscale,ChgIqfKb86GqgrZMGgwvZy8xMXhjeHkybmcQAQ,Roomzzz Aparthotel Newcastle City,2026-08-18,discovered
+north_east,upscale,ChgIhsCKg8_iqqjjARoLL2cvMXRmc2JkZzUQAQ,"The County Hotel, Newcastle",2026-08-18,discovered
+north_west,midscale,ChoI-qP67I3SyYbgARoNL2cvMTFiNXZyOF9yMRAB,Britannia Sachas Hotel Manchester,2026-08-18,discovered
+north_west,midscale,ChcI87PUuv612bQqGgsvZy8xdHp2dzJfNxAB,Holiday Inn Express Manchester City Centre - Arena by IHG,2026-08-18,discovered
+north_west,midscale,ChcI7pujnd-a1M9lGgsvZy8xdGs2dmdkMhAB,Manchester Portland by Sunday,2026-08-18,discovered
+north_west,midscale,ChkInvrQqr7Vgar8ARoML2cvMTJsdHcyOTEwEAE,Premier Inn Manchester City Centre (Arena/Printworks) hotel,2026-08-18,discovered
+north_west,midscale,ChgIw422g-X3msWtARoLL2cvMXYycHBuamMQAQ,The Gardens Hotel,2026-08-18,discovered
+north_west,upscale,ChkIy9qs_bW10fJnGg0vZy8xMXB0dl9ieHQ2EAE,Leonardo Hotel Manchester Piccadilly,2026-08-18,discovered
+north_west,upscale,ChoI8Km8xaiPjO71ARoNL2cvMTFiNjIwejJxYhAB,The Ainscow Hotel,2026-08-18,discovered
+north_west,upscale,ChoIvqzb5-TMgra9ARoNL2cvMTFwdzFoejNtcRAB,"Wilde Aparthotels, Manchester, City Centre",2026-08-18,discovered
+north_west,upscale,ChgIhKKb-9Cm6LaJARoLL2cvMXRjenZoNGMQAQ,YHA Manchester Hostel,2026-08-18,discovered
+north_west,upscale,ChgIrrzWisCGyIjqARoLL2cvMXY5Z3RfeWQQAQ,a&o Manchester City Centre,2026-08-18,discovered
+northern_ireland,midscale,ChgIs4qvyouOyffSARoLL2cvMXRfaHlkZDYQAQ,Holiday Inn Express Belfast City by IHG,2026-08-18,discovered
+northern_ireland,midscale,ChgI8a7U4p3WocDRARoLL2cvMXRmdGttY24QAQ,Premier Inn Belfast City Centre (Alfred Street) hotel,2026-08-18,discovered
+northern_ireland,midscale,ChcI_u-k8O-OodknGgsvZy8xdGhkNjJkaxAB,Ramada by Wyndham Belfast City Centre,2026-08-18,discovered
+northern_ireland,midscale,ChoI0ISMyKDn6-j_ARoNL2cvMTFoOG1ybndndBAB,The 1852 Hotel,2026-08-18,discovered
+northern_ireland,midscale,ChcI9PbNwpSbwvQcGgsvZy8xdGZ5Y18zahAB,Travelodge Belfast Central,2026-08-18,discovered
+northern_ireland,upscale,ChcIksqNuNvF5_0KGgsvZy8xdHFmX3JoaBAB,Benedicts Hotel Belfast,2026-08-18,discovered
+northern_ireland,upscale,ChkImPTS76WZnbAHGg0vZy8xMWNuN3g5cTZmEAE,Bullitt Hotel,2026-08-18,discovered
+northern_ireland,upscale,ChcIwaqorNm-ifltGgsvZy8xdHJ0dHF5eRAB,Leonardo Hotel Belfast,2026-08-18,discovered
+northern_ireland,upscale,ChcIhsPE4vXKs6d2GgsvZy8xdHZndHJucxAB,The Malone Hotel,2026-08-18,discovered
+northern_ireland,upscale,ChoI8Jqs9pe2m8OiARoNL2cvMTFnNnA1NV81ZBAB,Titanic Hotel Belfast,2026-08-18,discovered
+scotland,midscale,ChkI64-0rsypt8THARoML2cvMWhobGcxbjhoEAE,Brooks Hotel Edinburgh,2026-08-18,discovered
+scotland,midscale,ChgI8I_H-t2orvLiARoLL2cvMXRjejd0NjQQAQ,Edinburgh Thistle Hotel,2026-08-18,discovered
+scotland,midscale,ChkIwJWAhdy2pIioARoML2cvMWhjMXE2cG5rEAE,Leonardo Hotel Edinburgh City,2026-08-18,discovered
+scotland,midscale,ChkIraKWmcqL6tC9ARoML2cvMWhjMWJiZmpuEAE,Premier Inn Edinburgh City Centre (Princes Street) hotel,2026-08-18,discovered
+scotland,midscale,ChkI3OyOzo7n5ZTmARoML2cvMXB5Y2o3OTgzEAE,ibis Edinburgh Centre Royal Mile,2026-08-18,discovered
+scotland,upscale,ChgIpPDfqc7Mq9LqARoLL2cvMXRoNjJ6M3oQAQ,Kick Ass Greyfriars,2026-08-18,discovered
+scotland,upscale,ChcIu-7i9YuYsIUBGgsvZy8xdjZwM3c3YhAB,Kildonan Lodge Hotel,2026-08-18,discovered
+scotland,upscale,ChcIo8Sl1t7B6J1rGgsvZy8xdGp0aHZ4MhAB,Leonardo Hotel Edinburgh Murrayfield,2026-08-18,discovered
+scotland,upscale,ChcI1sPr-t7vzv0BGgsvZy8xdHAyeno0eRAB,Novotel Edinburgh Centre,2026-08-18,discovered
+scotland,upscale,ChgI4aHsqrrh5P-PARoLL2cvMXRka2x0M2cQAQ,Ten Hill Place Hotel,2026-08-18,discovered
+south_east,midscale,ChcI9t27zaDh2pZMGgsvZy8xdHl5d2w0MhAB,Ambassador Hotel,2026-08-18,discovered
+south_east,midscale,ChgI2bKi55CP39SqARoLL2cvMXRjdnQ5c3oQAQ,Amherst Brighton,2026-08-18,discovered
+south_east,midscale,ChoIxoDkpvPRucGdARoNL2cvMTFja3hfcjYwZBAB,HAPPY Brighton,2026-08-18,discovered
+south_east,midscale,ChoI-avs9MjilKuIARoNL2cvMTFmcGRwbHlwNRAB,West Beach Hotel Brighton,2026-08-18,discovered
+south_east,upscale,ChkIwdizqtDDsL_eARoML2cvMWhjMWRnc3MyEAE,Drakes Hotel | A Curious Group of Hotels,2026-08-18,discovered
+south_east,upscale,ChcIkNOW4fLgxukrGgsvZy8xdGZwdHIxZBAB,Hotel Pelirocco,2026-08-18,discovered
+south_east,upscale,ChkIqbfvn6zFuLU9Gg0vZy8xMWowMDRicGIyEAE,Hudsons Guest House,2026-08-18,discovered
+south_east,upscale,ChgIyorlxZGy-s-lARoLL2cvMXRnZDVfMW4QAQ,Sea Spray Brighton Luxury Hotel,2026-08-18,discovered
+south_east,upscale,ChcItt3DmdTYkasSGgsvZy8xdGhxOTl3ehAB,White House Brighton,2026-08-18,discovered
+south_west,midscale,ChoI5aTT2dS5rYecARoNL2cvMTFidHY2NTdjZhAB,Hampton by Hilton Bristol City Centre,2026-08-18,discovered
+south_west,midscale,ChkIyKbP1YLO1eVaGg0vZy8xMXJfeGptaGZ3EAE,Harbourside Hostel Bristol,2026-08-18,discovered
+south_west,midscale,ChcIrYmJvoiOpvo1GgsvZy8xdG02OGNuORAB,The Washington Guesthouse Bristol,2026-08-18,discovered
+south_west,midscale,ChcIsPGj0NiB7Np8GgsvZy8xdGRkNHFmehAB,Travelodge Bristol Central,2026-08-18,discovered
+south_west,midscale,ChgI8NXY-drgqYrmARoLL2cvMXZxdGc3N2gQAQ,ibis Bristol Temple Meads Quay,2026-08-18,discovered
+south_west,upscale,ChcInqS0tbCI8Z0xGgsvZy8xdGd3cnFjYhAB,Holiday Inn Bristol City Centre by IHG,2026-08-18,discovered
+south_west,upscale,ChkItdHsmM3AgcNfGg0vZy8xMWhic3p3bjgxEAE,The Bristol Wing,2026-08-18,discovered
+south_west,upscale,ChgIldOQ4eKTi4P6ARoLL2cvMXRmY2g2ZHEQAQ,YHA Bristol,2026-08-18,discovered
+wales,midscale,ChgI3KqQ_q3-ktbYARoLL2cvMXRoNmQ4NmYQAQ,Holiday Inn Express Cardiff Bay by IHG,2026-08-18,discovered
+wales,midscale,ChkI0JGz9fjuuoT_ARoML2cvMTFfcWNiYm15EAE,Premier Inn Cardiff City Centre (Queen Street) hotel,2026-08-18,discovered
+wales,midscale,ChgIsfbRmY7jk52uARoLL2cvMXRsMHdzN18QAQ,Tanes Hotel,2026-08-18,discovered
+wales,midscale,ChYI4M22wsSmhaiyARoJL20vMDg3NGtzEAE,The Coal Exchange Hotel,2026-08-18,discovered
+wales,midscale,ChgIy6Th07iV-pTCARoLL2cvMXR5eXdqeGIQAQ,Travelodge Cardiff Atlantic Wharf,2026-08-18,discovered
+wales,upscale,ChgIsILI29L7ze_YARoLL2cvMXR0OGJwdjYQAQ,Leonardo Hotel Cardiff,2026-08-18,discovered
+wales,upscale,ChoI3Jba28bH3cWXARoNL2cvMTFoMGQ1eXRkZxAB,Mercure Cardiff,2026-08-18,discovered
+wales,upscale,ChoI3PmB4rbu4Pe2ARoNL2cvMTFiYnJsM2o5MhAB,"Radisson Blu Hotel, Cardiff",2026-08-18,discovered
+wales,upscale,ChoIidaQkfy2nsXcARoNL2cvMTFyOHZ6cHI1bhAB,Staybridge Suites Cardiff by IHG,2026-08-18,discovered
+wales,upscale,ChkI18Lsp6-Rr4NAGg0vZy8xMXI5Z3ZmbF93EAE,The Parkgate Hotel,2026-08-18,discovered
+west_midlands,midscale,ChkIuNmfvoyw0JZ8Gg0vZy8xMWg1NWJ3M2dnEAE,Malacuna Birmingham,2026-08-18,discovered
+west_midlands,midscale,ChcI-72w0LzmtP0gGgsvZy8xdjNkcmt6ahAB,ibis Birmingham New Street Station,2026-08-18,discovered
+west_midlands,upscale,ChUInKTWzO_y4uVGGgkvbS8wYjliZzYQAQ,Castle Bromwich Hall Hotel,2026-08-18,discovered
+west_midlands,upscale,ChUIzZ-FvMGRk49EGgkvbS8wZm13NjAQAQ,Hyatt Regency Birmingham,2026-08-18,discovered
+west_midlands,upscale,ChcIxIfayo78nPhgGgsvZy8xdGZqXzk1NxAB,The Duke of Wellington Hotel & Bar,2026-08-18,discovered
+west_midlands,upscale,ChYIqtHivp_Rkbg3GgovbS8wal81dnNnEAE,The Grand Hotel Birmingham,2026-08-18,discovered
+west_midlands,upscale,ChkI-d-sj5vujK2DARoML2cvMTJsbHk0NnAwEAE,The Spires Serviced Apartments Birmingham,2026-08-18,discovered
+yorkshire_and_the_humber,midscale,ChkIgtna4vSCgPoDGg0vZy8xMWI3Nmh3NzJuEAE,Hinsley Hall,2026-08-18,discovered
+yorkshire_and_the_humber,midscale,ChcIp-OIsPitprQqGgsvZy8xdGRjZnd3cxAB,Holiday Inn Express Leeds City Centre - Armouries by IHG,2026-08-18,discovered
+yorkshire_and_the_humber,midscale,ChgIu5nTrLu10YKWARoLL2cvMXRrYnhyOTcQAQ,The Wrens,2026-08-18,discovered
+yorkshire_and_the_humber,midscale,ChgIoZahib-ztvwNGgwvZy8xMXhwamo3MXoQAQ,Travelodge Leeds Central,2026-08-18,discovered
+yorkshire_and_the_humber,midscale,ChkI1e6Br8KW2K_zARoML2cvMTJxZnpmdG40EAE,Travelodge Leeds Central Vicar Lane,2026-08-18,discovered
+yorkshire_and_the_humber,upscale,ChkImL7K6aaq4tpiGg0vZy8xMXZ6ZzFsbDY4EAE,Hyatt House Leeds,2026-08-18,discovered
+yorkshire_and_the_humber,upscale,ChkIqJKDn8225bY7Gg0vZy8xMXZ3eGN6c3g0EAE,Hyatt Place Leeds,2026-08-18,discovered
+yorkshire_and_the_humber,upscale,ChgIlNOXpvD2pteLARoLL2cvMXYyeXljd3EQAQ,Novotel Leeds Centre,2026-08-18,discovered
+yorkshire_and_the_humber,upscale,ChgIvMiZ2--qr_0OGgwvZy8xamt3Y3F0NnIQAQ,"Radisson Blu Hotel, Leeds City Centre",2026-08-18,discovered
+yorkshire_and_the_humber,upscale,ChYIjp3MqJeX3YrkARoJL20vMGY5a254EAE,The Queens Hotel,2026-08-18,discovered
