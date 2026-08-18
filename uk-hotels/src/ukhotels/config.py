@@ -173,10 +173,17 @@ class Config:
             min_properties_per_cell=_env_int("MIN_PROPERTIES_PER_CELL", 3),
             failure_threshold=threshold,
             dry_run=dry_run,
+            # Namespaced env var names, not BQ_SCRAPES_TABLE / BQ_INDEX_TABLE.
+            # uk-airfares reads those exact names, so a repository variable set
+            # for one project would silently retarget the other -- recreating
+            # the shared-table collision that broke reconciliation on
+            # 2026-08-18, but through configuration instead of defaults.
             scrapes_table=os.environ.get(
-                "BQ_SCRAPES_TABLE", "accommodation_scrapes"
+                "BQ_ACCOMMODATION_SCRAPES_TABLE", "accommodation_scrapes"
             ).strip(),
-            index_table=os.environ.get("BQ_INDEX_TABLE", "accommodation_reconstructed_index").strip(),
+            index_table=os.environ.get(
+                "BQ_ACCOMMODATION_INDEX_TABLE", "accommodation_reconstructed_index"
+            ).strip(),
             location=os.environ.get("BQ_LOCATION", "europe-west2").strip(),
         )
 

@@ -21,7 +21,8 @@ name: Accommodation ONS published-series backfill
 
 on:
   schedule:
-    - cron: "0 6 3 * *"
+  # 06:30, not 06:00: staggered off the air fares backfill on the same day.
+    - cron: "30 6 3 * *"
   workflow_dispatch:
     inputs:
       release_url:

@@ -21,7 +21,7 @@ Six limitations bound every number that comes out of this. Five are structural
 rather than bugs, and three of them may never fully resolve.
 
 **1. No collection has happened yet, so no accuracy claim is possible.** The
-pipeline is complete and tested (191 tests, no network) but has never run against
+pipeline is complete and tested (198 tests, no network) but has never run against
 the live provider. `validate` returns `INSUFFICIENT_DATA` and will keep doing so
 until a full quarter of overlap exists. That is enforced, not advisory.
 
@@ -435,7 +435,7 @@ a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                          # 191 tests, no network
+python -m pytest                          # 198 tests, no network
 
 # 2026-06-30 is exactly six weeks before the 2nd Tuesday of August 2026.
 DRY_RUN=1 HOTEL_PROVIDER=mock PYTHONPATH=src \
@@ -474,15 +474,42 @@ PYTHONPATH=src python -m ukhotels.digest --month 2026-07
 PYTHONPATH=src python -m ukhotels.export
 ```
 
+### Sharing a repository with uk-airfares
+
+The two projects share a runner pool, a SerpApi key, a BigQuery dataset and a
+git branch. Four things follow, and three are already handled:
+
+| Shared | Status |
+|---|---|
+| **BigQuery objects** | Handled. Every accommodation object is prefixed; a test keeps the names disjoint. |
+| **Cron schedules** | Handled. All four hotels schedules originally matched an air fares schedule *exactly* — including both digests pushing `main` in the same minute. Now staggered 30–60 minutes; a test forbids duplicates. |
+| **Table-name env vars** | Handled. Hotels reads `BQ_ACCOMMODATION_*`, so a repository variable set for one project cannot retarget the other. |
+| **SerpApi quota** | **Not handled — a plan decision, not a code one.** See below. |
+
+**The SerpApi key is shared, and so is its quota.** Measured over Sept–Dec 2026:
+
+| | calls/month |
+|---|---|
+| uk-airfares (44/run × ~16 run-days) | ~715 |
+| uk-hotels | ~51 |
+| **combined** | **~766** |
+
+Air fares is **93%** of it. On a 1,000/month plan that is ~77% utilisation —
+workable, but a retry storm, a manual re-run or a backfill could exhaust it. If
+that happens the loss is asymmetric: air fares can re-collect a missed route
+tomorrow, whereas a missed accommodation night is a quote six weeks ahead of a
+date that has passed and is gone permanently. Either raise the plan or thin the
+air fares cadence before the quota becomes the binding constraint.
+
 ### Schedules
 
 | Workflow | Cadence | Behaviour |
 |---|---|---|
-| `hotels-collect` | `0 9 * * *` | Asks the calendar whether anything is due; no-ops on the ~25 days a month when nothing is |
-| `hotels-monthly-reconcile` | `0 12 15-25 * *` | Attempts daily; no-ops until the bulletin is out |
-| `hotels-backfill-ons` | `0 6 3 * *` | Refreshes the published answer key from both sources |
+| `hotels-collect` | `0 10 * * *` | Asks the calendar whether anything is due; no-ops on the ~25 days a month when nothing is |
+| `hotels-monthly-reconcile` | `30 12 15-25 * *` | Attempts daily; no-ops until the bulletin is out |
+| `hotels-backfill-ons` | `30 6 3 * *` | Refreshes the published answer key from both sources |
 | `hotels-panel-refresh` | `0 8 4 * *` | Tops up and substitutes the pinned property sample; **commits** it |
-| `hotels-monthly-digest` | `0 7 2 * *` | Writes and **commits** `reports/YYYY-MM.md` plus the analytics export |
+| `hotels-monthly-digest` | `30 7 2 * *` | Writes and **commits** `reports/YYYY-MM.md` plus the analytics export |
 | `hotels-ci` | on push/PR | Tests + an end-to-end mock dry run |
 
 The collection gate is evaluated **in Python inside the job**, not in cron. The
@@ -721,7 +748,7 @@ uk-hotels/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi_hotels.py · mock.py
-└── tests/              191 tests, no network required
+└── tests/              198 tests, no network required
 ```
 
 ## Non-goals

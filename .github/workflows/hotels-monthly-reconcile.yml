@@ -21,7 +21,9 @@ name: Accommodation monthly reconciliation
 
 on:
   schedule:
-    - cron: "0 12 15-25 * *"
+  # 12:30, not 12:00: staggered off the air fares reconciliation, which runs
+  # the same window and fetches the same ONS bulletin.
+    - cron: "30 12 15-25 * *"
   workflow_dispatch:
     inputs:
       index_month:

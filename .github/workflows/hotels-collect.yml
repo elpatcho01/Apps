@@ -20,7 +20,10 @@ name: Accommodation collection
 
 on:
   schedule:
-    - cron: "0 9 * * *"
+  # 10:00, not 09:00: uk-airfares pulls at 09:00 on the SAME SerpApi key,
+  # and a shared key means shared quota and shared concurrency limits. An
+  # hour's gap keeps the two off each other rather than racing for it.
+    - cron: "0 10 * * *"
   workflow_dispatch:
     inputs:
       scrape_date:

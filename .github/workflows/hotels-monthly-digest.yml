@@ -34,7 +34,11 @@ name: Accommodation monthly digest
 
 on:
   schedule:
-    - cron: "0 7 2 * *"
+  # 07:30, not 07:00: the air fares digest commits and pushes to main at
+  # 07:00 on the same day. Two jobs rebasing and pushing the same branch in
+  # the same minute is a race; both have retry loops, but not colliding is
+  # cheaper than recovering from a collision.
+    - cron: "30 7 2 * *"
   workflow_dispatch:
     inputs:
       month:
