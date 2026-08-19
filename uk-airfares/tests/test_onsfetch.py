@@ -164,3 +164,78 @@ class TestDumpBulletin:
         out = dump_bulletin(dt.date(2026, 7, 1), session=self.Session(html))
         assert "[methodology]" in out
         assert "[air fare]" in out
+
+
+class TestJuly2026BulletinWording:
+    """Fixtures are verbatim from the live July 2026 bulletin, via `--dump`.
+
+    The parser failed on this page in production on 2026-08-19. Both sentences
+    below are real and sit in the same bulletin; one carries the index day and
+    one is a trap that the previous pattern preferred.
+    """
+
+    #: The sentence that actually states the collection date. Note "data ...
+    #: collected", not "prices collected", and "on or around" rather than "on".
+    REAL = (
+        "The consumer price indices are based on prices collected manually from "
+        "outlets around the country, information collected centrally over the "
+        "internet and by phone, and, from February 2026, data collected from "
+        "supermarket scanners at the checkouts or online. The traditionally "
+        "sourced data used in this release were collected on or around 14 July "
+        "2026. An overview of consumer price statistics is given in our Consumer "
+        "price indices, a brief guide: 2026."
+    )
+
+    #: Contains "prices were collected" AND a date, but the date is a reference
+    #: to a geopolitical event. The old wildcard pattern read it as the index day.
+    TRAP = (
+        "Routes are less likely to have multiple daily flights to a destination. "
+        "All domestic and European flight prices were collected after the "
+        "outbreak of the conflict in the Middle East on 28 February 2026. "
+        "Long-haul flight prices collected three months and one month before "
+        "departure were collected after that date."
+    )
+
+    def test_reads_the_real_wording(self):
+        from ukairfares.onsfetch import parse_index_day
+
+        result = parse_index_day(f"<p>{self.REAL}</p>", dt.date(2026, 7, 1))
+        assert result.index_day == dt.date(2026, 7, 14)
+        assert result.ordinal == 2
+
+    def test_trap_sentence_alone_yields_nothing(self):
+        from ukairfares.onsfetch import IndexDayNotFound, parse_index_day
+
+        with pytest.raises(IndexDayNotFound):
+            parse_index_day(f"<p>{self.TRAP}</p>", dt.date(2026, 7, 1))
+
+    def test_trap_does_not_win_when_both_are_present(self):
+        """Page order puts the trap first, as it does in the real bulletin."""
+        from ukairfares.onsfetch import parse_index_day
+
+        result = parse_index_day(
+            f"<p>{self.TRAP}</p><p>{self.REAL}</p>", dt.date(2026, 7, 1)
+        )
+        assert result.index_day == dt.date(2026, 7, 14)
+
+    def test_plain_on_without_the_hedge_still_parses(self):
+        from ukairfares.onsfetch import parse_index_day
+
+        html = "<p>Prices were collected on 21 July 2026 for this release.</p>"
+        result = parse_index_day(html, dt.date(2026, 7, 1))
+        assert result.index_day == dt.date(2026, 7, 21)
+        assert result.ordinal == 3
+
+    def test_weekday_prefix_and_ordinal_suffix_parse(self):
+        from ukairfares.onsfetch import parse_index_day
+
+        html = "<p>Data were collected on or about Tuesday, 14th July 2026.</p>"
+        assert parse_index_day(html, dt.date(2026, 7, 1)).index_day == dt.date(2026, 7, 14)
+
+    def test_a_wrong_date_adjacent_to_collected_is_still_rejected(self):
+        """The Tuesday constraint remains the backstop, not the only defence."""
+        from ukairfares.onsfetch import IndexDayNotFound, parse_index_day
+
+        html = "<p>Data were collected on or around 3 July 2026.</p>"
+        with pytest.raises(IndexDayNotFound):
+            parse_index_day(html, dt.date(2026, 7, 1))

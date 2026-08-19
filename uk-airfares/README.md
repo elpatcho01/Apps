@@ -458,6 +458,26 @@ making for a tidier exit code.
 
 ## Reading the index day out of the bulletin
 
+**Confirmed working against the real July 2026 bulletin.** The wording ONS use is:
+
+> The traditionally sourced data used in this release were collected on or
+> around **14 July 2026**.
+
+That is the 2nd Tuesday. Two things about it broke the first parser: it says
+*data* collected, not *prices* collected, and **"on or around"** sits between the
+preposition and the date.
+
+The same bulletin contains a trap, and it is why the pattern now requires `on` to
+follow `collected` immediately rather than across a wildcard:
+
+> All domestic and European flight prices were collected after the outbreak of
+> the conflict in the Middle East on **28 February 2026**.
+
+That sentence carries "prices ... collected" and a date, and the loose pattern
+preferred it. The Tuesday constraint rejected it — but only by luck of the
+calendar. A wrong date landing on a 2nd or 3rd Tuesday would have been accepted
+in silence.
+
 Parsing prose for a date is brittle, so `onsfetch` leans on a structural check
 rather than on clever regex: **a valid index day is the 2nd or 3rd Tuesday of
 the target month.** That single constraint rejects essentially every possible

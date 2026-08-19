@@ -60,9 +60,25 @@ _PATTERNS: tuple[re.Pattern[str], ...] = (
         r"(\d{1,2})(?:st|nd|rd|th)?\s+(\w+)",
         re.IGNORECASE,
     ),
+    # The wording ONS actually used in the July 2026 bulletin, observed via
+    # `--dump`: "The traditionally sourced data used in this release were
+    # collected on or around 14 July 2026."
+    #
+    # Two things this must get right, and the previous version got both wrong.
+    # It is "data ... collected", not "prices collected", so the subject cannot
+    # be required. And "on or around" sits between the preposition and the date.
+    #
+    # `on` must follow `collected` immediately (bar the hedge), NOT across a
+    # wildcard. The loose version this replaces matched a different sentence in
+    # the same bulletin -- "flight prices were collected after the outbreak of
+    # the conflict in the Middle East on 28 February 2026" -- reading a
+    # geopolitical reference as the collection date. The Tuesday constraint
+    # rejected it, but only by luck of the calendar: a wrong date landing on a
+    # 2nd or 3rd Tuesday would have been accepted in silence and corrupted every
+    # reconstruction built on it. Precision here is not tidiness.
     re.compile(
-        r"prices?\s+(?:were\s+)?collected[^.]{0,120}?on\s+(?:\w+day\s+)?"
-        r"(\d{1,2})\s+(\w+)\s+(\d{4})",
+        r"collected\s+on(?:\s+or\s+(?:around|about))?\s+(?:\w+day,?\s+)?"
+        r"(\d{1,2})(?:st|nd|rd|th)?\s+(\w+)\s+(\d{4})",
         re.IGNORECASE,
     ),
     re.compile(
