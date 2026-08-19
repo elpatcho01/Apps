@@ -224,3 +224,43 @@ class TestReleaseDiscovery:
                 return FakeResp()
 
         assert "2716" in discover_latest_release(FakeSession())
+
+
+class TestPreTwentySixteenHistory:
+    """The floor that silently dropped nine years of the published series.
+
+    `MIN_YEAR` was 2015, chosen when the pinned release was titled "January 2017
+    to February 2025". Discovery now finds one spanning **January 2007**, and the
+    floor was throwing every earlier sheet away without a word: `_as_year`
+    returned None, so the loop skipped the sheet. The live table held 678 values
+    starting 2016 while the workbook offered roughly nine more years.
+
+    The failure mode is what makes it worth a test. Nothing errored. A bound
+    written against one release's title quietly became a filter when the release
+    changed, and the only symptom was history that was never there.
+    """
+
+    def test_parses_a_2007_sheet(self):
+        rows = parse_subindices(workbook_years((2007,)))
+        assert len(rows) == 12 * 6
+        assert min(r["index_month"] for r in rows).year == 2007
+
+    def test_parses_the_full_2007_to_2026_span(self):
+        years = (2007, 2010, 2014, 2015, 2016, 2020, 2026)
+        rows = parse_subindices(workbook_years(years))
+        assert {r["index_month"].year for r in rows} == set(years)
+        assert len(rows) == len(years) * 12 * 6
+
+    def test_still_rejects_a_year_that_is_not_one(self):
+        """Widening the floor must not turn stray numbers into sheets."""
+        from ukairfares.onsweights import _as_year
+
+        assert _as_year(1999) is None
+        assert _as_year(2099) is None
+        assert _as_year(2007) == 2007
+
+    def test_a_sheet_that_is_not_year_shaped_is_still_skipped(self):
+        """Admitting older years must not admit junk sheets."""
+        sheets = {"2007": year_sheet(2007), "Notes": [["Some", "commentary"]]}
+        rows = parse_subindices(workbook_bytes(sheets))
+        assert len(rows) == 12 * 6

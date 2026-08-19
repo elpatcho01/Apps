@@ -72,11 +72,25 @@ _CATEGORY_PATTERNS = {
 _YEAR_PATTERNS = (r"^year$", r"^date$", r"^period$")
 _MONTH_PATTERNS = (r"^month$", r"^date$", r"^period$", r"^index month$")
 
-#: Sanity bounds. A weight outside this is a parse error, not a datum.
-MIN_YEAR, MAX_YEAR = 2015, 2035
+#: Sanity bounds on a parsed YEAR (from a sheet title or a header cell), so a
+#: stray number is not mistaken for one.
+#:
+#: This floor was 2015, set when the pinned release was titled "January 2017 to
+#: February 2025". Discovery now finds a release spanning **January 2007** to
+#: February 2026, and the floor was silently discarding every sheet before 2015 --
+#: `_as_year` returned None for them, so the loop skipped them without a word.
+#: The live table held 678 values from 2016 onward when the workbook offers
+#: roughly nine more years than that.
+#:
+#: The lesson worth keeping: a bound derived from one release's title becomes a
+#: silent filter when the release changes. Bounds here reject nonsense, not
+#: history.
+MIN_YEAR, MAX_YEAR = 2005, 2035
 
-#: The sub-index series begins in January 2017 per the release title.
-MIN_SERIES_YEAR = 2016
+#: Sub-index sheets are accepted for any sane year. Kept as a separate name
+#: because the two limits answer different questions, but no longer set above
+#: MIN_YEAR -- that is exactly what dropped 2007-2015.
+MIN_SERIES_YEAR = MIN_YEAR
 
 _MONTH_NAMES = {m.lower(): i for i, m in enumerate(calendar.month_name) if m}
 _MONTH_NAMES.update({m.lower(): i for i, m in enumerate(calendar.month_abbr) if m})

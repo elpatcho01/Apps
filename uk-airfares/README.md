@@ -119,18 +119,36 @@ would compare against something ONS never publish.
 The workbook itself is one sheet per year, transposed (months across columns,
 series down rows), with the category label merged across its window rows.
 
-**Coverage actually loaded: 2016-01 to 2026-02** — 678 values, 113 months, six
-series. That is what the live backfill put in `ons_published_index`, read back by
-the first digest run. It is wider than the Jan 2017–Feb 2025 vintage originally
-pinned, but **it stops six months before collection begins**, so as of
-2026-08 the overlap is zero and no accuracy claim is possible.
+**The release covers January 2007 to February 2026** — its own title says so —
+but what actually loaded was **2016-01 onward: 678 values, 113 months, six
+series**. That was a parser bug, not a limit of the release. A year floor of
+2015, written when the pinned release was titled "January 2017 to February 2025",
+silently discarded every earlier sheet: `_as_year` returned `None`, and the loop
+skipped it without a word. Nothing errored; the history simply was never there.
 
-That gap is not a defect here and cannot be closed from this repository — it
-closes when ONS publish a newer vintage of the ad hoc release. The monthly
-backfill workflow re-runs discovery and picks one up automatically, and the
-digest reports the remaining gap every month, so it is tracked rather than
-assumed. Confirm what is currently loaded with the coverage query in
-[Backfilling](#backfilling-onss-published-series).
+Fixed. **Re-run the backfill workflow to pick up the missing years**, which should
+roughly double the answer key. The general lesson is worth keeping: a bound
+derived from one release's title becomes a silent filter the moment the release
+changes.
+
+**The answer key is refreshed once a year, in March.** From the July 2026
+bulletin:
+
+> We updated our Domestic, European and long-haul air fares consumer prices
+> subindices and weights dataset on **25 March 2026** with data for March 2025 to
+> February 2026, and a longer historical time series back to 2007.
+
+That explains why the series stops at 2026-02, and it sets the timetable: the
+next vintage lands around **March 2027**. Since collection began 2026-08, the
+overlap is currently **zero months** and stays zero until then, so no accuracy
+claim is possible before it. The same bulletin notes that "from March 2026, we
+have also started to release quarterly and annual average air fares" — worth
+chasing, because a quarterly release would shorten that wait considerably.
+
+The monthly backfill workflow re-runs discovery and picks up a newer vintage
+automatically, and the digest reports the remaining gap every month, so this is
+tracked rather than assumed. Confirm what is currently loaded with the coverage
+query in [Backfilling](#backfilling-onss-published-series).
 
 **Nine months are absent, identically across all six series:** 2020-04, 2020-05,
 2020-06, 2020-11, and 2021-02 through 2021-06. That is 113 months out of a
