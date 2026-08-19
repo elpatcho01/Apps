@@ -37,7 +37,7 @@ from typing import Any, Iterable
 
 from . import bq, panel
 from .config import Config, ConfigError, PIPELINE_VERSION
-from .onscal import HaulCategory, add_months
+from .onscal import HaulCategory, add_months, candidate_index_days
 from .onsfetch import BulletinNotPublished, IndexDayNotFound, IndexDayResult, fetch_index_day
 
 log = logging.getLogger("ukairfares.reconcile")
@@ -402,29 +402,55 @@ def run_reconcile(
             evidence="supplied via --index-day",
         )
     else:
-        index_day = fetch_index_day(index_month)
-        log.info("confirmed index day: %s (%s)", index_day.index_day, index_day.source_url)
-        log.info("evidence: %s", index_day.evidence)
+        index_day = None  # resolved below, once we know we actually need it
 
     if reader is None:
         reader = bq.BigQueryWriter(config.project)
     writer = writer or bq.build_writer(config)
 
+    # Whether this month predates the panel is knowable WITHOUT the bulletin: the
+    # index day is always the 2nd or 3rd Tuesday, so the last date that could
+    # possibly matter is the 3rd Tuesday plus the substitution window.
+    #
+    # Establishing that first matters because of what happened on 2026-08-19. The
+    # July bulletin published, the parser could not read it, and the run went red
+    # -- over a July index day that could never have been used, since collection
+    # began 2026-08-17. We failed loudly on the answer to a question we had no
+    # use for. Order the checks so the loud failure lands only where it changes
+    # something.
+    _, third_tuesday = candidate_index_days(index_month.year, index_month.month)
+    first_day = collection_start(reader, config.scrapes_ref)
+    predates = first_day is None or first_day > third_tuesday + dt.timedelta(days=7)
+
+    if index_day is None:
+        try:
+            index_day = fetch_index_day(index_month)
+        except IndexDayNotFound:
+            if not predates:
+                raise
+            # The parse is broken and that is worth knowing -- next month it will
+            # be fatal -- but it cannot be acted on for a month with no data, and
+            # a red run for something unfixable teaches people to ignore the red.
+            raise NoCollectionYet(
+                f"{index_month:%B %Y} predates the panel, so it cannot be reconstructed "
+                "regardless. Noting separately that the bulletin did not parse: that "
+                "WILL fail the run once collection covers the month being reconciled. "
+                "Run the reconcile workflow with dump_bulletin to see the page."
+            ) from None
+        log.info("confirmed index day: %s (%s)", index_day.index_day, index_day.source_url)
+        log.info("evidence: %s", index_day.evidence)
+
+    if predates:
+        raise NoCollectionYet(
+            f"collection {'has not started' if first_day is None else f'started {first_day}'}, "
+            f"after the {index_month:%B %Y} collection window closed. This month predates "
+            "the panel and always will."
+        )
+
     scrape_date_used, offset = resolve_scrape_date(reader, config.scrapes_ref, index_day.index_day)
     if scrape_date_used is None:
-        # Before calling this a failure, establish whether collection had even
-        # started. See NoCollectionYet for why the two cases must not be merged.
-        first_day = collection_start(reader, config.scrapes_ref)
-        if first_day is None:
-            raise NoCollectionYet(
-                f"the panel holds no successful scrapes at all, so {index_day.index_month:%B %Y} "
-                "cannot be reconstructed. Expected until the daily puller has run at least once."
-            )
-        if first_day > index_day.index_day:
-            raise NoCollectionYet(
-                f"collection started {first_day}, after the {index_day.index_month:%B %Y} index "
-                f"day ({index_day.index_day}). This month predates the panel and always will."
-            )
+        # `predates` is already false here, so collection was running and simply
+        # produced nothing near the index day. That is a real gap.
         raise RuntimeError(
             f"no usable scrapes within a week of {index_day.index_day}, though collection "
             f"has been running since {first_day}. Did the daily puller run during the "

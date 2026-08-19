@@ -117,3 +117,50 @@ class TestAcrossManyMonths:
                 else:
                     with pytest.raises(IndexDayNotFound):
                         parse_index_day(wrap(body), month)
+
+
+class TestDumpBulletin:
+    """The diagnostic that exists because the sandbox cannot reach ons.gov.uk."""
+
+    class Resp:
+        def __init__(self, text, status=200):
+            self.text, self.status_code = text, status
+
+    class Session:
+        def __init__(self, text):
+            self.text = text
+
+        def get(self, url, **kw):
+            return TestDumpBulletin.Resp(self.text)
+
+    def test_reports_a_page_with_no_prose(self):
+        from ukairfares.onsfetch import dump_bulletin
+
+        out = dump_bulletin(dt.date(2026, 7, 1),
+                            session=self.Session("<html><body><nav>Home</nav></body></html>"))
+        assert "pattern matches: 0" in out
+        assert "does not contain the bulletin's prose" in out
+
+    def test_shows_rejected_candidates_with_context(self):
+        from ukairfares.onsfetch import dump_bulletin
+
+        html = "<p>The index date was 28 February for the reference period.</p>"
+        out = dump_bulletin(dt.date(2026, 7, 1), session=self.Session(html))
+        assert "2026-02-28" in out
+        assert "rejected" in out
+        assert "reference period" in out
+
+    def test_marks_an_accepted_candidate(self):
+        from ukairfares.onsfetch import dump_bulletin
+
+        html = "<p>The index day was 14 July 2026 for this collection.</p>"
+        out = dump_bulletin(dt.date(2026, 7, 1), session=self.Session(html))
+        assert "2026-07-14" in out and "ACCEPTED" in out
+
+    def test_surfaces_key_phrases_even_when_no_date_matches(self):
+        from ukairfares.onsfetch import dump_bulletin
+
+        html = "<p>See the methodology for how air fares are collected.</p>"
+        out = dump_bulletin(dt.date(2026, 7, 1), session=self.Session(html))
+        assert "[methodology]" in out
+        assert "[air fare]" in out

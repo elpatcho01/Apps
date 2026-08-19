@@ -26,6 +26,11 @@ on:
         description: "Confirmed index day (YYYY-MM-DD), skipping the bulletin fetch."
         required: false
         type: string
+      dump_bulletin:
+        description: "Print what the bulletin parser sees, and reconcile nothing."
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: airfares-reconcile
@@ -86,7 +91,25 @@ jobs:
           placeholders and skip the weighted aggregate. Run \
           'python -m ukairfares.onsweights --dump' to inspect the release layout."
 
+      # ons.gov.uk is unreachable from the development sandbox by egress policy,
+      # so a parse failure cannot be diagnosed where the code is written. This
+      # step runs in the one place that can see the page.
+      - name: Dump the bulletin
+        if: inputs.dump_bulletin
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m ukairfares.onsfetch --dump \
+            --month "${{ inputs.index_month || '2026-07' }}" | tee bulletin-dump.txt
+          {
+            echo "### Bulletin dump"
+            echo '```'
+            cat bulletin-dump.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Reconstruct sub-indices
+        if: ${{ !inputs.dump_bulletin }}
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
@@ -101,6 +124,7 @@ jobs:
             | tee reconcile-summary.json
 
       - name: Score against published ONS values
+        if: ${{ !inputs.dump_bulletin }}
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}

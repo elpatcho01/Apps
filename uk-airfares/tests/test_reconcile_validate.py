@@ -332,3 +332,86 @@ class TestNoCollectionYet:
             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("puller did not run")),
         )
         assert rec.main(["--index-month", "2026-07", "--index-day", "2026-07-14"]) == 1
+
+
+class TestBulletinNotNeededForAStaleMonth:
+    """The 2026-08-19 failure: red run over a parse we had no use for.
+
+    July's bulletin published, the parser could not read it, and reconcile exited
+    1 -- for a July index day that could never have been used, since collection
+    began 2026-08-17. Whether a month predates the panel is knowable without the
+    bulletin (the index day is always the 2nd or 3rd Tuesday), so that check now
+    comes first and the loud failure lands only where it changes something.
+    """
+
+    class Reader:
+        def __init__(self, first_day):
+            self.first_day = first_day
+
+        def query(self, sql, params=None):
+            if "MIN(scrape_date)" in sql:
+                return [{"first_day": self.first_day}]
+            return []
+
+    def _config(self):
+        from ukairfares.config import Config
+        return Config(
+            project="p", dataset="d", provider_name="mock", provider_credential=None,
+            market="uk", currency="GBP", target_departure_time=dt.time(9, 0),
+            failure_threshold=0.34, dry_run=True,
+            scrapes_table="airfare_scrapes", index_table="reconstructed_index",
+        )
+
+    def _run(self, month, first_day, fetch):
+        import ukairfares.reconcile as rec
+        return rec.run_reconcile(
+            self._config(), index_month=month,
+            reader=self.Reader(first_day), writer=None,
+        )
+
+    def test_unparseable_bulletin_is_not_fatal_for_a_month_we_cannot_use(self, monkeypatch):
+        import ukairfares.reconcile as rec
+
+        def boom(_month):
+            raise rec.IndexDayNotFound("no index day for July 2026")
+
+        monkeypatch.setattr(rec, "fetch_index_day", boom)
+        # July's 3rd Tuesday is 2026-07-21; collection began 2026-08-17.
+        with pytest.raises(rec.NoCollectionYet) as exc:
+            self._run(dt.date(2026, 7, 1), dt.date(2026, 8, 17), boom)
+        assert "predates the panel" in str(exc.value)
+        assert "WILL fail the run" in str(exc.value), "the parse breakage must still be said"
+
+    def test_unparseable_bulletin_is_fatal_once_collection_covers_the_month(self, monkeypatch):
+        import ukairfares.reconcile as rec
+
+        def boom(_month):
+            raise rec.IndexDayNotFound("no index day for August 2026")
+
+        monkeypatch.setattr(rec, "fetch_index_day", boom)
+        # August's 3rd Tuesday is 2026-08-18; collection began the 17th, so this
+        # month IS reconstructable and a broken parse must stop the run.
+        with pytest.raises(rec.IndexDayNotFound):
+            self._run(dt.date(2026, 8, 1), dt.date(2026, 8, 17), boom)
+
+    def test_stale_month_does_not_fetch_the_bulletin_result_at_all(self, monkeypatch):
+        """A parseable bulletin for a stale month still yields NoCollectionYet."""
+        import ukairfares.reconcile as rec
+        from ukairfares.onsfetch import IndexDayResult
+
+        monkeypatch.setattr(rec, "fetch_index_day", lambda m: IndexDayResult(
+            index_month=dt.date(2026, 7, 1), index_day=dt.date(2026, 7, 14),
+            ordinal=2, source_url="x", evidence="y"))
+        with pytest.raises(rec.NoCollectionYet):
+            self._run(dt.date(2026, 7, 1), dt.date(2026, 8, 17), None)
+
+    def test_empty_panel_predates_everything(self, monkeypatch):
+        import ukairfares.reconcile as rec
+        from ukairfares.onsfetch import IndexDayResult
+
+        monkeypatch.setattr(rec, "fetch_index_day", lambda m: IndexDayResult(
+            index_month=dt.date(2026, 8, 1), index_day=dt.date(2026, 8, 18),
+            ordinal=3, source_url="x", evidence="y"))
+        with pytest.raises(rec.NoCollectionYet) as exc:
+            self._run(dt.date(2026, 8, 1), None, None)
+        assert "has not started" in str(exc.value)

@@ -334,7 +334,20 @@ run" and "fail loudly rather than silently skip". Resolved as:
 | Bulletin not published yet | Exit **0** with a notice — expected, not an error |
 | Bulletin published but unparseable | Exit **1** — our parser broke, and silence would skip the month forever |
 | Index month predates the panel | Exit **0** with a notice — permanent absence, nothing to fix |
+| Bulletin unparseable, month predates the panel | Exit **0** with a notice naming the parse breakage |
 | Index day missing *during* active collection | Exit **1** — the puller broke |
+
+Whether a month predates the panel is established **before** the bulletin is
+fetched, because it is knowable without it — the index day is always the 2nd or
+3rd Tuesday. On 2026-08-19 it was not, and the run went red over a July bulletin
+that would not parse, for a July index day that could never have been used since
+collection began 2026-08-17. The parse breakage is real and still reported; it
+just no longer fails a run it cannot affect. It becomes fatal the moment
+collection covers the month being reconciled.
+
+To see what the parser sees, run the reconcile workflow with `dump_bulletin`:
+ons.gov.uk is unreachable from the development sandbox by egress policy, so
+Actions is the only place that can look at the page.
 
 The last two look identical from inside a failing reconcile (no rows near the
 index day) and are opposite in meaning, so `reconcile` checks `MIN(scrape_date)`
