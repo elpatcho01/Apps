@@ -1,2 +1,4 @@
+# Test dependencies. Production pins live in requirements.txt; see the note
+# there on why this project locks rather than ranges.
 -r requirements.txt
-pytest>=8.0
+pytest==9.1.1

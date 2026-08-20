@@ -330,7 +330,45 @@ PYTHONPATH=src python -m ukairfares.export
 | `airfares-monthly-reconcile` | `0 12 15-25 * *` | Attempts daily; no-ops until the bulletin is out |
 | `airfares-backfill-ons` | `0 6 3 * *` | Refreshes the published ONS series and weights |
 | `airfares-monthly-digest` | `0 7 2 * *` | Writes and **commits** `reports/YYYY-MM.md` |
-| `airfares-ci` | on push/PR | Tests + an end-to-end mock dry run |
+| `airfares-ci` | on push/PR **and weekly (Sun 07:00)** | Tests, workflow lint, dependency canary |
+
+### Keeping it alive for months, not weeks
+
+Four things exist purely so an unattended pipeline fails on a Sunday rather than
+on an index day. Fares missed on an index day cannot be recollected, which is
+what makes "find out in production" the expensive outcome.
+
+**`requirements.txt` is a lock, not a range.** Exact pins including transitive
+dependencies, taken from a verified production resolve. Previously it said
+`requests>=2.31,<3` and resolved fresh every run, so an upstream minor release
+could break collection with no change on our side.
+
+**A weekly `latest-deps` canary** installs *unpinned* and runs the suite, and is
+allowed to fail. That is the answer to the obvious objection to pinning — that
+you never learn an upgrade breaks you. A red canary is information, not an
+incident: production runs the lock and is unaffected.
+
+**`actionlint` runs in CI** over `airfares-*.yml`. On 2026-08-18 a commit from
+the sibling `uk-hotels` project left an invalid GitHub expression in
+`airfares-backfill-ons.yml`. CI passed, because all it did was run pytest; the
+only symptom was a workflow run named after the *file path* instead of the
+workflow — GitHub's quiet signal for "this does not parse" — and the backfill was
+dead for ~50 minutes. Verified: actionlint flags that exact commit and exits 1.
+Scoped to our own files, since a neighbour's mistakes turning this suite red is
+how a suite gets ignored.
+
+**Every job has `timeout-minutes`.** They did not, so each defaulted to GitHub's
+six hours — and with `cancel-in-progress: false` a hung run holds the concurrency
+slot, queues one replacement and cancels the rest. One stuck run could have cost
+several days of collection.
+
+**Dependabot** (`.github/dependabot.yml`, monthly) maintains both the pins and
+the action versions. The action bumps matter: every run currently warns that
+`checkout@v4`, `setup-python@v5`, `upload-artifact@v4` and `auth@v2` target Node
+20 and are being forced onto Node 24. When that shim goes, all five workflows
+break at once. Delegated rather than hand-edited because guessing a tag that does
+not exist breaks everything immediately — a worse failure than the one being
+fixed.
 
 The 8th–21st window is not arbitrary: it is exactly the range that brackets
 every possible 2nd or 3rd Tuesday, in every month. (There is a test asserting

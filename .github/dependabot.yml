@@ -1,0 +1,50 @@
+# Dependabot exists here to solve two problems that pinning creates and one it
+# does not.
+#
+# 1. THE PINS NEED A MAINTAINER. requirements.txt is a lock, chosen so an
+#    unattended pipeline cannot be broken by an upstream release. Locks rot.
+#    Dependabot is the thing that proposes moving them, and CI is the thing that
+#    judges the proposal — including the weekly `latest-deps` canary, which will
+#    already have said whether the upgrade is safe.
+#
+# 2. ACTION VERSIONS ARE A SCHEDULED OUTAGE. Every run currently logs that
+#    checkout@v4, setup-python@v5, upload-artifact@v4 and google-github-actions/
+#    auth@v2 target Node 20 and are being forced onto Node 24. When GitHub drops
+#    that shim, all five workflows break at once. Bumping them by hand means
+#    knowing today's major for each, and guessing a tag that does not exist
+#    breaks everything immediately — a worse failure than the one being fixed.
+#    Dependabot knows the real versions; that is the whole reason to delegate it.
+#
+# Monthly, not weekly. This repository is meant to be ignored for long stretches,
+# and a PR queue nobody reads is indistinguishable from no PRs at all.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies
+    # Grouped so four action bumps arrive as one reviewable PR rather than four
+    # that each need their own CI run.
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: pip
+    directory: "/uk-airfares"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"
+    labels:
+      - dependencies
+    groups:
+      python:
+        patterns:
+          - "*"

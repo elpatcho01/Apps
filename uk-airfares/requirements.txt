@@ -1,3 +1,64 @@
-requests>=2.31,<3
-google-cloud-bigquery>=3.25,<4
-openpyxl>=3.1,<4
+# PINNED, deliberately, including transitive dependencies.
+#
+# This file is a lock, not a range. The versions below are the exact set that
+# ran successfully in production on 2026-08-19 (run 32258951498), copied from
+# that run's install log.
+#
+# WHY A LOCK AND NOT A RANGE
+#
+# The previous file said `requests>=2.31,<3` and friends, so every run resolved
+# fresh against PyPI. That is fine for a project someone looks at weekly, and
+# wrong for this one: the entire design goal is to run unattended for months. A
+# minor release with changed behaviour would break collection with no change on
+# our side, and -- because CI only ran on push -- the first place it would show
+# up is a live collection day. Fares missed on an index day cannot be
+# recollected, so "find out in production" is the one outcome worth paying to
+# avoid.
+#
+# The obvious objection is that pinning means never learning that a newer
+# version breaks us. That is handled rather than accepted: `airfares-ci` runs a
+# weekly `latest-deps` job that installs UNPINNED and runs the suite. It is
+# allowed to fail. So the pins keep production reproducible while the canary
+# gives early warning, and neither job depends on the other.
+#
+# HOW TO UPDATE
+#
+# Let Dependabot open the PR (see .github/dependabot.yml) and let CI judge it.
+# By hand: relax to the direct dependencies below, install, and paste back
+# `pip freeze`. The three that are actually ours are:
+#
+#     requests                 HTTP for the fare provider and the ONS fetchers
+#     google-cloud-bigquery    the append-only panel
+#     openpyxl                 reads the ONS .xlsx release
+#
+# Everything else is transitive and pinned only so the set is reproducible.
+
+requests==2.34.2
+google-cloud-bigquery==3.43.0
+openpyxl==3.1.5
+
+# --- transitive, from the verified production resolution ---------------------
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.1
+cryptography==50.0.0
+et-xmlfile==2.0.0
+google-api-core==2.34.0
+google-auth==2.56.3
+google-cloud-core==2.6.1
+google-crc32c==1.8.0
+google-resumable-media==2.10.1
+googleapis-common-protos==1.75.1
+grpcio==1.83.0
+grpcio-status==1.83.0
+idna==3.19
+packaging==26.3
+proto-plus==1.28.3
+protobuf==7.35.1
+pyasn1==0.6.4
+pyasn1-modules==0.4.2
+pycparser==3.0
+python-dateutil==2.9.0.post0
+six==1.17.0
+typing-extensions==4.16.0
+urllib3==2.7.0

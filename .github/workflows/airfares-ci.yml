@@ -10,6 +10,12 @@ name: Air fares CI
 # scheduled-workflow inactivity clock from expiring. Those commits change no
 # code, so testing them is noise, and a red CI run on a generated report would
 # be actively misleading about the state of the pipeline.
+#
+# THE WEEKLY SCHEDULE IS NOT DECORATION. Until it existed, CI ran only on push —
+# so on a repository nobody is touching, which is the entire point of this
+# pipeline, the first thing to notice a break would be a live collection run on
+# an index day. Fares missed on an index day cannot be recollected. Sunday
+# 07:00 is deliberately far from anything else that runs.
 on:
   push:
     paths:
@@ -21,11 +27,14 @@ on:
       - "uk-airfares/**"
       - "!uk-airfares/reports/**"
       - ".github/workflows/airfares-*.yml"
+  schedule:
+    - cron: "0 7 * * 0"
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: uk-airfares
@@ -38,7 +47,7 @@ jobs:
           cache: pip
           cache-dependency-path: uk-airfares/requirements-dev.txt
 
-      - name: Install dependencies
+      - name: Install pinned dependencies
         run: pip install -r requirements-dev.txt
 
       - name: Run tests
@@ -52,3 +61,81 @@ jobs:
         run: |
           python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
           test "$(wc -l < /tmp/dry.ndjson)" -eq 44
+
+  # Validates workflow SYNTAX AND EXPRESSIONS, which pytest cannot.
+  #
+  # This exists because of a real outage. On 2026-08-18 a commit from the
+  # sibling uk-hotels project edited airfares-backfill-ons.yml and left an
+  # invalid GitHub expression in it. CI ran on that commit and passed, because
+  # all it did was run pytest. The only symptom was a workflow run named after
+  # the file path instead of the workflow -- GitHub's quiet signal for "this
+  # file does not parse" -- and the backfill was dead for about fifty minutes
+  # until someone happened to look.
+  #
+  # Scoped to airfares-*.yml on purpose. Two projects share this directory and
+  # linting a neighbour's files would mean their mistakes turn this suite red,
+  # which is how a suite gets ignored. Ours breaking is our problem to see.
+  lint-workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run actionlint on the air fares workflows
+        run: |
+          bash <(curl -sSf https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color .github/workflows/airfares-*.yml
+
+  # The other half of the pinning decision, and the reason pinning is safe.
+  #
+  # requirements.txt is a lock, so production is reproducible and cannot be
+  # broken by an upstream release. The cost of that is never learning a new
+  # version breaks us until we try it. This job pays that cost on a Sunday
+  # instead of on an index day: it installs UNPINNED and runs the suite.
+  #
+  # continue-on-error is the entire point. A red canary means "an upgrade will
+  # break you", which is information, not an incident — nothing in production
+  # has changed. It must never gate a merge or make the suite look broken.
+  latest-deps:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: uk-airfares
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the newest compatible versions, ignoring the lock
+        run: pip install --upgrade requests google-cloud-bigquery openpyxl pytest
+
+      - name: Record what resolved
+        run: pip freeze | grep -Ei '^(requests|google-cloud-bigquery|openpyxl|pytest)=' | tee resolved.txt
+
+      - name: Run tests against them
+        id: canary
+        run: python -m pytest -q
+
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo "### Latest-dependency canary"
+            echo ""
+            if [ "${{ steps.canary.outcome }}" = "success" ]; then
+              echo "Pass. Upgrading is safe; the lock in requirements.txt can move."
+            else
+              echo "**Fail — an upgrade would break the pipeline.** Production is"
+              echo "unaffected: it runs the pinned set. Read the test output above"
+              echo "before accepting any Dependabot bump."
+            fi
+            echo ""
+            echo '```'
+            cat resolved.txt 2>/dev/null || echo "resolution failed"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
