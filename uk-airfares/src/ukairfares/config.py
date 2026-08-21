@@ -72,6 +72,17 @@ class Config:
     #: afterwards, so it is set explicitly rather than left to the API default
     #: (which is the US). europe-west2 is London.
     location: str = "europe-west2"
+    #: Set only when TARGET_DEPARTURE_TIME is explicitly in the environment, in
+    #: which case it applies to EVERY haul and overrides the per-haul defaults.
+    #:
+    #: Defaults to None rather than to `target_departure_time` on purpose: the
+    #: two answer different questions. `target_departure_time` is the legacy
+    #: single constant; this records whether someone deliberately asked for one
+    #: time everywhere. Keeping them separate is what lets a run be configured to
+    #: reproduce the old uniform-09:00 behaviour for comparison, which is how the
+    #: one-time-versus-per-haul question gets settled against ONS rather than
+    #: asserted.
+    target_departure_time_override: dt.time | None = None
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -115,6 +126,11 @@ class Config:
             currency=os.environ.get("FARE_CURRENCY", "GBP").strip().upper(),
             target_departure_time=_env_time(
                 "TARGET_DEPARTURE_TIME", DEFAULT_TARGET_DEPARTURE_TIME
+            ),
+            target_departure_time_override=(
+                _env_time("TARGET_DEPARTURE_TIME", DEFAULT_TARGET_DEPARTURE_TIME)
+                if os.environ.get("TARGET_DEPARTURE_TIME", "").strip()
+                else None
             ),
             failure_threshold=threshold,
             dry_run=dry_run,

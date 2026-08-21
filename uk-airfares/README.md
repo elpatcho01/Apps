@@ -93,6 +93,38 @@ them for departing near 09:00. Selection now takes **direct services only**
 where any exist, with an outlier cap (default 5× the cheapest) behind it.
 `candidate_basis` and `n_quotes_considered` record what was filtered, per row.
 
+**The target time is per haul, because one constant did not work.** Four
+consecutive collection days (2026-08-17 to 20) showed the long-haul cells moving
+**4.5–7.2% day to day while the price-blind cheapest fare on the same queries
+moved 0.6–2.1%**. The market was nearly still; the movement was ours.
+
+`ons_rule_time_delta_minutes` shows the mechanism — it oscillated
+`173 → 273 → 173 → 273` for long-haul while short-haul sat flat at 59 and 66.
+Long-haul departures cluster in a bank set by arrival slots and night-flight
+curfews (observed 114–273 minutes after 09:00, so roughly 11:00–13:30). Nothing
+departs near 09:00, so every candidate was hours away and one flight entering or
+leaving the provider's result set relocated the choice by ~100 minutes. Long-haul
+1-month has a median published monthly move of 7.7%; the rule was generating
+6.2% of noise on its own.
+
+Long-haul now targets **12:00**, inside its actual bank. Short-haul is unchanged
+at 09:00 — it was already stable and there was nothing to fix.
+
+*The tension, stated because it is real:* ONS do not publish their target time.
+If theirs is 09:00 everywhere, this is a divergence. But 09:00 was always a
+guess, and a guess landing where no aircraft departs is not the faithful choice —
+it just makes the selection arbitrary. Both escapes are open:
+`TARGET_DEPARTURE_TIME` in the environment still forces one time across every
+haul, `target_departure_time` is stored on every row so a mixed history is
+unambiguous, and `raw_response` retains every quote so any target can be
+re-derived over data already collected.
+
+**`selection_margin_minutes` makes fragility visible per row.** How much further
+from the target the runner-up sat. Small means the choice was a near-tie and one
+flight appearing or vanishing would have changed it; NULL means there was no
+runner-up at all. The flip above was only detectable by comparing days in
+aggregate — nothing on an individual row said "this was a coin flip". Now it does.
+
 **Both selection rules are stored.** A cheapest-of-day rule silently migrates
 between a 06:10 departure one month and a 21:45 the next, so much of the
 resulting "price change" is just the time-of-day fare curve moving underneath

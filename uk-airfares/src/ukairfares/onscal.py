@@ -67,6 +67,50 @@ RETURN_LEG: dict[HaulCategory, dt.timedelta] = {
 #: silently switching between a 06:00 and an 18:00 flight.
 DEFAULT_TARGET_DEPARTURE_TIME = dt.time(9, 0)
 
+#: Target departure time PER HAUL, because one constant does not work.
+#:
+#: Four consecutive collection days (2026-08-17..20) showed the long-haul cells
+#: producing 4.5-7.2% day-to-day movement while the price-blind cheapest fare on
+#: the same queries moved 0.6-2.1%. The market was nearly still; the movement was
+#: ours. The cause is visible in `ons_rule_time_delta_minutes`, which oscillated
+#: 173 -> 273 -> 173 -> 273 and 210 -> 114 -> 114 -> 210 while the short-haul
+#: cells sat perfectly flat at 59 and 66.
+#:
+#: Long-haul departures cluster in a bank set by arrival slots and night-flight
+#: curfews -- observed 114 to 273 minutes after 09:00, so roughly 11:00-13:30.
+#: NOTHING departs near 09:00. A rule that picks "closest to 09:00" among
+#: candidates that are all two to four hours away is not implementing the ONS
+#: rule; it is picking near-arbitrarily, and a single flight entering or leaving
+#: the provider's result set relocates the choice by a hundred minutes.
+#:
+#: THE TENSION, STATED BECAUSE IT IS REAL: ONS do not publish their target time.
+#: If theirs is 09:00 for every haul, moving ours away from it is a divergence.
+#: But 09:00 was always a guess, and a guess that lands where no aircraft departs
+#: is not the faithful choice -- it just makes the selection arbitrary. Two
+#: things keep this reversible: `target_departure_time` is stored on every row,
+#: so a mixed history is unambiguous, and `raw_response` retains every quote, so
+#: any target time can be re-derived over data already collected without
+#: re-querying.
+TARGET_DEPARTURE_TIME_BY_HAUL: dict[str, dt.time] = {
+    "domestic": dt.time(9, 0),
+    "european": dt.time(9, 0),
+    "long_haul": dt.time(12, 0),
+}
+
+
+def target_departure_time_for(
+    haul: str, override: dt.time | None = None
+) -> dt.time:
+    """The target time for a haul, or `override` applied uniformly.
+
+    An explicit override wins for every haul, so the old single-constant
+    behaviour stays available for comparison -- which is what makes it possible
+    to test empirically whether ONS use one time or several.
+    """
+    if override is not None:
+        return override
+    return TARGET_DEPARTURE_TIME_BY_HAUL.get(haul, DEFAULT_TARGET_DEPARTURE_TIME)
+
 
 def nth_weekday(year: int, month: int, weekday: int, n: int) -> dt.date:
     """Return the `n`-th `weekday` of the given month (1-based).

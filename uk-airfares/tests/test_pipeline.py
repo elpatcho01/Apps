@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 import requests
 
-from ukairfares import panel, selection
+from ukairfares import onscal, panel, selection
 from ukairfares.config import Config
 from ukairfares.bq import DryRunWriter
 from ukairfares.onscal import ADVANCE_MONTHS
@@ -580,3 +580,100 @@ class TestCandidateFiltering:
         assert priced
         assert all(r["candidate_basis"] for r in priced)
         assert all(r["n_quotes_considered"] <= r["n_quotes"] for r in priced)
+
+
+class TestLongHaulSelectionStability:
+    """The 2026-08-17..20 finding: the rule was manufacturing its own noise.
+
+    Four consecutive collection days, same 44 queries. The long-haul cells moved
+    4.5-7.2% day to day while the price-blind cheapest fare on the same queries
+    moved 0.6-2.1%. The market was nearly still; the movement was ours.
+
+    The cause is legible in `ons_rule_time_delta_minutes`, which oscillated
+    173 -> 273 -> 173 -> 273 for long-haul 1-month while the short-haul cells sat
+    perfectly flat at 59 and 66. Long-haul departures cluster in a bank set by
+    slots and night-flight curfews -- observed 114 to 273 minutes after 09:00 --
+    so nothing departs near the 09:00 target, every candidate is hours away, and
+    one flight entering or leaving the result set relocates the choice.
+    """
+
+    @staticmethod
+    def _q(hhmm, price, **kw):
+        h, m = divmod(hhmm, 100)
+        return FareQuote(
+            price=Decimal(str(price)), currency="GBP", airline="XX", transfers=0,
+            departure_at=dt.datetime(2026, 9, 15, h, m), return_at=None, found_at=None, **kw
+        )
+
+    def _bank(self):
+        """A long-haul departure bank: nothing near 09:00, everything 11:00+."""
+        return [self._q(1054, 640), self._q(1153, 720), self._q(1230, 580),
+                self._q(1333, 900)]
+
+    def test_nine_am_target_flips_when_one_flight_leaves_the_set(self):
+        """Reproduces the observed failure against the old uniform 09:00."""
+        full = self._bank()
+        thinned = [q for q in full if q.departure_at.hour != 10]  # 10:54 drops out
+
+        a = selection.select(full, target_time=dt.time(9, 0))
+        b = selection.select(thinned, target_time=dt.time(9, 0))
+
+        assert a.ons_rule_time_delta_minutes == 114     # 10:54
+        assert b.ons_rule_time_delta_minutes == 173     # 11:53
+        assert a.ons_rule.price != b.ons_rule.price, "the priced flight changed"
+
+    def test_a_target_inside_the_bank_survives_the_same_change(self):
+        full = self._bank()
+        thinned = [q for q in full if q.departure_at.hour != 10]
+
+        target = onscal.target_departure_time_for("long_haul")
+        a = selection.select(full, target_time=target)
+        b = selection.select(thinned, target_time=target)
+
+        assert a.ons_rule.price == b.ons_rule.price, (
+            "losing a flight far from the target must not change the selection"
+        )
+
+    def test_short_haul_target_is_unchanged(self):
+        """Short-haul was stable and must not be disturbed by this fix."""
+        assert onscal.target_departure_time_for("domestic") == dt.time(9, 0)
+        assert onscal.target_departure_time_for("european") == dt.time(9, 0)
+
+    def test_explicit_override_still_applies_to_every_haul(self):
+        """So the old uniform behaviour stays reproducible for comparison."""
+        for haul in ("domestic", "european", "long_haul"):
+            assert onscal.target_departure_time_for(haul, dt.time(7, 30)) == dt.time(7, 30)
+
+
+class TestSelectionMargin:
+    """The per-row fragility gauge. The flip above was invisible on any one row."""
+
+    @staticmethod
+    def _q(hhmm, price):
+        h, m = divmod(hhmm, 100)
+        return FareQuote(price=Decimal(str(price)), currency="GBP", airline="XX",
+                         transfers=0, departure_at=dt.datetime(2026, 9, 15, h, m), return_at=None,
+                         found_at=None)
+
+    def test_near_tie_reports_a_small_margin(self):
+        sel = selection.select([self._q(855, 100), self._q(905, 400)],
+                               target_time=dt.time(9, 0))
+        assert sel.selection_margin_minutes == 0, "equidistant: a coin flip"
+
+    def test_clear_winner_reports_a_large_margin(self):
+        sel = selection.select([self._q(900, 100), self._q(1500, 400)],
+                               target_time=dt.time(9, 0))
+        assert sel.selection_margin_minutes == 360
+
+    def test_single_candidate_has_no_runner_up(self):
+        sel = selection.select([self._q(900, 100)], target_time=dt.time(9, 0))
+        assert sel.selection_margin_minutes is None
+
+    def test_margin_would_have_flagged_the_long_haul_flip(self):
+        """114 vs 173 minutes is a 59-minute margin — fragile, and now visible."""
+        bank = [TestLongHaulSelectionStability._q(1054, 640),
+                TestLongHaulSelectionStability._q(1153, 720),
+                TestLongHaulSelectionStability._q(1230, 580),
+                TestLongHaulSelectionStability._q(1333, 900)]
+        sel = selection.select(bank, target_time=dt.time(9, 0))
+        assert sel.selection_margin_minutes == 59

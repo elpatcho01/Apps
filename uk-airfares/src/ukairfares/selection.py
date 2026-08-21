@@ -106,6 +106,18 @@ class Selection:
     #: What the filter did -- "direct_only", "no_direct_available",
     #: optionally suffixed "+outlier_capped".
     candidate_basis: str = "empty"
+    #: How many MORE minutes from the target the runner-up sat than the winner.
+    #:
+    #: This is a fragility gauge, and it exists because the failure it measures
+    #: was invisible per row. Long-haul selections were flipping between two
+    #: candidates on consecutive days -- 173 to 273 minutes and back -- which
+    #: showed up only as day-to-day noise in the aggregate. A SMALL margin means
+    #: the choice is a near-tie and one flight entering or leaving the provider's
+    #: result set will change it; a LARGE margin means the winner is unambiguous.
+    #:
+    #: None when there is no runner-up (a single timed candidate), which is its
+    #: own kind of fragile and distinguishable from a confident wide margin.
+    selection_margin_minutes: int | None = None
 
     @property
     def spread(self) -> Decimal | None:
@@ -151,10 +163,14 @@ def select(
     timed = [(q, _minutes_from_target(q, target_time)) for q in quotes]
     timed = [(q, d) for q, d in timed if d is not None]
 
+    margin: int | None = None
     if timed:
         # Tie-break on price so the choice is deterministic when two flights sit
         # equidistant from the target time.
-        ons_quote, delta = min(timed, key=lambda pair: (pair[1], pair[0].price))
+        ranked = sorted(timed, key=lambda pair: (pair[1], pair[0].price))
+        ons_quote, delta = ranked[0]
+        if len(ranked) > 1:
+            margin = ranked[1][1] - delta
     else:
         # No usable departure times. Fall back to cheapest rather than dropping
         # the observation, and flag it by leaving the delta None so downstream
@@ -168,4 +184,5 @@ def select(
         n_quotes=len(all_quotes),
         n_considered=len(quotes),
         candidate_basis=basis,
+        selection_margin_minutes=margin,
     )

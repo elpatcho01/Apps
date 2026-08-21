@@ -1,3 +1,21 @@
+-- NUMBERED 900 SO IT ALWAYS SORTS LAST. This is not cosmetic.
+--
+-- `ensure_tables` applies sql/*.sql in filename order, and this view is defined
+-- as `SELECT s.*`. BigQuery resolves that star AT CREATION TIME and freezes the
+-- column list into the view definition -- it does not re-expand on read. So a
+-- view created before a migration that adds a column simply does not have that
+-- column, and stays that way until it is recreated.
+--
+-- As 006 that broke on the very next migration: 006 recreated the view, THEN 007
+-- added selection_margin_minutes, so the view was a full run behind and the new
+-- column was invisible to the digest, the export and the dashboard. The symptom
+-- would have been a column that exists in the table and is missing from every
+-- consumer -- exactly the kind of absence this project has already been caught by
+-- once, with current_scrapes returning NotFound because the DDL had not caught up.
+--
+-- Views depend on tables, so views run after tables. The 900 band is reserved for
+-- them; put future migrations in the 0xx band and future views here.
+
 -- A view exposing one coherent vintage per collection date.
 --
 -- WHY THIS EXISTS INSTEAD OF DELETING ROWS

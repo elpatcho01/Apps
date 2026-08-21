@@ -180,3 +180,36 @@ class TestCurrentScrapesView:
         sql = self._view_sql().upper()
         for forbidden in ("DROP TABLE", "DELETE FROM", "TRUNCATE"):
             assert forbidden not in sql
+
+
+class TestViewsApplyAfterMigrations:
+    """`SELECT *` in a view is frozen at creation time, so ordering is load-bearing.
+
+    BigQuery resolves the star when the view is created and stores the resulting
+    column list; it does not re-expand on read. A view created before a migration
+    that adds a column therefore does not have that column, and stays that way
+    until it is recreated.
+
+    That is why the view is numbered 900 rather than 006. As 006 it ran BEFORE
+    007_add_selection_margin, so the new column would have been in the table and
+    missing from every consumer -- the digest, the export, the dashboard -- for a
+    full run. This project has already lost time to exactly that shape of
+    problem once, when current_scrapes returned NotFound because the DDL had not
+    caught up with the code reading it.
+    """
+
+    def test_every_view_sorts_after_every_table_and_migration(self):
+        views = [p for p in SQL_FILES if "VIEW" in p.read_text().upper()]
+        others = [p for p in SQL_FILES if p not in views]
+        assert views, "expected at least one view"
+        assert others, "expected table DDL"
+        assert max(SQL_FILES.index(v) for v in views) > max(
+            SQL_FILES.index(o) for o in others
+        ), "a view is applied before a table migration; its SELECT * will be stale"
+
+    def test_views_live_in_the_reserved_band(self):
+        for p in SQL_FILES:
+            if "VIEW" in p.read_text().upper():
+                assert p.name[0] == "9", (
+                    f"{p.name}: views belong in the 900 band so they always sort last"
+                )

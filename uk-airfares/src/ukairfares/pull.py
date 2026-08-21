@@ -43,6 +43,7 @@ from .onscal import (
     index_month_collection,
     index_month_departure,
     legs_for,
+    target_departure_time_for,
 )
 from .panel import Route
 from .providers import FareProvider, ProviderError, build_provider
@@ -202,6 +203,7 @@ def _row_from_result(row: dict[str, Any], result, target_time: dt.time) -> dict[
     row["ons_rule_time_delta_minutes"] = sel.ons_rule_time_delta_minutes
     row["n_quotes_considered"] = sel.n_considered
     row["candidate_basis"] = sel.candidate_basis
+    row["selection_margin_minutes"] = sel.selection_margin_minutes
     return row
 
 
@@ -273,7 +275,13 @@ def run_pull(
                     scrape_ts=scrape_ts,
                     scrape_date=scrape_date,
                     currency=config.currency,
-                    target_time=config.target_departure_time,
+                    # Per haul, not one constant: see TARGET_DEPARTURE_TIME_BY_HAUL.
+                    # An explicit TARGET_DEPARTURE_TIME in the environment still
+                    # overrides for every haul, which is what makes the
+                    # one-time-versus-several question testable.
+                    target_time=target_departure_time_for(
+                        route.haul, config.target_departure_time_override
+                    ),
                     backoff=backoff,
                 )
             )
