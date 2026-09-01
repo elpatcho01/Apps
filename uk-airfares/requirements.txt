@@ -34,27 +34,27 @@
 # Everything else is transitive and pinned only so the set is reproducible.
 
 requests==2.34.2
-google-cloud-bigquery==3.43.0
+google-cloud-bigquery==3.44.0
 openpyxl==3.1.5
 
 # --- transitive, from the verified production resolution ---------------------
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.5.1
-cryptography==50.0.0
+cryptography==50.0.1
 et-xmlfile==2.0.0
 google-api-core==2.34.0
-google-auth==2.56.3
-google-cloud-core==2.6.1
+google-auth==2.57.0
+google-cloud-core==2.7.0
 google-crc32c==1.8.0
-google-resumable-media==2.10.1
-googleapis-common-protos==1.75.1
-grpcio==1.83.0
-grpcio-status==1.83.0
+google-resumable-media==2.10.2
+googleapis-common-protos==1.75.2
+grpcio==1.83.1
+grpcio-status==1.83.1
 idna==3.19
 packaging==26.3
-proto-plus==1.28.3
-protobuf==7.35.1
+proto-plus==1.28.4
+protobuf==7.36.0
 pyasn1==0.6.4
 pyasn1-modules==0.4.2
 pycparser==3.0
