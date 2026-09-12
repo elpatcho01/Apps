@@ -1092,7 +1092,7 @@
  ],
  "dataset": "airfares",
  "errors": {},
- "generated_ts": "2026-09-12T05:40:56.319213+00:00",
+ "generated_ts": "2026-09-12T06:38:39.214352+00:00",
  "latest_routes": [
   {
    "candidate_basis": "direct_only",
