@@ -205,6 +205,37 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The return leg: uncontrolled, unrecorded, and unmeasured until now.
+      #
+      # The target-time rule picks the outbound. The return is whatever the
+      # provider bundled -- a cheapest-of-day choice, which is exactly the rule
+      # the README argues against for the outbound -- and `return_at` is a
+      # placeholder, midnight of the date requested, so nothing about the real
+      # return was ever stored.
+      #
+      # Before buying control (a second departure_token call per query, +719
+      # searches/month, a doubling), this asks the free question: does the
+      # payload already in BigQuery carry return detail at all? It is a census
+      # over every key path rather than a parser for a shape nobody has
+      # confirmed, so "there is nothing there" is a finding it can report rather
+      # than a silence it produces. It also counts departure_token, because a
+      # token that is not retained makes the fix cost two searches, not one.
+      - name: Measure the return leg
+        id: returnleg
+        continue-on-error: true
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: |
+          {
+            echo "### Return leg: is it in the payload we already store?"
+            echo ""
+            echo '```'
+            python -m ukairfares.returnleg || echo "return-leg census failed; see the step log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Warn if the export failed
         if: steps.export.outcome == 'failure'
         run: |

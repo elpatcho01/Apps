@@ -434,6 +434,51 @@ the leisure routes (AGP, ALC, FAO, PMI, NAP) and is weak on the business routes
 (AMS, CDG, DUB). Spread evenly across all nine, half-term is not the explanation.
 `routes_by_index_month` makes this answerable from the committed export.
 
+### The half of the trip nobody is measuring
+
+Every quote prices a return trip, and the ONS target-time rule is applied to the
+outbound and to nothing else. The return is whatever the provider bundled — in
+practice the cheapest available return for the chosen outbound — so half of each
+priced trip is selected by exactly the rule this project argues against for the
+other half: *a cheapest-of-day rule silently migrates between a 06:10 departure
+one month and a 21:45 the next, so much of the resulting price change is just the
+time-of-day fare curve moving underneath you.*
+
+It is worse than uncontrolled, because it is also unrecorded: `return_at` on a
+quote is a placeholder — midnight of the date requested — not a departure anyone
+observed. So the size of the problem has never been known.
+
+That matters for the European anomaly above, because the two trips differ in a
+way that fits its shape. September departs 8 Sep and returns 22 Sep, both
+term-time; October departs 13 Oct and returns 27 Oct, inside half-term. If cheap
+returns dry up in half-term, the cheapest *total* rises sharply while the rule's
+already-dearer combination moves much less — +18% against −1.7% is that shape.
+
+`returnleg.py` asks the free question first. Controlling the return means a
+second `departure_token` call per query: +719 searches/month, a doubling of
+spend. Before buying that, the module runs a **census** over the payloads already
+in BigQuery — every key path, counted, with the share of rows each appears in —
+rather than a parser for a shape nobody has confirmed. That is deliberate: a
+parser that finds nothing cannot distinguish "the field is absent" from "I looked
+in the wrong place", and it is how the sibling accommodation project settled the
+same kind of question, where a raw-key census over 214 live properties found
+`free_cancellation` in the key set of *none* of them and stopped a control being
+designed against a field that was never there.
+
+The census returns one of two answers, and both are actionable:
+
+- **return detail is present** → the variation is measurable from data already
+  paid for, and a median that moves between the September and October index
+  months is the anomaly's explanation;
+- **return detail is absent** → control requires the second call, and the cost is
+  a real number rather than a hypothetical.
+
+It also counts `departure_token`, because that decides the price of the fix: with
+the token retained, the second call runs against stored payloads at one extra
+search per query; without it, the outbound must be re-queried first and the fix
+costs two. Nothing is written — it runs in the monthly digest beside the bank and
+matched-model measurements, and prints.
+
 ---
 
 ## Route panel
@@ -526,7 +571,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 419 tests, no network
+python -m pytest                                    # 436 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -1057,6 +1102,7 @@ uk-airfares/
 │   ├── onsweights.py   Fetches + parses ONS weights and sub-indices
 │   ├── banks.py        Measures each route's departure bank from raw_response
 │   ├── matched.py      Replays matched-model vs re-picking, to decide on evidence
+│   ├── returnleg.py    Censuses raw_response for the return leg nobody controls
 │   ├── backfill.py     Loads ONS published series (the answer key)
 │   ├── index.py        Matched-sample relatives, splicing, rebasing
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
@@ -1064,7 +1110,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              419 tests, no network required
+└── tests/              436 tests, no network required
 ```
 
 ## Non-goals
