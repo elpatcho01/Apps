@@ -155,9 +155,23 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # THE GATE IS IN BASH, NOT IN THE `if:`. It used to read
+      # `if: always() && inputs.commit != false`, which can never be true on a
+      # scheduled run: `inputs` is populated for workflow_dispatch, so
+      # `inputs.commit` is null there, and GitHub coerces both null and false to
+      # 0 before comparing, making `null != false` FALSE. Same shape as the
+      # `&& '' ||` ternary fixed earlier, and actionlint flags neither.
       - name: Commit the panel
-        if: always() && inputs.commit != false
+        if: always()
+        env:
+          # Empty on a schedule, "true"/"false" on a dispatch. Compared as a
+          # string, where empty is simply not "false" and the default is commit.
+          COMMIT: ${{ inputs.commit }}
         run: |
+          if [ "${COMMIT}" = "false" ]; then
+            echo "::notice::commit input is false; skipping the commit."
+            exit 0
+          fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/ukhotels/data/property_panel.csv

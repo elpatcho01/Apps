@@ -321,7 +321,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 282 tests, no network
+python -m pytest                                    # 370 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -528,6 +528,36 @@ purpose: **it must always reach its commit step.**
 An aborting digest workflow would look like a minor annoyance and would take the
 collection schedules down with it six weeks later. That is not a trade worth
 making for a tidier exit code.
+
+### The commit step once skipped itself on every scheduled run
+
+Worth reading before touching the `if:` on that step, because the failure was
+invisible for six weeks and the mechanism is not obvious.
+
+The step used to be gated on `if: always() && inputs.commit != false`. The
+`inputs` context is populated for `workflow_dispatch`, so on a `schedule` event
+`inputs.commit` is null — and **GitHub coerces both null and false to `0` before
+comparing**, which makes `null != false` evaluate to *false*. The step was
+therefore skipped on exactly the runs that the mechanism exists for, and only
+ever ran under manual dispatch.
+
+Nothing failed. The digest was generated, the analytics JSON was exported, both
+were discarded when the runner was torn down, and the run went green with the
+step marked "skipped" — which reads like a condition doing its job. It was found
+on 2026-09-12 by noticing that `reports/data/analytics.json` still described a
+panel ending 2026-08-20 while collection had run cleanly every day since.
+
+Two things follow, and both are now enforced by tests:
+
+- **The gate lives in bash**, not in a GitHub expression — the same conclusion
+  reached earlier about `${{ cond && '' || '--flag' }}`, arrived at a second time
+  through a different operator. An empty string in bash is just an empty string.
+- **`actionlint` does not catch this.** The expression is valid and lints clean;
+  it simply means something other than what it appears to say. The suite now
+  forbids comparing any context against a bare `true`/`false` literal.
+
+The same line was present on both of the sibling `uk-hotels` commit steps, so
+neither project had reset the inactivity clock since 2026-08-21.
 
 ### Things worth knowing
 
@@ -815,7 +845,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              339 tests, no network required
+└── tests/              370 tests, no network required
 ```
 
 ## Non-goals

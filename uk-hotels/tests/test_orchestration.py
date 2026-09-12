@@ -126,3 +126,39 @@ def test_conditional_flags_put_a_non_empty_value_in_the_true_branch():
         for line in _live_expressions(path.read_text(encoding="utf-8")):
             for match in re.finditer(r"&&\s*('(?:[^']*)')\s*\|\|", line):
                 assert match.group(1) != "''", f"{path.name}: {line.strip()}"
+
+
+# Bare `true`/`false`, not the quoted strings: `[ "$x" != "false" ]` inside a
+# run block is the correct bash form and must not trip this.
+BOOLEAN_LITERAL_COMPARISON = re.compile(r"(?:==|!=)\s*(?:true|false)\b")
+
+
+def test_no_workflow_compares_a_context_against_a_boolean_literal():
+    """`inputs.commit != false` is FALSE on every scheduled run.
+
+    The second instance of the same lesson as the two tests above: a GitHub
+    expression that is valid, lints clean, and means the opposite of what it
+    says. `inputs` is populated for workflow_dispatch, so on a `schedule` event
+    `inputs.commit` is null, and GitHub coerces null and false alike to 0 before
+    comparing -- making `null != false` false, and skipping the step.
+
+    It sat on the commit step of both digests and the panel refresh, so all
+    three worked under manual dispatch and silently did nothing on a schedule.
+    Confirmed on 2026-09-02, the first scheduled run of either digest: both
+    generated a report, exported analytics, committed neither, and reported
+    success. Those commits are the only thing resetting GitHub's 60-day
+    scheduled-workflow inactivity timer for this repository.
+
+    Note this scans every line, not just `${{ }}` ones: a step-level `if:` needs
+    no expression delimiters, which is exactly where all three instances were.
+    """
+    offenders = []
+    for path in WORKFLOWS:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.lstrip().startswith("#"):
+                continue  # the comments explaining this quote the broken form
+            if BOOLEAN_LITERAL_COMPARISON.search(line):
+                offenders.append(f"{path.name}: {line.strip()}")
+    assert not offenders, (
+        "comparison against a bare boolean literal in:\n  " + "\n  ".join(offenders)
+    )

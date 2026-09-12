@@ -213,11 +213,28 @@ jobs:
       # exits non-zero, which would fail the job for no reason. Worth being
       # explicit that an unchanged report also resets nothing, so the value comes
       # from each month's first run, not from re-runs.
+      #
+      # THE GATE IS IN BASH, NOT IN THE `if:`. It used to read
+      # `if: always() && inputs.commit != false`, which silently skipped this
+      # step on every scheduled run -- the only runs that matter here.
+      # `inputs` is populated for workflow_dispatch, so on a `schedule` event
+      # `inputs.commit` is null; GitHub coerces both null and false to 0 before
+      # comparing, so `null != false` is FALSE and the step never ran. Verified
+      # against the first scheduled run (2026-09-02): digest generated, analytics
+      # exported, both discarded, run green. Same shape as the `&& '' ||` ternary
+      # fixed earlier, and actionlint does not flag either.
       - name: Commit the report
-        if: always() && inputs.commit != false
+        if: always()
         env:
           MONTH: ${{ steps.month.outputs.month }}
+          # Empty on a schedule, "true"/"false" on a dispatch. Compared as a
+          # string, where empty is simply not "false" and the default is commit.
+          COMMIT: ${{ inputs.commit }}
         run: |
+          if [ "${COMMIT}" = "false" ]; then
+            echo "::notice::commit input is false; skipping the commit."
+            exit 0
+          fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add reports/
