@@ -269,9 +269,101 @@ reconciliation time (`attribution_rule`). Validation scores them side by side
 and lets the data settle it. `index_month_hyp` is retained under its original
 name and follows the departure-month rule.
 
+**The published seasonality points hard at departure-month.** Not proof, but the
+strongest evidence available before overlap exists, and it costs nothing to
+check: take the peak month of each published series and ask what each reading
+implies about when people are flying.
+
+| Series | Peaks | If index = departure | If index = collection |
+|---|---|---|---|
+| Domestic 1m | Aug | depart **Aug** | depart Sep |
+| European 1m | Aug | depart **Aug** | depart Sep |
+| European 3m | Aug | depart **Aug** | depart Nov |
+| Long-haul 1m | Dec | depart **Dec** | depart Jan |
+| Long-haul 3m | Dec | depart **Dec** | depart Mar |
+| Long-haul 6m | Aug | depart **Aug** | depart Feb |
+
+Under departure-month every series peaks for August or December travel — summer
+holidays and Christmas. Under collection-month, long-haul fares would have to
+peak for **January and February departures**, the two cheapest months of the year
+to fly long-haul. The second reading is not credible.
+
+The same test explains the 08→09 transition, which is the most reliably negative
+step in the calendar (negative in 19 of 19 years, median −22% to −27%). Under
+departure-month that is August travel giving way to September travel, which is
+the post-summer collapse. Under collection-month it would be November departures
+giving way to December ones — Christmas — which should *rise*.
+
+*The counter-argument, stated because it is real:* standard CPI measures prices
+collected in the reference month, and departure-month attribution means a
+September 6-month figure was collected the previous March. That is unusual
+timing. Air fares are already one of the few items collected forward-looking, so
+it is not disqualifying, but ONS have published nothing either way. Both
+attributions remain stored and scored.
+
 The same applies to aggregation: mean, median and geometric mean are all
 computed. ONS use a Jevons (geometric mean) elementary aggregate for most CPI
 items, so the geometric mean is the most likely match, but all three are carried.
+
+### Read the panel at index-month grain, or it will mislead you
+
+This is the single most important habit when looking at this data, and getting it
+wrong produced a published chart that was flatly wrong for a day.
+
+**Departure dates roll forward with the collection date.** An August collection at
+3 months ahead prices a 10 Nov departure returning 1 Dec; the September one prices
+8 Dec returning **29 Dec**. Charted against collection date, consecutive points
+are different trips in different months, and the series appears to rise 28% in a
+month that has fallen in 19 years out of 19. Nothing was wrong with the fares —
+the panel had walked out of an off-peak November trip into a Christmas one, which
+ONS's own history says adds about 38% to that series.
+
+So: **group by `index_month_departure`, never by `scrape_date`**, whenever the
+question is about fare movement. `routes_by_index_month` in the export exists for
+exactly this, at the route grain.
+
+### Two live measurement problems, both found this way
+
+Placing the first two index months on the ONS calendar and checking each step
+against the same calendar step since 2007 isolates two cells. One has a known
+cause; one does not.
+
+**Long-haul 1-month is not measuring fares.** Its Sep→Oct step was **+30.5%**,
+which is 4.4 standard deviations above the historical mean and more than double
+the widest such move in 19 years. The price-blind control on identical queries
+moved **+3.7%**, entirely ordinary. The market did not do this; the selection did
+— `ons_rule_time_delta_minutes` shows the rule settling onto a different, dearer
+flight (173→273 oscillation in August, then locked at 153–157). Treat this cell
+as unusable until the long-haul target time is measured per window rather than
+inherited.
+
+**European 1-month is unexplained and is not a selection problem.** There the
+*rule* looks normal (−1.7%, 63rd percentile) and the **cheapest comparable fare**
+is the outlier: **+18%**, above its own 19-year maximum of +13%. A price-blind
+control cannot be moved by the selection rule, so this is something else. Ruled
+out so far:
+
+- *Not composition.* All 9 European routes priced on all 12 collection days, zero
+  `no_data`, so it is not the unmatched-sample artifact described under
+  [Matched samples](#matched-samples).
+- *Not one route.* The mean/median ratio holds at 0.95–1.08 throughout with no
+  shift between months.
+- *Not noise.* The cheapest sits at £82–85 across all seven August days and
+  £95–103 across all five September days — a clean level shift.
+
+The leading hypothesis is the **return leg**, not the departure. European returns
+are +2 weeks, so the October trip departs 13 Oct and returns **27 Oct**, inside
+UK autumn half-term; the September trip is term-time on both legs. Holiday demand
+empties the cheap buckets first, which lifts the floor while leaving the
+distribution broadly alone — exactly the observed signature. It does not fully
+close the gap, since +18% still exceeds ONS's own maximum for that step, though
+their index day moves between the 2nd and 3rd Tuesday and half-term dates vary,
+so the effect would show up in their data as variance rather than a median shift.
+
+**The test that settles it:** if half-term is the cause, the rise concentrates in
+the leisure routes (AGP, ALC, FAO, PMI, NAP) and is weak on the business routes
+(AMS, CDG, DUB). Spread evenly across all nine, half-term is not the explanation.
+`routes_by_index_month` makes this answerable from the committed export.
 
 ---
 
@@ -365,7 +457,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 378 tests, no network
+python -m pytest                                    # 382 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -540,6 +632,7 @@ What it contains:
 | `published_series` | Every current ONS published value — the validation target |
 | `daily_by_series` | One row per (day × haul × window): counts, mean/median/geomean fare, minutes off target |
 | `latest_routes` | Per-route detail for the most recent collection date only |
+| `routes_by_index_month` | One row per (index month × route × window): the grain ONS file at, so route-level movement between months is answerable without BigQuery. ~44 rows a month, not 44 a day |
 | `reconstructions` | Every current reconstruction, all variants |
 
 **Aggregates only, never raw observation rows.** Git keeps every version of
@@ -889,7 +982,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              378 tests, no network required
+└── tests/              382 tests, no network required
 ```
 
 ## Non-goals

@@ -85,7 +85,7 @@ class TestAlwaysLands:
         assert data["schema_version"] == SCHEMA_VERSION
         assert set(data["errors"]) == {
             "coverage", "published_series", "daily_by_series",
-            "latest_routes", "reconstructions",
+            "latest_routes", "routes_by_index_month", "reconstructions",
         }
         assert data["published_series"] == []
 
@@ -142,6 +142,46 @@ class TestShape:
         data = build_export(FakeReader(LIVE_SHAPED), _config())
         for key in ("generated_ts", "pipeline_version", "project", "dataset"):
             assert data[key], f"{key} missing — a stale export must be recognisable"
+
+
+class TestPerRouteHistory:
+    """`latest_routes` alone cannot answer "which routes moved between months?".
+
+    That blocked two investigations in one day. LHR-SIN priced 2.9x its own
+    cheapest comparable fare and there was no way to see whether it had always
+    done so; then European 1-month stepped +18% on the cheapest measure -- above
+    its 19-year maximum -- and the export could not say whether that was spread
+    across all nine routes or two leisure routes catching October half-term.
+    Both are answerable from BigQuery and neither was answerable from the file
+    the pipeline commits, which is the file anything without cloud access reads.
+    """
+
+    def test_the_section_is_exported(self):
+        data = build_export(FakeReader(LIVE_SHAPED), _config())
+        assert "routes_by_index_month" in data
+
+    def test_grouped_by_index_month_not_scrape_date(self):
+        """Comparisons happen at the grain ONS file at, which is departure month."""
+        reader = FakeReader(LIVE_SHAPED)
+        build_export(reader, _config())
+        sql = [q for q in reader.queries if "index_month_departure" in q]
+        assert sql, "no query groups by index month"
+        assert "GROUP BY 1, 2, 3, 4" in sql[0]
+        assert "route" in sql[0]
+
+    def test_carries_the_spread_across_collection_days(self):
+        """ONS take one day; we take several. The span is index-day timing risk."""
+        reader = FakeReader(LIVE_SHAPED)
+        build_export(reader, _config())
+        sql = [q for q in reader.queries if "index_month_departure" in q][0]
+        assert "min_price_gbp" in sql and "max_price_gbp" in sql
+
+    def test_reads_the_view_so_superseded_runs_are_excluded(self):
+        reader = FakeReader(LIVE_SHAPED)
+        build_export(reader, _config())
+        sql = [q for q in reader.queries if "index_month_departure" in q][0]
+        assert "proj.ds.current_scrapes" in sql
+        assert "proj.ds.airfare_scrapes" not in sql
 
 
 class TestSelectionMarginIsExported:
@@ -231,7 +271,7 @@ class TestFailureShapeMatchesSuccessShape:
     def test_row_sections_are_lists_even_on_failure(self):
         data = build_export(FakeReader({"": RuntimeError("NotFound")}), _config())
         for name in ("published_series", "daily_by_series", "latest_routes",
-                     "reconstructions"):
+                     "routes_by_index_month", "reconstructions"):
             assert isinstance(data[name], list)
 
     def test_error_messages_are_single_line(self):

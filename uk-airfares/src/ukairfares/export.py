@@ -54,7 +54,9 @@ from .config import Config, ConfigError, PIPELINE_VERSION
 log = logging.getLogger("ukairfares.export")
 
 #: Bump when the shape changes in a way a consumer would need to notice.
-SCHEMA_VERSION = 1
+#: 2 — adds `routes_by_index_month`, and `selection_margin_minutes` to the
+#: per-route and per-series sections.
+SCHEMA_VERSION = 2
 
 DEFAULT_OUT = pathlib.Path("reports/data/analytics.json")
 
@@ -120,6 +122,42 @@ WHERE scrape_date = (SELECT d FROM latest)
 ORDER BY haul_category, route, months_ahead
 """
 
+# --- Per route, per index month ----------------------------------------------
+# LATEST_ROUTES carries only the most recent collection date, which makes any
+# question of the form "which routes moved between two index months?"
+# unanswerable from the export. That blocked two investigations in one day: the
+# LHR-SIN outlier, and a European 1-month step where the cheapest comparable fare
+# rose 18% -- above its own 19-year maximum -- with no way to tell whether it was
+# broad-based or two leisure routes catching half-term.
+#
+# Grouped by index_month_departure, not scrape_date, because that is the grain
+# ONS file at and therefore the grain comparisons happen at. A collection month
+# maps to exactly one index month per window, so this is ~44 rows per month
+# rather than 44 per day: bounded growth, ~500 rows a year, which keeps the
+# aggregates-only rule intact while making the panel's history legible per route.
+#
+# min/max span the collection days feeding that index month, so index-day timing
+# risk stays visible per route rather than only in the series average.
+ROUTES_BY_INDEX_MONTH = """
+SELECT
+  index_month_departure, route, haul_category, months_ahead,
+  COUNT(*)                     AS days,
+  COUNTIF(status = 'ok')       AS ok,
+  COUNTIF(status = 'no_data')  AS no_data,
+  MIN(departure_date)          AS departure_date,
+  MIN(return_date)             AS return_date,
+  CAST(ROUND(AVG(price_gbp), 2) AS FLOAT64)           AS mean_price_gbp,
+  CAST(ROUND(MIN(price_gbp), 2) AS FLOAT64)           AS min_price_gbp,
+  CAST(ROUND(MAX(price_gbp), 2) AS FLOAT64)           AS max_price_gbp,
+  CAST(ROUND(AVG(price_cheapest_gbp), 2) AS FLOAT64)  AS mean_cheapest_gbp,
+  ROUND(AVG(ons_rule_time_delta_minutes))             AS mean_mins_off_target,
+  ROUND(AVG(selection_margin_minutes))                AS mean_selection_margin
+FROM `{view}`
+WHERE index_month_departure IS NOT NULL
+GROUP BY 1, 2, 3, 4
+ORDER BY 1, 3, 2, 4
+"""
+
 RECONSTRUCTIONS = """
 SELECT index_month, haul_category, months_ahead,
        attribution_rule, selection_rule, agg_method,
@@ -179,6 +217,8 @@ def build_export(reader, config: Config, *, generated: dt.datetime | None = None
         "published_series": lambda: _rows(reader, PUBLISHED_SERIES.format(published=published)),
         "daily_by_series": lambda: _rows(reader, DAILY_BY_SERIES.format(view=view)),
         "latest_routes": lambda: _rows(reader, LATEST_ROUTES.format(view=view)),
+        "routes_by_index_month": lambda: _rows(
+            reader, ROUTES_BY_INDEX_MONTH.format(view=view)),
         "reconstructions": lambda: _rows(reader, RECONSTRUCTIONS.format(
             index_table=config.index_ref)),
     }
