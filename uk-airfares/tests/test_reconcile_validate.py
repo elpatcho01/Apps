@@ -415,3 +415,175 @@ class TestBulletinNotNeededForAStaleMonth:
         with pytest.raises(rec.NoCollectionYet) as exc:
             self._run(dt.date(2026, 8, 1), None, None)
         assert "has not started" in str(exc.value)
+
+
+def _agg(rows, previous_rows=None):
+    return aggregate(
+        rows,
+        index_day=INDEX_DAY,
+        scrape_date_used=dt.date(2026, 8, 11),
+        offset_days=0,
+        run_id="r",
+        computed_ts=dt.datetime(2026, 9, 20, tzinfo=dt.timezone.utc),
+        previous_rows=previous_rows,
+    )
+
+
+def _pick(rows, agg_method="geometric_mean", haul="domestic"):
+    return [
+        r for r in rows
+        if r["agg_method"] == agg_method
+        and r["haul_category"] == haul
+        and r["attribution_rule"] == "departure_month"
+        and r["selection_rule"] == "ons_target_time"
+    ][0]
+
+
+class TestMatchedPriceRelative:
+    """The protection that was built, tested, documented -- and not in the path.
+
+    index.py has always implemented matched_pairs and price_relative, with a test
+    proving the naive alternative invents a 25% price collapse out of one dropped
+    route. Nothing called it: reconcile stored an unmatched monthly LEVEL and
+    validate differenced those levels. These tests pin it into the pipeline.
+    """
+
+    def _prev(self, **prices):
+        return [panel_row(route, "domestic", price,
+                          dep_month=(2026, 8), coll_month=(2026, 7))
+                for route, price in prices.items()]
+
+    def _now(self, **prices):
+        return [panel_row(route, "domestic", price) for route, price in prices.items()]
+
+    def test_relative_is_computed_against_the_previous_month(self):
+        rows = _agg(self._now(A=110, B=220, C=330),
+                    previous_rows=self._prev(A=100, B=200, C=300))
+        r = _pick(rows)
+        assert float(r["price_relative"]) == pytest.approx(1.10)
+        assert r["relative_formula"] == "jevons"
+        assert r["n_matched_routes"] == 3
+        assert r["n_unmatched_routes"] == 0
+        assert r["prev_index_month"] == dt.date(2026, 8, 1)
+
+    def test_a_dropped_route_does_not_read_as_a_price_fall(self):
+        """The whole point. Fares are flat; one expensive route stops pricing.
+
+        An unmatched average of levels falls hard -- the basket got cheaper
+        because the dear route left, not because anything was repriced. The
+        matched relative sees only the routes present in both months and
+        correctly reports no change.
+        """
+        prev = self._prev(A=100, B=100, C=100, EXPENSIVE=900)
+        now = self._now(A=100, B=100, C=100)
+        rows = _agg(now, previous_rows=prev)
+        r = _pick(rows)
+
+        unmatched_level_change = (
+            float(r["geomean_fare_gbp"])
+            / float(_pick(_agg(prev)) ["geomean_fare_gbp"]) - 1) * 100
+        assert unmatched_level_change < -30, "the naive comparison should crater"
+        assert float(r["price_relative"]) == pytest.approx(1.0), \
+            "the matched relative must see no price change"
+        assert r["n_unmatched_routes"] == 1
+
+    def test_mean_pairs_with_dutot_and_median_carries_none(self):
+        prev, now = self._prev(A=100, B=200, C=300), self._now(A=110, B=220, C=330)
+        rows = _agg(now, previous_rows=prev)
+        assert _pick(rows, "mean")["relative_formula"] == "dutot"
+        assert _pick(rows, "geometric_mean")["relative_formula"] == "jevons"
+        median = _pick(rows, "median")
+        assert median["price_relative"] is None, "median has no elementary analogue"
+        assert median["relative_formula"] is None
+
+    def test_no_previous_month_leaves_the_columns_null(self):
+        r = _pick(_agg(self._now(A=100, B=200, C=300)))
+        assert r["price_relative"] is None
+        assert r["n_matched_routes"] is None
+        assert r["prev_index_month"] is None
+
+    def test_too_little_overlap_carries_no_relative_rather_than_a_fragile_one(self):
+        rows = _agg(self._now(A=110, B=220, C=330),
+                    previous_rows=self._prev(A=100, ZZ=500))
+        assert _pick(rows)["price_relative"] is None
+
+    def test_the_level_keeps_its_meaning(self):
+        """Additive: reconstructed_value must still be the level in pounds."""
+        rows = _agg(self._now(A=100, B=100, C=100),
+                    previous_rows=self._prev(A=50, B=50, C=50))
+        r = _pick(rows)
+        assert float(r["reconstructed_value"]) == pytest.approx(100.0)
+        assert float(r["price_relative"]) == pytest.approx(2.0)
+
+    def test_cheapest_rule_gets_its_own_relative(self):
+        prev = [panel_row("A", "domestic", 200, cheapest=100,
+                          dep_month=(2026, 8), coll_month=(2026, 7)),
+                panel_row("B", "domestic", 200, cheapest=100,
+                          dep_month=(2026, 8), coll_month=(2026, 7)),
+                panel_row("C", "domestic", 200, cheapest=100,
+                          dep_month=(2026, 8), coll_month=(2026, 7))]
+        now = [panel_row("A", "domestic", 200, cheapest=150),
+               panel_row("B", "domestic", 200, cheapest=150),
+               panel_row("C", "domestic", 200, cheapest=150)]
+        rows = _agg(now, previous_rows=prev)
+        rule = [r for r in rows if r["selection_rule"] == "ons_target_time"
+                and r["agg_method"] == "geometric_mean"
+                and r["attribution_rule"] == "departure_month"][0]
+        cheap = [r for r in rows if r["selection_rule"] == "cheapest"
+                 and r["agg_method"] == "geometric_mean"
+                 and r["attribution_rule"] == "departure_month"][0]
+        assert float(rule["price_relative"]) == pytest.approx(1.0)
+        assert float(cheap["price_relative"]) == pytest.approx(1.5)
+
+
+class TestValidatePrefersTheMatchedRelative:
+    """Scoring must use the matched relative, not the difference of two levels.
+
+    The two disagree exactly when the basket changed, which is the case the
+    matched relative exists for. If validate kept differencing levels, wiring the
+    relative into reconcile would have achieved nothing.
+    """
+
+    def _rows(self, **over):
+        base = dict(haul_category="domestic", months_ahead=1,
+                    attribution_rule="departure_month", selection_rule="ons_target_time",
+                    agg_method="geometric_mean", n_observations=8,
+                    index_day_exact=True, index_day_offset_days=0,
+                    weights_are_placeholder=False, source_is_cached=False)
+        # Levels crater 50% (a dear route dropped out); the matched relative says flat.
+        rows = [
+            dict(base, index_month=dt.date(2026, 9, 1), reconstructed_value=200.0,
+                 published_ons_value=100.0, price_relative=None, prev_index_month=None),
+            dict(base, index_month=dt.date(2026, 10, 1), reconstructed_value=100.0,
+                 published_ons_value=100.0, price_relative=1.0,
+                 prev_index_month=dt.date(2026, 9, 1)),
+        ]
+        rows[-1].update(over)
+        return rows
+
+    def test_uses_the_relative_not_the_level_difference(self):
+        score = score_variant(self._rows())
+        # ONS was flat; the matched relative says flat, so the error is zero.
+        # Differencing levels would have said -50% and scored a 50-point error.
+        assert score.mae == pytest.approx(0.0, abs=1e-9)
+
+    def test_falls_back_to_levels_when_no_relative_was_stored(self):
+        score = score_variant(self._rows(price_relative=None, prev_index_month=None))
+        assert score.mae == pytest.approx(50.0)
+
+    def test_ignores_a_relative_that_spans_a_gap(self):
+        """A relative measured from a month that is not the previous ROW."""
+        score = score_variant(self._rows(prev_index_month=dt.date(2026, 7, 1)))
+        assert score.mae == pytest.approx(50.0)
+
+    def test_the_splice_uses_the_relative_too(self):
+        score = score_variant(self._rows())
+        # ONS's previous level 100 carried forward by a flat relative is 100,
+        # which is exactly what they published, so the splice error is zero.
+        assert score.splice_mae_index_points == pytest.approx(0.0, abs=1e-9)
+
+    def test_the_score_query_selects_the_columns_it_relies_on(self):
+        """Without these the fallback silently wins on every row in production."""
+        from ukairfares.validate import SCORE_QUERY
+        for column in ("price_relative", "prev_index_month"):
+            assert f"r.{column}" in SCORE_QUERY

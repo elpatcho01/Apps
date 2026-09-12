@@ -77,7 +77,12 @@ SELECT
   r.attribution_rule, r.selection_rule, r.agg_method,
   r.reconstructed_value, p.index_value AS published_ons_value, p.basis AS published_basis,
   r.n_observations, r.index_day_exact, r.index_day_offset_days,
-  r.weights_are_placeholder, r.source_is_cached
+  r.weights_are_placeholder, r.source_is_cached,
+  -- The matched-sample relative and the month it measures from. Without these
+  -- `_changes` silently falls back to differencing levels on every row, which
+  -- is the unmatched comparison this was wired in to replace.
+  r.price_relative, r.prev_index_month, r.relative_formula,
+  r.n_matched_routes, r.n_unmatched_routes
 FROM latest_recon r
 JOIN latest_published p
   ON r.index_month = p.index_month
@@ -118,6 +123,33 @@ def _pct_change(series: Sequence[float]) -> list[float]:
     ]
 
 
+def _changes(rows: list[dict[str, Any]], levels: Sequence[float]) -> list[float]:
+    """Month-on-month change, preferring the stored matched-sample relative.
+
+    Differencing two monthly LEVELS is only valid while the basket is identical
+    in both months. It is not: routes drop in and out, and an unmatched average
+    reads a dropped expensive route as a fall in fares. `reconcile` now stores a
+    matched relative computed over routes priced in both months, which is what
+    CPI does and what this should use.
+
+    Falls back to differencing levels where no relative was stored -- every row
+    written before the column existed, a first month with no base, or a month
+    whose overlap was too thin to defend one. That keeps historical rows scorable
+    instead of silently dropping them, at the accuracy the old path had.
+    """
+    out: list[float] = []
+    for i in range(1, len(rows)):
+        relative = rows[i].get("price_relative")
+        previous = rows[i].get("prev_index_month")
+        # Only usable if it measures from the row immediately before this one;
+        # a relative spanning a gap in collection answers a different question.
+        if relative is not None and previous == rows[i - 1]["index_month"]:
+            out.append((float(relative) - 1.0) * 100.0)
+        elif levels[i - 1]:
+            out.append((levels[i] - levels[i - 1]) / levels[i - 1] * 100.0)
+    return out
+
+
 def score_variant(rows: list[dict[str, Any]]) -> VariantScore | None:
     """MAE, bias and a rolling-origin MAE for one variant on one haul category.
 
@@ -133,7 +165,7 @@ def score_variant(rows: list[dict[str, Any]]) -> VariantScore | None:
     recon = [float(r["reconstructed_value"]) for r in rows]
     published = [float(r["published_ons_value"]) for r in rows]
 
-    recon_ch = _pct_change(recon)
+    recon_ch = _changes(rows, recon)
     pub_ch = _pct_change(published)
     if not recon_ch or len(recon_ch) != len(pub_ch):
         return None
@@ -170,7 +202,15 @@ def score_variant(rows: list[dict[str, Any]]) -> VariantScore | None:
         prev_recon = recon[i - 1]
         if prev_published <= 0 or prev_recon <= 0:
             continue
-        nowcast = prev_published * (recon[i] / prev_recon)
+        # Carry ONS's level forward by OUR relative. Prefer the matched one for
+        # the same reason as above: a splice built on an unmatched level change
+        # inherits every phantom movement the basket produced.
+        relative = rows[i].get("price_relative")
+        previous = rows[i].get("prev_index_month")
+        if relative is not None and previous == rows[i - 1]["index_month"]:
+            nowcast = prev_published * float(relative)
+        else:
+            nowcast = prev_published * (recon[i] / prev_recon)
         splice_errors.append(abs(nowcast - published[i]))
     splice_mae = statistics.fmean(splice_errors) if splice_errors else None
 

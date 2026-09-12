@@ -35,7 +35,7 @@ import uuid
 from decimal import Decimal
 from typing import Any, Iterable
 
-from . import bq, panel
+from . import bq, index, panel
 from .config import Config, ConfigError, PIPELINE_VERSION
 from .onscal import HaulCategory, add_months, candidate_index_days
 from .onsfetch import BulletinNotPublished, IndexDayNotFound, IndexDayResult, fetch_index_day
@@ -104,6 +104,39 @@ SELECT MIN(scrape_date) AS first_day
 FROM `{table}`
 WHERE status = 'ok'
 """
+
+
+#: Which elementary formula corresponds to which aggregation of levels. Median
+#: is absent deliberately: there is no standard CPI elementary aggregate that is
+#: a median of relatives, and inventing one to fill the column would put a number
+#: with no methodology behind it next to two that have.
+_FORMULA_FOR_AGG = {"mean": "dutot", "geometric_mean": "jevons"}
+
+
+def _relatives(
+    base: dict[str, float], current: dict[str, float]
+) -> dict[str, index.PriceRelative]:
+    """Matched-sample relatives, or nothing where one cannot be defended.
+
+    `price_relative` raises below `min_matched` routes, which is the correct
+    behaviour and not an error here: a first month has no base, and a month whose
+    basket barely overlaps the last one should carry no relative rather than a
+    fragile one. Both arrive as an empty dict and leave the columns NULL.
+    """
+    if not base or not current:
+        return {}
+    out: dict[str, index.PriceRelative] = {}
+    for formula in ("jevons", "dutot"):
+        try:
+            out[formula] = index.price_relative(base, current, formula)
+        except index.IndexError_ as exc:
+            log.info("no %s relative (%s)", formula, exc)
+    return out
+
+
+def _previous_month_of(rows: list[dict[str, Any]], key: str) -> dt.date | None:
+    months = {r[key] for r in rows if r.get(key)}
+    return max(months) if months else None
 
 
 class NoCollectionYet(Exception):
@@ -182,6 +215,7 @@ def aggregate(
     offset_days: int,
     run_id: str,
     computed_ts: dt.datetime,
+    previous_rows: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build every (attribution x selection x aggregation) reconstruction row.
 
@@ -198,6 +232,15 @@ def aggregate(
     """
     out: list[dict[str, Any]] = []
     expected = {h: len(panel.routes_by_haul(h)) for h in HAULS}
+
+    # The previous index month's rows, grouped by the cell they belong to. They
+    # come from a different scrape date, one collection month earlier, so for any
+    # (haul, window) they ARE the previous index month by construction -- no
+    # filtering by month is needed or wanted.
+    previous: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    for r in previous_rows or []:
+        if r.get("months_ahead"):
+            previous.setdefault((r["haul_category"], r["months_ahead"]), []).append(r)
 
     # Weights are keyed by year and carried forward, matching how CPI weights
     # are set annually. Placeholders are permitted here but the flag propagates
@@ -243,6 +286,24 @@ def aggregate(
                         if not prices:
                             continue
 
+                        # The matched-sample relative, against the same cell in
+                        # the previous index month. Computed per ROUTE and only
+                        # over routes priced in both months -- differencing the
+                        # levels below would read a dropped route as a price
+                        # move, which is the failure index.matched_pairs exists
+                        # to prevent and which was live until this was wired in.
+                        current_by_route = {
+                            r["route"]: float(r[price_col])
+                            for r in haul_rows if r.get(price_col) is not None
+                        }
+                        base_by_route = {
+                            r["route"]: float(r[price_col])
+                            for r in previous.get((haul, window), [])
+                            if r.get(price_col) is not None
+                        }
+                        relatives = _relatives(base_by_route, current_by_route)
+                        prev_month = _previous_month_of(previous.get((haul, window), []), key)
+
                         mean = statistics.fmean(prices)
                         median = statistics.median(prices)
                         geomean = _geometric_mean(prices)
@@ -254,6 +315,13 @@ def aggregate(
                         ):
                             if value is None:
                                 continue
+                            # An arithmetic mean of levels pairs with Dutot (a
+                            # ratio of means) and a geometric mean with Jevons
+                            # (a geometric mean of relatives): the same question
+                            # asked two ways. Median has no standard elementary
+                            # analogue, so it carries no relative rather than an
+                            # invented one.
+                            rel = relatives.get(_FORMULA_FOR_AGG.get(agg_method))
                             out.append(
                                 {
                                     "index_month": index_month,
@@ -267,6 +335,11 @@ def aggregate(
                                     "attribution_rule": attribution,
                                     "selection_rule": selection_rule,
                                     "agg_method": agg_method,
+                                    "price_relative": _quantise(rel.value) if rel else None,
+                                    "relative_formula": rel.formula if rel else None,
+                                    "n_matched_routes": rel.n_matched if rel else None,
+                                    "n_unmatched_routes": rel.n_unmatched if rel else None,
+                                    "prev_index_month": prev_month if rel else None,
                                     "mean_fare_gbp": _quantise(mean),
                                     "median_fare_gbp": _quantise(median),
                                     "geomean_fare_gbp": _quantise(geomean),
@@ -470,6 +543,38 @@ def run_reconcile(
     if not rows:
         raise RuntimeError(f"no successful panel rows on {scrape_date_used}")
 
+    # The previous index month, for the matched-sample relative. Resolved the
+    # same way as the current one -- nearest usable scrape to the index day a
+    # month earlier -- so a missed collection day degrades to a nearby date
+    # rather than to no relative at all.
+    #
+    # Allowed to come back empty and never allowed to fail the run: a first
+    # month legitimately has no base, and reconciliation of THIS month must not
+    # depend on the previous one being readable. Absent a base the relative
+    # columns are NULL and validation falls back to differencing levels, which
+    # is what it did for every row written before this existed.
+    previous_rows: list[dict[str, Any]] = []
+    try:
+        prev_target = add_months(index_day.index_day, -1)
+        prev_date, prev_offset = resolve_scrape_date(
+            reader, config.scrapes_ref, prev_target
+        )
+        if prev_date is not None:
+            previous_rows = reader.query(
+                PANEL_QUERY.format(table=config.scrapes_ref),
+                {"scrape_date": prev_date},
+            )
+            log.info(
+                "%d rows from %s (%+d days off the previous index day) for the relative",
+                len(previous_rows), prev_date, prev_offset,
+            )
+        else:
+            log.info("no usable scrape near %s; this month carries no relative",
+                     prev_target)
+    except Exception as exc:  # noqa: BLE001 - a missing base must not fail the month
+        log.warning("could not read the previous index month (%s); "
+                    "reconstructions will carry no relative", exc)
+
     out = aggregate(
         rows,
         index_day=index_day,
@@ -477,6 +582,7 @@ def run_reconcile(
         offset_days=offset,
         run_id=run_id,
         computed_ts=computed_ts,
+        previous_rows=previous_rows,
     )
     written = writer.append(
         config.index_ref if not config.dry_run else "reconstructed_index", out

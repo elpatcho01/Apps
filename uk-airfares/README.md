@@ -526,7 +526,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 407 tests, no network
+python -m pytest                                    # 419 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -875,6 +875,17 @@ on. `validate.py` reports its error as `splice_mae_index_points`.
 
 ### Matched samples
 
+**This was built, tested, documented as load-bearing — and not wired in until
+2026-09-12.** `index.py` had always implemented `matched_pairs` and
+`price_relative`; nothing called it. `reconcile` stored an unmatched monthly
+*level* and `validate` differenced those levels, so the protection below was
+described accurately and applied nowhere. It is now in the path:
+`reconstructed_index` carries `price_relative` alongside the level, and scoring
+prefers it, falling back to differencing only where no relative could be
+defended. The lesson generalises — a guard with no caller is documentation, not
+a guard, and the only thing that distinguishes them is a test that fails when
+it is removed.
+
 The price relative is computed **only over routes priced in both months**. This
 isn't fussiness. If `LHR-CPT` returns £900 in March and nothing in April, an
 unmatched average reads the drop as a fall in prices when nothing about the fare
@@ -1053,7 +1064,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              407 tests, no network required
+└── tests/              419 tests, no network required
 ```
 
 ## Non-goals
