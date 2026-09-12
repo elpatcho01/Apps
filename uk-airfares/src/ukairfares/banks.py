@@ -89,13 +89,44 @@ def _minutes(value: str) -> int | None:
         return None
 
 
+#: Leaf keys that carry a departure time on their own.
+DEPARTURE_KEYS = {"departure_time", "departure_at", "departure", "departsat",
+                  "depart_time"}
+
+#: Leaf keys that carry a time only when the PATH says which time it is.
+#: SerpApi is the case that matters: the departure sits at
+#: `best_flights[].flights[].departure_airport.time`, where the leaf is just
+#: `time` and every bit of meaning is in the parent.
+AMBIGUOUS_TIME_KEYS = {"time", "at", "datetime"}
+
+
+def _is_departure(key: str, path: str) -> bool:
+    """Does this leaf carry the OUTBOUND departure time?
+
+    Three exclusions, each for a time that would otherwise be averaged into the
+    bank and move it: arrivals, return legs, and layover segments.
+    """
+    key, path = key.lower(), path.lower()
+    if any(word in path for word in ("arrival", "return", "inbound", "layover")):
+        return False
+    if key in DEPARTURE_KEYS:
+        return True
+    return key in AMBIGUOUS_TIME_KEYS and "departure" in path
+
+
 def departure_minutes(payload: Any) -> list[int]:
     """Every candidate departure time in one provider payload.
 
-    Deliberately forgiving about shape. Providers nest departure times
-    differently and a new one should not require this module to be rewritten
-    before a bank can be measured, so this walks the structure looking for the
-    keys that carry a departure rather than assuming a layout.
+    Matched on the KEY PATH, not the leaf key, and that is the whole lesson of
+    this function. It originally matched leaf keys only -- `departure_time`,
+    `departure_at` and friends -- and found nothing in a single live payload,
+    because SerpApi puts the departure at `departure_airport.time`: the leaf is
+    `time` and the meaning is entirely in the parent. The first live run printed
+    "no candidate departure times found in raw_response" against a panel where
+    every row had one.
+
+    The tests missed it because their fixtures were written from the same
+    assumption as the code. They now use the provider's real shape.
     """
     if isinstance(payload, str):
         try:
@@ -103,20 +134,21 @@ def departure_minutes(payload: Any) -> list[int]:
         except (ValueError, TypeError):
             return []
     found: list[int] = []
-    stack = [payload]
+    stack: list[tuple[Any, str]] = [(payload, "")]
     while stack:
-        node = stack.pop()
+        node, path = stack.pop()
         if isinstance(node, dict):
             for key, value in node.items():
+                child = f"{path}.{key}" if path else str(key)
                 if isinstance(value, (dict, list)):
-                    stack.append(value)
-                elif key in {"departure_time", "departure_at", "departure",
-                             "departsAt", "depart_time"}:
+                    stack.append((value, child))
+                elif _is_departure(str(key), child):
                     minutes = _minutes(str(value))
                     if minutes is not None:
                         found.append(minutes)
         elif isinstance(node, list):
-            stack.extend(node)
+            for item in node:
+                stack.append((item, f"{path}[]"))
     return found
 
 

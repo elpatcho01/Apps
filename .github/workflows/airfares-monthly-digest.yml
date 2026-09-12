@@ -186,7 +186,11 @@ jobs:
             echo '```python'
             python -m ukairfares.banks || echo "bank measurement failed; see the step log"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          # tee, not >>: the run summary is a web page this conversation cannot
+          # read and GitHub does not expose over the API, so a measurement that
+          # went only there could not be acted on without a human relaying it.
+          # The log carries the same text.
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       # Matched-model, measured rather than adopted.
       #
@@ -214,7 +218,11 @@ jobs:
             echo '```'
             python -m ukairfares.matched || echo "replay failed; see the step log"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          # tee, not >>: the run summary is a web page this conversation cannot
+          # read and GitHub does not expose over the API, so a measurement that
+          # went only there could not be acted on without a human relaying it.
+          # The log carries the same text.
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       # The return leg: uncontrolled, unrecorded, and unmeasured until now.
       #
@@ -245,7 +253,11 @@ jobs:
             echo '```'
             python -m ukairfares.returnleg || echo "return-leg census failed; see the step log"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          # tee, not >>: the run summary is a web page this conversation cannot
+          # read and GitHub does not expose over the API, so a measurement that
+          # went only there could not be acted on without a human relaying it.
+          # The log carries the same text.
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Warn if the DDL failed
         if: steps.ddl.outcome == 'failure'

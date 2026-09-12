@@ -59,27 +59,66 @@ class TestTargetResolution:
         assert onscal.TARGET_DEPARTURE_TIME_BY_ROUTE == {}
 
 
+def _serpapi(*times, arrival="2026-10-13 15:30"):
+    """One payload shaped the way the live provider actually shapes it.
+
+    The departure is at `best_flights[].flights[].departure_airport.time`. The
+    leaf key is `time`; all the meaning is in the parent. Fixtures that invent a
+    flat `departure_time` key are why this module shipped unable to read a single
+    real payload.
+    """
+    return {"best_flights": [
+        {"price": 214, "flights": [{
+            "departure_airport": {"id": "LHR", "time": t},
+            "arrival_airport": {"id": "JFK", "time": arrival},
+            "airline": "BA", "flight_number": "BA 117",
+        }]}
+        for t in times
+    ]}
+
+
 class TestReadingCandidateTimes:
-    def test_finds_departures_wherever_the_provider_nests_them(self):
-        payload = {"best_flights": [
-            {"flights": [{"departure_time": "2026-10-13 11:55"}]},
-            {"flights": [{"departure_time": "2026-10-13 14:25"}]},
-        ]}
+    def test_reads_the_shape_the_provider_actually_returns(self):
+        """The regression. This payload is SerpApi's, not an invented one."""
+        payload = _serpapi("2026-10-13 11:55", "2026-10-13 14:25")
         assert sorted(departure_minutes(payload)) == [11 * 60 + 55, 14 * 60 + 25]
 
+    def test_the_arrival_beside_it_is_not_counted(self):
+        """Averaging arrivals into the bank moves the target hours late."""
+        payload = _serpapi("06:10", arrival="09:45")
+        assert departure_minutes(payload) == [6 * 60 + 10]
+
+    def test_a_return_leg_is_not_counted(self):
+        """The bank being measured is the outbound's."""
+        payload = {"return_flights": [
+            {"departure_airport": {"time": "21:45"}}]}
+        assert departure_minutes(payload) == []
+
+    def test_a_layover_is_not_counted(self):
+        """A connection departs too, and it is not a candidate."""
+        payload = {"flights": [{"departure_airport": {"time": "07:00"}}],
+                   "layovers": [{"departure_airport": {"time": "12:30"}}]}
+        assert departure_minutes(payload) == [7 * 60]
+
+    def test_a_flat_departure_key_still_reads(self):
+        """Other providers nest it differently; none should need a rewrite."""
+        payload = {"best_flights": [{"flights": [
+            {"departure_time": "2026-10-13 11:55"}]}]}
+        assert departure_minutes(payload) == [11 * 60 + 55]
+
     def test_accepts_a_json_string(self):
-        raw = json.dumps({"flights": [{"departure_time": "08:40"}]})
+        raw = json.dumps(_serpapi("08:40"))
         assert departure_minutes(raw) == [8 * 60 + 40]
 
     def test_unparseable_payload_yields_nothing_rather_than_raising(self):
         assert departure_minutes("not json at all") == []
-        assert departure_minutes({"flights": [{"departure_time": "elevenish"}]}) == []
+        assert departure_minutes(_serpapi("elevenish")) == []
 
 
 def _rows(route, haul, times, n=1):
+    """Panel rows carrying the provider's real payload shape, not a stand-in."""
     return [{"route": route, "haul_category": haul,
-             "raw_response": json.dumps(
-                 {"flights": [{"departure_time": t} for t in times]})}
+             "raw_response": json.dumps(_serpapi(*times))}
             for _ in range(n)]
 
 

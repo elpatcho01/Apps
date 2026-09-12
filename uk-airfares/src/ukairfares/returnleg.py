@@ -121,7 +121,9 @@ def census(rows) -> dict[str, Any]:
     """How often each key path appears, and which of them mention a return."""
     counts: collections.Counter[str] = collections.Counter()
     total = 0
+    fetched = 0
     for row in rows:
+        fetched += 1
         payload = _loads(row["raw_response"])
         if payload is None:
             continue
@@ -134,8 +136,8 @@ def census(rows) -> dict[str, Any]:
     }
     token_rows = max((n for p, n in counts.items() if TOKEN_HINT in p.lower()),
                      default=0)
-    return {"rows": total, "paths": counts, "return_paths": return_paths,
-            "token_rows": token_rows}
+    return {"rows": total, "fetched": fetched, "paths": counts,
+            "return_paths": return_paths, "token_rows": token_rows}
 
 
 def return_times(payload: Any) -> list[int]:
@@ -148,6 +150,11 @@ def return_times(payload: Any) -> list[int]:
             for key, value in node.items():
                 child = f"{path}.{key}" if path else str(key)
                 looks_return = any(h in child.lower() for h in RETURN_HINTS)
+                # An arrival time sitting under the same return path is a
+                # different quantity; averaging the two produces a median that
+                # belongs to neither.
+                if "arrival" in child.lower():
+                    looks_return = False
                 is_time = any(h in str(key).lower() for h in TIME_HINTS)
                 if looks_return and is_time and not isinstance(value, (dict, list)):
                     minutes = _to_minutes(str(value))
@@ -213,12 +220,26 @@ def report(cen: dict[str, Any], var: dict[str, Any]) -> str:
     if not cen["rows"]:
         return "\n".join(lines + ["No payloads readable. Nothing to say."])
 
-    lines.append(f"Payloads examined: {cen['rows']}")
+    lines.append(f"Rows fetched: {cen.get('fetched', cen['rows'])}   "
+                 f"payloads readable: {cen['rows']}")
+    unreadable = cen.get("fetched", cen["rows"]) - cen["rows"]
+    if unreadable:
+        lines.append(f"  ({unreadable} rows had no readable raw_response at all, "
+                     f"which is its own finding)")
     if cen["return_paths"]:
         lines += ["", "Key paths mentioning a return leg:"]
         for path, n in sorted(cen["return_paths"].items(), key=lambda kv: -kv[1])[:20]:
             lines.append(f"  {n / cen['rows'] * 100:5.1f}% of rows   {path}")
     else:
+        # Show what IS in the payload. A census that reports only the absence of
+        # what it looked for leaves the reader unable to tell "the field is not
+        # there" from "you looked under the wrong name" -- and that distinction
+        # has already cost this project one silent module: the bank measurement
+        # searched for `departure_time` while the provider stores the departure
+        # at `departure_airport.time`, and reported finding nothing.
+        lines += ["", "The 20 commonest key paths that ARE present:"]
+        for path, n in sorted(cen["paths"].items(), key=lambda kv: (-kv[1], kv[0]))[:20]:
+            lines.append(f"  {n / cen['rows'] * 100:5.1f}% of rows   {path}")
         lines += ["", "NO KEY PATH MENTIONS A RETURN LEG, in any row.",
                   "The outbound response does not carry it, so controlling the return",
                   "requires the second departure_token call. The cost is real, not",

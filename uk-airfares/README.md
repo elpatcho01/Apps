@@ -571,7 +571,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 443 tests, no network
+python -m pytest                                    # 450 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -845,6 +845,32 @@ against whatever schema is already there, but the pull **writes**, and writing
 fares into a table missing a column loses them silently. Had this migration
 reached `main` before it was caught, the next collection day would have failed
 that way — and a missed index day cannot be recollected.
+
+### The bank measurement read a key the provider does not use
+
+`banks.py` walked `raw_response` looking for a leaf key called `departure_time`,
+`departure_at` or `departure`. SerpApi stores the departure at:
+
+```
+best_flights[].flights[].departure_airport.time
+```
+
+The leaf is `time`; every bit of meaning is in the parent. So the first live run
+printed **"no candidate departure times found in raw_response"** against a panel
+where every row had one. Nothing failed, the step went green, and the answer it
+gave was wrong rather than absent.
+
+The tests missed it because their fixtures were written from the same assumption
+as the code — an invented flat `departure_time` key that no provider returns.
+They now use the provider's real shape, and the matching is on the key PATH, with
+arrivals, return legs and layovers excluded by name (an arrival averaged into the
+bank drags the target hours late).
+
+The general lesson is now built into `returnleg.py`: when it finds no return leg,
+it prints the twenty commonest key paths that *are* present. A census that
+reports only the absence of what it looked for leaves you unable to tell "the
+field is not there" from "you looked under the wrong name" — which is exactly the
+distinction this cost a run to learn.
 
 ### Things worth knowing
 
@@ -1146,7 +1172,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              443 tests, no network required
+└── tests/              450 tests, no network required
 ```
 
 ## Non-goals

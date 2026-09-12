@@ -144,3 +144,36 @@ class TestItOnlyLooks:
         for forbidden in ("INSERT", "UPDATE ", "DELETE", "MERGE", "load_table",
                           "insert_rows", "CREATE "):
             assert forbidden not in text, forbidden
+
+
+class TestShowingWhatIsActuallyThere:
+    """Absence is only a finding if you can tell it from looking in the wrong place.
+
+    `banks.py` searched for a leaf key named `departure_time`, found nothing in
+    any live payload, and said so -- while every row held a departure at
+    `departure_airport.time`. The census must not be able to fail that way
+    silently, so when it finds no return leg it prints the shape it did find.
+    """
+
+    def test_the_real_payload_shape_is_printed_when_no_return_is_found(self):
+        rows = [_row({"best_flights": [{"flights": [
+            {"departure_airport": {"id": "LGW", "time": "2026-10-13 06:10"},
+             "arrival_airport": {"id": "BCN", "time": "2026-10-13 09:35"}}]}]})]
+        text = report(census(rows), variation(rows))
+        assert "commonest key paths that ARE present" in text
+        assert "best_flights[].flights[].departure_airport.time" in text
+
+    def test_rows_with_no_payload_are_counted_rather_than_vanishing(self):
+        rows = [_row({"best_flights": []}), {"raw_response": None,
+                                             "haul_category": "european",
+                                             "months_ahead": 1,
+                                             "index_month_departure": "2026-10-01"}]
+        out = census(rows)
+        assert out["fetched"] == 2 and out["rows"] == 1
+        assert "1 rows had no readable raw_response" in report(out, {})
+
+    def test_a_return_arrival_is_not_read_as_a_return_departure(self):
+        payload = {"return_flights": [{
+            "departure_airport": {"time": "2026-10-27 18:40"},
+            "arrival_airport": {"time": "2026-10-27 21:15"}}]}
+        assert return_times(payload) == [18 * 60 + 40]
