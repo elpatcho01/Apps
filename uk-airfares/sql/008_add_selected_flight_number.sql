@@ -1,0 +1,32 @@
+-- The scheduled service the ONS rule selected, e.g. "BA 059".
+--
+-- Without this, WHAT WE PRICED IS NOT RECOVERABLE from the row. `selected_airline`
+-- and `selected_departure_ts` together get close, but a carrier can run two
+-- services within the same hour on a trunk route, and a retimed flight keeps its
+-- number while changing its departure. The provider already extracts
+-- flight_number into FareQuote and the row builder was dropping it on the floor.
+--
+-- IT IS ALSO THE PREREQUISITE FOR MATCHED-MODEL PRICING, which is the open
+-- methodology question behind the long-haul instability. CPI prices the SAME item
+-- month to month, substituting only when it disappears; our rule re-picks from
+-- scratch every month, so the choice can migrate between aircraft carrying
+-- different fare buckets. LHR-SIN on 2026-09-11 priced £2,172 against a £748
+-- cheapest while sitting 40 minutes from target -- the right flight by the rule,
+-- and still a number driven by that one flight's booking curve rather than by
+-- the market.
+--
+-- Tracking a flight across months requires knowing which flight was tracked. The
+-- scheduled service number is the identity that survives a date change: BA 059 on
+-- 8 September and BA 059 on 13 October are the same item in CPI terms, which a
+-- departure timestamp cannot express.
+--
+-- Storing it does NOT adopt matched-model pricing. `ukairfares.matched` measures
+-- whether it would help, over data already collected, and that decision is taken
+-- on the numbers rather than on the argument sounding good.
+--
+-- Nullable and additive, so every row already written stays valid and carries
+-- NULL. Rows collected before this can still be reprocessed: raw_response
+-- retains the flight number even where the column does not.
+ALTER TABLE `${PROJECT}.${DATASET}.airfare_scrapes`
+  ADD COLUMN IF NOT EXISTS selected_flight_number STRING
+  OPTIONS(description="Flight number of the selected itinerary's first segment, e.g. 'BA 059'. The identity that survives a date change, and the key matched-model pricing would track across months. NULL for rows written before the column existed, or where the provider gave no flight number.");

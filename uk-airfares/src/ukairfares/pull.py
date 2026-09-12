@@ -112,6 +112,7 @@ def _base_row(
         "n_quotes_considered": 0,
         "candidate_basis": None,
         "selected_airline": None,
+        "selected_flight_number": None,
         "selected_departure_ts": None,
         "quote_found_at": None,
         "error_message": None,
@@ -196,6 +197,10 @@ def _row_from_result(row: dict[str, Any], result, target_time: dt.time) -> dict[
         row["price_gbp"] = chosen.price
         row["currency_raw"] = chosen.currency
         row["selected_airline"] = chosen.airline
+        # The identity that survives a date change, and the key matched-model
+        # pricing would track across months. The provider already parses it; the
+        # row builder was discarding it.
+        row["selected_flight_number"] = chosen.flight_number
         row["selected_departure_ts"] = chosen.departure_at
         row["quote_found_at"] = chosen.found_at
     if sel.cheapest is not None:

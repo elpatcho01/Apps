@@ -148,6 +148,32 @@ target CPT's two candidates sit 385 and 630 minutes away, so whichever appears i
 the result set wins: different aircraft, different fare buckets, on the most
 expensive route in the panel.
 
+**The other half of the problem is not the target time at all.** LHR–SIN on
+2026-09-11 priced £2,172 against a £748 cheapest while sitting 40 minutes from
+target — direct, economy, the right flight by the rule. What differed was that
+flight's own fare bucket: cheap inventory sells out per departure and closer to
+travel, so a correctly-chosen flight can still carry a price driven by its own
+booking curve rather than by the market.
+
+Moving the target cannot fix that. The candidate methodology change is
+**matched-model pricing**: CPI prices the same item month to month, substituting
+only when it disappears, where our rule re-picks from scratch every month. That
+would remove the flipping by construction — but it is a bet on how ONS operate,
+which they have never published, and a rule that is stable *because* it ignores
+substitution is not automatically a rule that is right.
+
+So it is measured rather than adopted. `selected_flight_number` (sql/008) records
+the identity that survives a date change — BA 059 on 8 September and BA 059 on
+13 October are one item in CPI terms, which a departure timestamp cannot express
+— and `python -m ukairfares.matched` replays both rules over payloads already
+collected and reports which produces less month-to-month movement. It runs
+monthly in the digest workflow and writes nothing.
+
+It will answer **"not enough history"** until roughly February 2027, and that is
+the correct answer: two index months give one step per series, and one step
+cannot distinguish a quieter rule from a lucky one. The month it stops saying so
+is the month the decision becomes possible.
+
 **So the bank belongs to the sector, not the haul.** `target_departure_time_for`
 now takes a route and consults `TARGET_DEPARTURE_TIME_BY_ROUTE` before falling
 back to the haul. That table ships **empty on purpose** — deriving targets from
@@ -500,7 +526,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 397 tests, no network
+python -m pytest                                    # 407 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -1019,6 +1045,7 @@ uk-airfares/
 │   ├── onsfetch.py     CPI bulletin index-day parser
 │   ├── onsweights.py   Fetches + parses ONS weights and sub-indices
 │   ├── banks.py        Measures each route's departure bank from raw_response
+│   ├── matched.py      Replays matched-model vs re-picking, to decide on evidence
 │   ├── backfill.py     Loads ONS published series (the answer key)
 │   ├── index.py        Matched-sample relatives, splicing, rebasing
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
@@ -1026,7 +1053,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              397 tests, no network required
+└── tests/              407 tests, no network required
 ```
 
 ## Non-goals

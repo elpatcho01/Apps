@@ -177,6 +177,34 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Matched-model, measured rather than adopted.
+      #
+      # CPI prices the same item month to month; our rule re-picks the
+      # nearest-to-target flight every month, so the choice can migrate between
+      # aircraft because the provider's result set changed rather than because
+      # fares did. Tracking a flight would remove that by construction -- but it
+      # is a bet on how ONS operate, which they have not published.
+      #
+      # So it is replayed over raw_response and reported, not switched on. It
+      # will say "not enough history" until roughly February 2027, which is the
+      # correct answer until then and the point of running it monthly: the month
+      # it stops saying that is the month the decision becomes possible.
+      - name: Measure matched-model against re-picking
+        id: matched
+        continue-on-error: true
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: |
+          {
+            echo "### Matched-model vs re-picking"
+            echo ""
+            echo '```'
+            python -m ukairfares.matched || echo "replay failed; see the step log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Warn if the export failed
         if: steps.export.outcome == 'failure'
         run: |
