@@ -88,7 +88,15 @@ SELECT
   CAST(ROUND(AVG(price_cheapest_gbp), 2) AS FLOAT64)  AS mean_cheapest_gbp,
   ROUND(AVG(ons_rule_time_delta_minutes))             AS mean_mins_off_target,
   ROUND(AVG(n_quotes), 1)                             AS mean_quotes,
-  ROUND(AVG(n_quotes_considered), 1)                  AS mean_considered
+  ROUND(AVG(n_quotes_considered), 1)                  AS mean_considered,
+  -- How far past the winner the runner-up sat. A small margin means the choice
+  -- was a near-tie that one flight appearing or vanishing would have flipped.
+  -- AVG skips NULLs, so the count of them is carried separately: NULL means
+  -- there was no runner-up at all, which is its own kind of fragile and must
+  -- not be silently averaged away as if it were a confident wide margin.
+  ROUND(AVG(selection_margin_minutes))                AS mean_selection_margin,
+  COUNTIF(status = 'ok' AND selection_margin_minutes IS NULL)
+                                                      AS sole_candidate
 FROM `{view}`
 GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
@@ -105,7 +113,7 @@ SELECT
   CAST(price_gbp AS FLOAT64)          AS price_gbp,
   CAST(price_cheapest_gbp AS FLOAT64) AS price_cheapest_gbp,
   selected_airline, selected_departure_ts, target_departure_time,
-  ons_rule_time_delta_minutes,
+  ons_rule_time_delta_minutes, selection_margin_minutes,
   n_quotes, n_quotes_considered, candidate_basis, error_message
 FROM `{view}`
 WHERE scrape_date = (SELECT d FROM latest)

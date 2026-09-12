@@ -13,7 +13,7 @@ import pathlib
 import pytest
 
 from ukairfares.config import Config
-from ukairfares.digest import build_digest, run_digest
+from ukairfares.digest import PRICE_OUTLIER_RATIO, build_digest, run_digest
 
 AUGUST = dt.date(2026, 8, 1)
 AUGUST_END = dt.date(2026, 8, 31)
@@ -217,6 +217,82 @@ class TestConcerns:
         text = build_digest(FakeReader(self._published(AUGUST)), _config(),
                             period_start=AUGUST, period_end=AUGUST_END)
         assert not any("Published ONS series ends" in c for c in self._concerns(text))
+
+
+def _outlier(**over):
+    row = dict(
+        route="LHR-SIN", months_ahead=3, haul_category="long_haul", days=4,
+        mean_ratio=3.55, worst_ratio=3.55, mins_off_target=80, margin_mins=25,
+    )
+    row.update(over)
+    return [row]
+
+
+class TestPerRouteSelectionOutliers:
+    """A series mean cannot see one bad route, and that is the whole problem.
+
+    On 2026-09-11 LHR-SIN 3m selected a £2,092 fare against a £589 cheapest --
+    255% above -- while the long_haul 1m series mean read 9.4%. The existing
+    `pct_above_cheapest > 200` concern is computed per series, so it stayed
+    silent. So would it have stayed silent for the itinerary bug that motivated
+    it, which was also a single route (LGW-EDI at £4,841 against a £72 direct).
+    """
+
+    def _concerns(self, text):
+        after = text.split("## Needs attention", 1)[1]
+        return [l for l in after.splitlines() if l.startswith("- ")]
+
+    def test_a_single_bad_route_is_flagged_despite_a_benign_series_mean(self):
+        responses = dict(HEALTHY, **{
+            "GROUP BY 1, 2\nORDER BY 1, 2": _series(pct_above_cheapest=9.4),
+            "HAVING mean_ratio": _outlier(),
+        })
+        text = build_digest(FakeReader(responses), _config(),
+                            period_start=AUGUST, period_end=AUGUST_END)
+        concerns = self._concerns(text)
+        assert not any("above cheapest" in c for c in concerns), (
+            "the series-level check should still be quiet — that is the point"
+        )
+        assert any("LHR-SIN 3m" in c and "3.55×" in c for c in concerns)
+
+    def test_the_outlier_row_is_printed_not_merely_counted(self):
+        """A ratio alone does not tell you whether to worry; the row might."""
+        responses = dict(HEALTHY, **{"HAVING mean_ratio": _outlier()})
+        text = build_digest(FakeReader(responses), _config(),
+                            period_start=AUGUST, period_end=AUGUST_END)
+        assert "### Selection outliers" in text
+        assert "LHR-SIN" in text.split("### Selection outliers", 1)[1]
+
+    def test_says_a_premium_is_not_itself_a_defect(self):
+        """The rule is price-blind by design. Flagging must not imply a bug."""
+        responses = dict(HEALTHY, **{"HAVING mean_ratio": _outlier()})
+        text = build_digest(FakeReader(responses), _config(),
+                            period_start=AUGUST, period_end=AUGUST_END)
+        assert "price-blind by design" in text
+
+    def test_no_outliers_adds_no_section_and_no_concern(self):
+        text = build_digest(FakeReader(HEALTHY), _config(),
+                            period_start=AUGUST, period_end=AUGUST_END)
+        assert "### Selection outliers" not in text
+        assert "Nothing flagged" in text
+
+    def test_threshold_is_interpolated_into_the_query(self):
+        reader = FakeReader(HEALTHY)
+        build_digest(reader, _config(), period_start=AUGUST, period_end=AUGUST_END)
+        sql = [q for q in reader.queries if "HAVING mean_ratio" in q]
+        assert sql, "the outlier query never ran"
+        assert f">= {PRICE_OUTLIER_RATIO}" in sql[0]
+
+    def test_the_margin_diagnostic_reaches_the_report(self):
+        """selection_margin_minutes was collected for a month and read by nobody.
+
+        It is computed in selection.py, written by pull.py and migrated in
+        sql/007, but neither the digest nor the export selected it -- so the
+        column built to make a fragile selection visible was never visible.
+        """
+        reader = FakeReader(HEALTHY)
+        build_digest(reader, _config(), period_start=AUGUST, period_end=AUGUST_END)
+        assert any("selection_margin_minutes" in q for q in reader.queries)
 
 
 class TestQueriesUseTheView:

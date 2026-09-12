@@ -110,6 +110,42 @@ leaving the provider's result set relocated the choice by ~100 minutes. Long-hau
 Long-haul now targets **12:00**, inside its actual bank. Short-haul is unchanged
 at 09:00 — it was already stable and there was nothing to fix.
 
+**That fixed the 1-month cell and did not fix the other two.** Re-running the
+same test on 2026-09-12, over consecutive collection days either side of the
+change:
+
+```
+                    ours d/d   cheapest   ratio
+PRE   long_haul 1m      7.0%       2.3%     3.0
+      long_haul 3m      6.2%       0.6%     9.9
+      long_haul 6m      4.2%       2.3%     1.8
+POST  long_haul 1m      4.1%       3.7%     1.1   <- fixed
+      long_haul 3m     10.1%       0.9%    10.7   <- unchanged
+      long_haul 6m     12.4%       0.4%    28.0   <- worse
+```
+
+Mean distance from target is still 108–157 minutes post-change, so 12:00 is not
+landing inside the bank for the longer windows either — the bank was estimated
+from four days of mostly 1-month data, and 3- and 6-month departures need their
+own measurement rather than an inherited constant.
+
+*Sample-size caveat, because the numbers above are small enough to mislead:*
+three and four consecutive-day pairs per cell. Only 2026-09-08 to 11 are truly
+consecutive post-change; the rest of the window is the Monday baseline, and a
+seven-day gap is not a day-over-day move. Treat this as "not yet solved" rather
+than as a measured regression. It is recorded here so the earlier fix is not
+read as more complete than it was.
+
+A second mechanism is now visible and is **not** a target-time problem: on
+2026-09-11 LHR–SIN selected a £2,172 fare against a £748 cheapest at 1 month and
+£2,092 against £589 at 3 months, while the 6-month window sat at only +21%. Same
+route, same airline, direct-only, 40 minutes from target — the rule picked the
+right flight. What differs is that flight's own fare bucket: cheap inventory
+sells out per departure and closer to travel, so a stably-chosen flight can still
+carry a price driven by its own booking curve rather than by the market. The
+digest now flags this per route (see `PRICE_OUTLIER_RATIO`); confirming it needs
+`raw_response`, which retains every quote.
+
 *The tension, stated because it is real:* ONS do not publish their target time.
 If theirs is 09:00 everywhere, this is a divergence. But 09:00 was always a
 guess, and a guess landing where no aircraft departs is not the faithful choice —
@@ -124,6 +160,14 @@ from the target the runner-up sat. Small means the choice was a near-tie and one
 flight appearing or vanishing would have changed it; NULL means there was no
 runner-up at all. The flip above was only detectable by comparing days in
 aggregate — nothing on an individual row said "this was a coin flip". Now it does.
+
+*It did not, for a month.* The column was computed, written and migrated, and
+then selected by neither the digest nor the export — so the diagnostic built to
+make fragility visible was collected on every row and read by nobody. Fixed, and
+both consumers now carry it. Note the export also counts `sole_candidate`
+separately, because `AVG` skips NULLs: without that count, a series where most
+rows had no runner-up at all would average the few that did and read as a
+confident wide margin, which is the opposite of the truth.
 
 **Both selection rules are stored.** A cheapest-of-day rule silently migrates
 between a 06:10 departure one month and a 21:45 the next, so much of the
@@ -321,7 +365,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 370 tests, no network
+python -m pytest                                    # 378 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -845,7 +889,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              370 tests, no network required
+└── tests/              378 tests, no network required
 ```
 
 ## Non-goals

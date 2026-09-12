@@ -35,6 +35,17 @@ log = logging.getLogger("ukairfares.digest")
 
 REPORTS_DIR = pathlib.Path("reports")
 
+#: Flag a route whose ONS-rule fare averages at least this multiple of its own
+#: cheapest comparable fare over the period.
+#:
+#: Calibrated against real collection rather than picked round: on 2026-09-11 the
+#: median premium was 1.19x for long-haul and 1.15x for short-haul, so 2.0 sits
+#: far outside normal behaviour while still catching LHR-SIN (2.9x and 3.6x),
+#: LGW-FAO 3m (2.9x) and LGW-JER 1m (2.3x). Set it lower and the routine
+#: time-of-day premium fills the report with rows nobody will act on, which is
+#: how a "needs attention" list stops being read.
+PRICE_OUTLIER_RATIO = 2.0
+
 COLLECTION_HEALTH = """
 SELECT
   COUNT(DISTINCT scrape_date) AS days_collected,
@@ -57,6 +68,7 @@ SELECT
   ROUND(AVG(n_quotes), 1)             AS flights_seen,
   ROUND(AVG(n_quotes_considered), 1)  AS considered,
   ROUND(AVG(ons_rule_time_delta_minutes)) AS mins_off_target,
+  ROUND(AVG(selection_margin_minutes)) AS margin_mins,
   ROUND(AVG(price_gbp))               AS avg_price_gbp,
   ROUND(AVG(SAFE_DIVIDE(price_gbp - price_cheapest_gbp, price_cheapest_gbp)) * 100, 1)
                                       AS pct_above_cheapest
@@ -75,6 +87,40 @@ WHERE scrape_date BETWEEN @start AND @end
 GROUP BY 1, 2
 HAVING not_ok > 0
 ORDER BY not_ok DESC, route
+LIMIT 10
+"""
+
+# --- Selection outliers, PER ROUTE -------------------------------------------
+# BY_SERIES already reports pct_above_cheapest, and a concern fires when it
+# exceeds 200. That check cannot see a single route, because it averages over
+# every route in the series: on 2026-09-11 LHR-SIN 3m sat 255% above its own
+# cheapest fare while the long_haul 1m series mean read 9.4%. Nothing fired.
+#
+# Which means the check has never been able to catch the case that motivated it.
+# The itinerary bug it was written for was LGW-EDI alone, at £4,841 against a
+# £72 direct -- one route out of eight, and it would have been diluted the same
+# way had the check existed at the time.
+#
+# So this asks the question at the grain the problem actually occurs at. A high
+# ratio is NOT proof of a bug: the ONS rule is price-blind by design, so paying
+# above the cheapest is the expected behaviour, not a malfunction. It is a
+# request to go and look, which is why the report prints the row rather than
+# just counting it.
+PRICE_OUTLIERS = """
+SELECT route, months_ahead, haul_category,
+       COUNT(*)                                                  AS days,
+       ROUND(AVG(SAFE_DIVIDE(price_gbp, price_cheapest_gbp)), 2) AS mean_ratio,
+       ROUND(MAX(SAFE_DIVIDE(price_gbp, price_cheapest_gbp)), 2) AS worst_ratio,
+       ROUND(AVG(ons_rule_time_delta_minutes))                   AS mins_off_target,
+       ROUND(AVG(selection_margin_minutes))                      AS margin_mins
+FROM `{view}`
+WHERE scrape_date BETWEEN @start AND @end
+  AND status = 'ok'
+  AND price_gbp IS NOT NULL
+  AND price_cheapest_gbp > 0
+GROUP BY 1, 2, 3
+HAVING mean_ratio >= {threshold}
+ORDER BY mean_ratio DESC
 LIMIT 10
 """
 
@@ -209,7 +255,7 @@ def build_digest(
         lines += [err, ""]
     else:
         cols = ["haul_category", "months_ahead", "ok", "no_data", "errors",
-                "flights_seen", "considered", "mins_off_target",
+                "flights_seen", "considered", "mins_off_target", "margin_mins",
                 "avg_price_gbp", "pct_above_cheapest"]
         lines += _table(series or [], cols) + [""]
         for row in series or []:
@@ -233,6 +279,38 @@ def build_digest(
     if worst:
         lines += ["### Routes with gaps", "",
                   *_table(worst, ["route", "months_ahead", "ok", "not_ok"]), ""]
+
+    # --- Selection outliers, per route -------------------------------------
+    outliers, err = _safe(
+        lambda: reader.query(
+            PRICE_OUTLIERS.format(view=view, threshold=PRICE_OUTLIER_RATIO), params
+        ),
+        "selection outliers", concerns,
+    )
+    if outliers:
+        lines += [
+            "### Selection outliers",
+            "",
+            f"_Routes whose ONS-rule fare averaged ≥{PRICE_OUTLIER_RATIO}× their own "
+            "cheapest comparable fare. The rule is price-blind by design, so this is "
+            "a prompt to look, not a defect in itself. `margin_mins` is how far past "
+            "the winner the runner-up sat — a small margin means the choice was a "
+            "near-tie; `—` means there was no runner-up at all._",
+            "",
+            *_table(outliers, ["route", "months_ahead", "haul_category", "days",
+                               "mean_ratio", "worst_ratio", "mins_off_target",
+                               "margin_mins"]),
+            "",
+        ]
+        for row in outliers:
+            label = f"{row['route']} {row['months_ahead']}m"
+            concerns.append(
+                f"{label}: ONS-rule fare averaged {row['mean_ratio']}× the cheapest "
+                f"comparable fare (worst {row['worst_ratio']}×) across {row['days']} "
+                f"day(s), {row['mins_off_target']} min from target. Check "
+                "`candidate_basis` and `raw_response` for that route before trusting "
+                "its contribution to the series."
+            )
 
     # --- Reconstructions ---------------------------------------------------
     recon, err = _safe(

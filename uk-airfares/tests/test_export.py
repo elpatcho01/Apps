@@ -144,6 +144,36 @@ class TestShape:
             assert data[key], f"{key} missing — a stale export must be recognisable"
 
 
+class TestSelectionMarginIsExported:
+    """The column exists to make a fragile selection visible. It must leave BigQuery.
+
+    `selection_margin_minutes` is computed in selection.py, written by pull.py and
+    migrated in sql/007 -- and for a month neither the export nor the digest
+    selected it, so the diagnostic was collected on every row and read by nobody.
+    Exactly the shape of the digest-commit bug: correct data, never surfaced.
+    """
+
+    def test_latest_routes_selects_the_margin(self):
+        reader = FakeReader(LIVE_SHAPED)
+        build_export(reader, _config())
+        routes = [q for q in reader.queries if "WHERE scrape_date = (SELECT d FROM latest)" in q]
+        assert routes and "selection_margin_minutes" in routes[0]
+
+    def test_daily_series_carries_the_margin_and_the_sole_candidate_count(self):
+        """A NULL margin means no runner-up at all -- its own kind of fragile.
+
+        AVG skips NULLs, so without a separate count a series where most rows had
+        a single candidate would average the handful that did have one and read
+        as a confident wide margin.
+        """
+        reader = FakeReader(LIVE_SHAPED)
+        build_export(reader, _config())
+        daily = [q for q in reader.queries if "GROUP BY 1, 2, 3" in q]
+        assert daily
+        assert "selection_margin_minutes" in daily[0]
+        assert "sole_candidate" in daily[0]
+
+
 class TestRunExport:
     def test_writes_valid_json(self, tmp_path):
         out = tmp_path / "nested" / "analytics.json"
