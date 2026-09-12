@@ -98,17 +98,53 @@ TARGET_DEPARTURE_TIME_BY_HAUL: dict[str, dt.time] = {
 }
 
 
-def target_departure_time_for(
-    haul: str, override: dt.time | None = None
-) -> dt.time:
-    """The target time for a haul, or `override` applied uniformly.
+#: Per-ROUTE overrides, because the departure bank is a property of the sector,
+#: not of the haul category. This is the correction to the note above, which
+#: assumed one long-haul bank existed. It does not.
+#:
+#: Measured 2026-09-11, mean minutes from the 12:00 target by route:
+#:
+#:     LHR-CPT  467      LGW-MCO   60
+#:     LHR-DXB  115      LGW-JFK   20
+#:     LHR-SIN   67      LHR-JFK   15
+#:
+#: Exclude LHR-CPT and long-haul sits 52-62 minutes off target -- BETTER than
+#: domestic at 63 and close to European at 40. The 12:00 target is fine for five
+#: of the six routes; the whole of the long-haul target miss is one sector.
+#:
+#: LHR-CPT departs 18:25 and 22:30 because it is an ~11.5-hour overnight timed to
+#: land in the morning. There is no midday departure and there cannot be one, so
+#: no single clock time can serve CPT, JFK (11:45) and DXB (13:40) at once. With
+#: a 12:00 target its two candidates sit 385 and 630 minutes away and whichever
+#: appears in the result set wins -- different aircraft, different fare buckets,
+#: on the most expensive route in the panel.
+#:
+#: DELIBERATELY EMPTY UNTIL MEASURED. These times must come from the observed
+#: candidate distribution in `raw_response`, not from the selected flight (which
+#: is biased toward whatever the current target already is) and not from one
+#: day's reading. `python -m ukairfares.banks` derives them; until it has run
+#: against BigQuery this stays empty and every route falls back to its haul, so
+#: the behaviour is unchanged rather than changed on a guess.
+TARGET_DEPARTURE_TIME_BY_ROUTE: dict[str, dt.time] = {}
 
-    An explicit override wins for every haul, so the old single-constant
-    behaviour stays available for comparison -- which is what makes it possible
-    to test empirically whether ONS use one time or several.
+
+def target_departure_time_for(
+    haul: str, override: dt.time | None = None, route: str | None = None
+) -> dt.time:
+    """The target time for a route, falling back to its haul.
+
+    Precedence: explicit override, then the route's measured bank, then the
+    haul default. An override still wins everywhere, so the old
+    single-constant behaviour stays available for comparison -- which is what
+    makes it possible to test empirically whether ONS use one time or several.
+
+    `route` is keyword-compatible with the previous two-argument signature, so
+    callers that do not know the route keep working and get haul behaviour.
     """
     if override is not None:
         return override
+    if route is not None and route in TARGET_DEPARTURE_TIME_BY_ROUTE:
+        return TARGET_DEPARTURE_TIME_BY_ROUTE[route]
     return TARGET_DEPARTURE_TIME_BY_HAUL.get(haul, DEFAULT_TARGET_DEPARTURE_TIME)
 
 

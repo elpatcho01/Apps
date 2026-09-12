@@ -124,10 +124,39 @@ POST  long_haul 1m      4.1%       3.7%     1.1   <- fixed
       long_haul 6m     12.4%       0.4%    28.0   <- worse
 ```
 
-Mean distance from target is still 108–157 minutes post-change, so 12:00 is not
-landing inside the bank for the longer windows either — the bank was estimated
-from four days of mostly 1-month data, and 3- and 6-month departures need their
-own measurement rather than an inherited constant.
+**The reason is one route, and the haul-level framing was wrong.** Mean distance
+from a 12:00 target, measured per route on 2026-09-11:
+
+| Route | Off target | Departs |
+|---|---|---|
+| **LHR–CPT** | **467m** | 18:25, 22:30 |
+| LHR–DXB | 115m | 13:40, 14:25 |
+| LHR–SIN | 67m | 10:40, 11:20 |
+| LGW–MCO | 60m | 10:30, 11:15 |
+| LGW–JFK | 20m | 11:30, 11:45 |
+| LHR–JFK | 15m | 11:55, 12:20 |
+
+Exclude LHR–CPT and long-haul sits **52–62 minutes** off target — better than
+domestic (63m) and close to European (40m). The 12:00 target is fine for five
+routes of six; the entire miss is one sector.
+
+And CPT cannot be fixed by moving the target. It is an ~11.5-hour overnight timed
+to arrive in the morning, so it departs in the evening and there is no midday
+service. No single clock time serves CPT (18:25), JFK (11:55) and DXB (14:25) at
+once — they are different sector lengths into different time zones. With a 12:00
+target CPT's two candidates sit 385 and 630 minutes away, so whichever appears in
+the result set wins: different aircraft, different fare buckets, on the most
+expensive route in the panel.
+
+**So the bank belongs to the sector, not the haul.** `target_departure_time_for`
+now takes a route and consults `TARGET_DEPARTURE_TIME_BY_ROUTE` before falling
+back to the haul. That table ships **empty on purpose** — deriving targets from
+the flights we already selected would be circular, since the selected flight is
+whatever was nearest the existing target. `python -m ukairfares.banks` reads the
+real candidate distribution out of `raw_response` and prints a block to paste in,
+refusing to propose a number for a route with fewer than 20 observations or a
+timetable too diffuse to have a centre. Until it has run, every route falls back
+to its haul and behaviour is unchanged.
 
 *Sample-size caveat, because the numbers above are small enough to mislead:*
 three and four consecutive-day pairs per cell. Only 2026-09-08 to 11 are truly
@@ -471,7 +500,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 382 tests, no network
+python -m pytest                                    # 397 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -989,6 +1018,7 @@ uk-airfares/
 │   ├── pull.py         Daily collection (Task 3)
 │   ├── onsfetch.py     CPI bulletin index-day parser
 │   ├── onsweights.py   Fetches + parses ONS weights and sub-indices
+│   ├── banks.py        Measures each route's departure bank from raw_response
 │   ├── backfill.py     Loads ONS published series (the answer key)
 │   ├── index.py        Matched-sample relatives, splicing, rebasing
 │   ├── reconcile.py    Monthly reconstruction (Task 4)
@@ -996,7 +1026,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              382 tests, no network required
+└── tests/              397 tests, no network required
 ```
 
 ## Non-goals

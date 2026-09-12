@@ -275,12 +275,16 @@ def run_pull(
                     scrape_ts=scrape_ts,
                     scrape_date=scrape_date,
                     currency=config.currency,
-                    # Per haul, not one constant: see TARGET_DEPARTURE_TIME_BY_HAUL.
-                    # An explicit TARGET_DEPARTURE_TIME in the environment still
-                    # overrides for every haul, which is what makes the
-                    # one-time-versus-several question testable.
+                    # Per route where its bank has been measured, else per haul.
+                    # The departure bank is a property of the sector: LHR-CPT is
+                    # an overnight that leaves at 18:25, LHR-JFK leaves at 11:55,
+                    # and no single clock time serves both. An explicit
+                    # TARGET_DEPARTURE_TIME in the environment still overrides
+                    # everything, which keeps the one-time-versus-several
+                    # question testable.
                     target_time=target_departure_time_for(
-                        route.haul, config.target_departure_time_override
+                        route.haul, config.target_departure_time_override,
+                        route=route.code,
                     ),
                     backoff=backoff,
                 )

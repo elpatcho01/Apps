@@ -146,6 +146,37 @@ jobs:
           PYTHONPATH: src
         run: python -m ukairfares.export
 
+      # Departure banks, measured rather than guessed.
+      #
+      # The ONS rule is only a rule if aircraft depart near the target time.
+      # LHR-CPT departs 18:25 and 22:30 against a 12:00 target, so "nearest" is
+      # decided by whichever of two evening flights is in the result set that
+      # day -- different aircraft, different fare buckets, on the priciest route
+      # in the panel. The fix is a per-route target, and the input is the real
+      # candidate distribution in raw_response, which only exists in BigQuery
+      # and therefore only here.
+      #
+      # Printed to the run summary rather than committed: a target time that
+      # moved on its own would reintroduce the drift a fixed target exists to
+      # prevent. Pasting it into TARGET_DEPARTURE_TIME_BY_ROUTE is a deliberate
+      # act. Running monthly is still worth it -- if an airline retimes a
+      # sector, the bank moves and this is where that becomes visible.
+      - name: Measure departure banks
+        id: banks
+        continue-on-error: true
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: |
+          {
+            echo "### Departure banks (paste into TARGET_DEPARTURE_TIME_BY_ROUTE)"
+            echo ""
+            echo '```python'
+            python -m ukairfares.banks || echo "bank measurement failed; see the step log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Warn if the export failed
         if: steps.export.outcome == 'failure'
         run: |
