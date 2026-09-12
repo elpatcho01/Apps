@@ -571,7 +571,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 436 tests, no network
+python -m pytest                                    # 443 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -809,6 +809,42 @@ Two things follow, and both are now enforced by tests:
 
 The same line was present on both of the sibling `uk-hotels` commit steps, so
 neither project had reset the inactivity clock since 2026-08-21.
+
+### And once, five ALTERs in one file took the whole run with them
+
+`sql/009` added five columns to `reconstructed_index` as five `ALTER TABLE`
+statements. **BigQuery allows five table metadata update operations per table per
+ten seconds**, the statements ran back to back, and the fourth returned:
+
+```
+Exceeded rate limits: too many table update operations for this table
+```
+
+`ensure_tables` exited non-zero, and because that step had no
+`continue-on-error`, GitHub skipped every step after it — the digest, the
+analytics export, and all three measurements. The run cost a runner and produced
+nothing. The commit step still ran (it is gated on `always()`), so the 60-day
+clock was never at risk; that part worked exactly as designed.
+
+Two independent faults, fixed separately because either alone would recur:
+
+- **The migration was over the limit.** One `ALTER TABLE` with several
+  `ADD COLUMN` clauses is *one* metadata operation, so a migration adding any
+  number of columns can sit well inside the budget. 009 is now a single
+  statement, a test caps any file at four `ALTER`s against one table, and
+  `ensure_tables` waits 12s and retries when the limit is met anyway — safe
+  because every statement in `sql/` is `IF NOT EXISTS` or `CREATE OR REPLACE`.
+- **The digest let a step skip the report.** Its stated posture is that nothing
+  may prevent it reaching the commit; the DDL step quietly did not honour it.
+  It is now `continue-on-error` with a warning, and a test asserts that *no*
+  step between auth and the commit can skip the ones after it.
+
+The posture is deliberately inverted in the daily pull, where `ensure_tables`
+stays fatal and a second test pins that: the digest only reads, so it can run
+against whatever schema is already there, but the pull **writes**, and writing
+fares into a table missing a column loses them silently. Had this migration
+reached `main` before it was caught, the next collection day would have failed
+that way — and a missed index day cannot be recollected.
 
 ### Things worth knowing
 
@@ -1110,7 +1146,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              436 tests, no network required
+└── tests/              443 tests, no network required
 ```
 
 ## Non-goals

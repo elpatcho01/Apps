@@ -107,7 +107,18 @@ jobs:
       # from. The data was in BigQuery the whole time; the lens over it had never
       # been created. Running the DDL here makes the workflow self-sufficient
       # instead of ordering-dependent.
+      #
+      # continue-on-error, for the same reason the header gives: nothing in this
+      # workflow may be allowed to skip the steps after it. On 2026-09-12 a
+      # migration tripped BigQuery's table metadata rate limit here, and because
+      # this step was fatal the digest, the export and all three measurements
+      # were skipped -- a whole run spent, nothing produced. The DDL is a
+      # convenience for a read-only workflow, not a precondition: the tables it
+      # would create already exist, and a query against a missing column becomes
+      # a note in the report rather than an exception.
       - name: Ensure BigQuery tables and views exist
+        id: ddl
+        continue-on-error: true
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
@@ -235,6 +246,13 @@ jobs:
             python -m ukairfares.returnleg || echo "return-leg census failed; see the step log"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Warn if the DDL failed
+        if: steps.ddl.outcome == 'failure'
+        run: |
+          echo "::warning::Schema preparation failed; the digest ran anyway against \
+          the schema already in BigQuery. Sections that need a new column will say \
+          so. See the DDL step's log."
 
       - name: Warn if the export failed
         if: steps.export.outcome == 'failure'

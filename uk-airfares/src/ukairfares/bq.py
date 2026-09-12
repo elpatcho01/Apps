@@ -16,12 +16,36 @@ import datetime as dt
 import json
 import logging
 import pathlib
+import time
 from decimal import Decimal
 from typing import Any, Iterable, Protocol
 
 log = logging.getLogger(__name__)
 
 SQL_DIR = pathlib.Path(__file__).resolve().parents[2] / "sql"
+
+#: BigQuery allows 5 table metadata update operations per table per 10 seconds.
+#: A migration adding five columns as five ALTERs exceeds it on the fourth, and
+#: ensure_tables then exits non-zero -- which on the daily pull costs a
+#: collection day that cannot be recollected. Migrations are written to stay
+#: under the limit (a test enforces it); this is the belt to that braces, for
+#: the case where two workflows prepare the same table at the same moment.
+#:
+#: Retrying the whole file is safe because every statement in sql/ is idempotent:
+#: CREATE TABLE IF NOT EXISTS, ADD COLUMN IF NOT EXISTS, CREATE OR REPLACE VIEW.
+MAX_DDL_ATTEMPTS = 4
+DDL_RETRY_SECONDS = 12
+
+
+def _is_rate_limited(exc: Exception) -> bool:
+    """Is this BigQuery's metadata-update rate limit, rather than a real error?
+
+    Matched on the message because the client raises a generic BadRequest for it
+    -- there is no distinct exception type to catch, and catching BadRequest
+    wholesale would retry genuine syntax errors four times before failing.
+    """
+    text = str(exc).lower()
+    return "exceeded rate limits" in text or "too many table update operations" in text
 
 
 def _json_default(obj: Any) -> Any:
@@ -153,7 +177,23 @@ class BigQueryWriter:
             # index_month_departure; kept under the original spec name"), so a
             # naive split severs string literals and every statement fails with
             # an unclosed-literal syntax error. That is exactly what happened.
-            self._client.query(sql).result()
+            self._apply_ddl(sql, path.name)
+
+    def _apply_ddl(self, sql: str, name: str) -> None:
+        """Run one DDL file, waiting out the metadata-update rate limit."""
+        for attempt in range(1, MAX_DDL_ATTEMPTS + 1):
+            try:
+                self._client.query(sql).result()
+                return
+            except Exception as exc:  # noqa: BLE001 - re-raised unless rate-limited
+                if not _is_rate_limited(exc) or attempt == MAX_DDL_ATTEMPTS:
+                    raise
+                log.warning(
+                    "%s hit BigQuery's table metadata rate limit (attempt %d of "
+                    "%d); waiting %ds. %s",
+                    name, attempt, MAX_DDL_ATTEMPTS, DDL_RETRY_SECONDS, exc,
+                )
+                time.sleep(DDL_RETRY_SECONDS)
 
 
 def _to_query_param(bigquery, name: str, value: Any):

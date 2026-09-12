@@ -4,6 +4,14 @@ A production run failed with "Unclosed string literal" because ensure_tables
 split each file on ';' before submitting. The column descriptions in these
 files legitimately contain semicolons, so the split severed string literals.
 These tests pin both halves of that lesson.
+
+A later run failed the other way. 009 added five columns as five ALTER
+statements, and BigQuery allows five table metadata update operations per table
+per ten seconds -- so the fourth returned "Exceeded rate limits" and
+ensure_tables exited non-zero. Every workflow prepares the schema first, so in
+the daily pull that would have cost a collection day, and a missed index day
+cannot be recollected. Two tests below keep it from recurring: migrations stay
+under the limit, and a run that meets it anyway waits rather than dies.
 """
 
 import pathlib
@@ -71,6 +79,89 @@ class TestDdlFiles:
             text = f.read_text().upper()
             for forbidden in ("DROP TABLE", "DELETE FROM", "TRUNCATE"):
                 assert forbidden not in text, f"{f.name} contains {forbidden}"
+
+
+class TestMetadataRateLimit:
+    """BigQuery: 5 table metadata update operations per table per 10 seconds."""
+
+    MAX_PER_TABLE = 4
+
+    def _alters_by_table(self, text: str) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for line in text.splitlines():
+            if line.strip().startswith("--"):
+                continue  # a comment describing ALTERs is not an ALTER
+            match = re.search(r"ALTER TABLE\s+`[^`]*\.([A-Za-z0-9_]+)`", line)
+            if match:
+                counts[match.group(1)] = counts.get(match.group(1), 0) + 1
+        return counts
+
+    def test_no_file_alters_one_table_more_than_four_times(self):
+        """Five ALTERs on one table in one script is what broke the digest.
+
+        A single ALTER with several ADD COLUMN clauses is ONE metadata operation,
+        so a migration adding any number of columns can stay well under the cap.
+        """
+        for f in SQL_FILES:
+            for table, n in self._alters_by_table(f.read_text()).items():
+                assert n <= self.MAX_PER_TABLE, (
+                    f"{f.name} issues {n} ALTERs against {table}; BigQuery allows "
+                    f"5 per 10s. Combine them into one ALTER with several "
+                    f"ADD COLUMN clauses."
+                )
+
+    def test_the_migration_that_broke_it_is_now_a_single_statement(self):
+        text = (pathlib.Path(__file__).parent.parent / "sql"
+                / "009_add_price_relative.sql").read_text()
+        assert self._alters_by_table(text) == {"reconstructed_index": 1}
+        assert text.upper().count("ADD COLUMN IF NOT EXISTS") == 5
+
+
+class RateLimitedClient:
+    """Fails with BigQuery's rate-limit message a given number of times first."""
+
+    MESSAGE = ("400 GET https://bigquery.googleapis.com/...: Exceeded rate limits: "
+               "too many table update operations for this table. at [52:1]")
+
+    def __init__(self, failures: int, error: Exception | None = None):
+        self.failures = failures
+        self.error = error
+        self.calls = 0
+
+    def query(self, sql, job_config=None):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise self.error or ValueError(self.MESSAGE)
+        return FakeQueryJob()
+
+
+class TestEnsureTablesWaitsOutTheLimit:
+    def test_a_rate_limited_file_is_retried_rather_than_fatal(self, monkeypatch):
+        slept: list[float] = []
+        monkeypatch.setattr(bq.time, "sleep", slept.append)
+        writer = make_writer()
+        writer._client = RateLimitedClient(failures=2)
+        writer.ensure_tables("proj", "ds")
+        assert writer._client.calls == len(SQL_FILES) + 2
+        assert slept == [bq.DDL_RETRY_SECONDS, bq.DDL_RETRY_SECONDS]
+
+    def test_it_gives_up_rather_than_retrying_forever(self, monkeypatch):
+        monkeypatch.setattr(bq.time, "sleep", lambda _: None)
+        writer = make_writer()
+        writer._client = RateLimitedClient(failures=99)
+        with pytest.raises(ValueError, match="Exceeded rate limits"):
+            writer.ensure_tables("proj", "ds")
+        assert writer._client.calls == bq.MAX_DDL_ATTEMPTS
+
+    def test_a_real_error_fails_immediately(self, monkeypatch):
+        """Retrying a syntax error four times just delays the same failure."""
+        monkeypatch.setattr(bq.time, "sleep", lambda _: None)
+        writer = make_writer()
+        writer._client = RateLimitedClient(
+            failures=99, error=ValueError("Syntax error: Unclosed string literal"))
+        with pytest.raises(ValueError, match="Unclosed string"):
+            writer.ensure_tables("proj", "ds")
+        assert writer._client.calls == 1
 
 
 class TestEnsureTablesSubmission:

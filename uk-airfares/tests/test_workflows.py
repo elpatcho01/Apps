@@ -78,3 +78,53 @@ def test_the_digest_commit_step_is_not_gated_on_an_expression():
     commit_step = digest.split("- name: Commit the report", 1)[1]
     condition = re.search(r"^\s*if:\s*(.+)$", commit_step, re.M).group(1).strip()
     assert condition == "always()", f"unexpected gate on the commit step: {condition}"
+
+
+def _steps(text: str) -> list[str]:
+    """The workflow's steps, as raw text blocks keyed by name."""
+    return ["- name:" + part for part in text.split("- name:")[1:]]
+
+
+def test_no_step_in_the_digest_can_skip_the_ones_after_it():
+    """A fatal step in the digest costs the whole run, not just itself.
+
+    On 2026-09-12 a migration tripped BigQuery's table metadata rate limit in the
+    DDL step. That step had no continue-on-error, so GitHub skipped everything
+    after it: the digest, the analytics export, and all three measurements. The
+    run cost a runner and produced nothing.
+
+    The workflow header states the posture -- "this one must always reach its
+    commit step" -- and every step between auth and the commit has to honour it.
+    The commit step itself is gated on always(), which is its own test above.
+    """
+    digest = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / ".github" / "workflows" / "airfares-monthly-digest.yml"
+    ).read_text(encoding="utf-8")
+    body = digest.split("- name: Ensure BigQuery tables", 1)[1]
+    body = body.split("- name: Commit the report", 1)[0]
+    offenders = [
+        step.splitlines()[0].strip()
+        for step in _steps("- name: Ensure BigQuery tables" + body)
+        if "continue-on-error: true" not in step and "if:" not in step
+    ]
+    assert not offenders, (
+        "these digest steps can skip the report and the commit:\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+def test_the_daily_pull_still_treats_schema_preparation_as_fatal():
+    """The inverse posture, and the reason the rule above is scoped to the digest.
+
+    The digest only reads, so it can run against whatever schema is already
+    there. The pull WRITES, and writing fares into a table missing a column
+    loses them silently -- so there, a DDL failure must stop the run before it
+    spends a query.
+    """
+    pull = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / ".github" / "workflows" / "airfares-daily-pull.yml"
+    ).read_text(encoding="utf-8")
+    step = next(s for s in _steps(pull) if "ensure_tables" in s)
+    assert "continue-on-error" not in step
