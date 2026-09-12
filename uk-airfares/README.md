@@ -351,14 +351,28 @@ out so far:
 - *Not noise.* The cheapest sits at £82–85 across all seven August days and
   £95–103 across all five September days — a clean level shift.
 
-The leading hypothesis is the **return leg**, not the departure. European returns
-are +2 weeks, so the October trip departs 13 Oct and returns **27 Oct**, inside
-UK autumn half-term; the September trip is term-time on both legs. Holiday demand
-empties the cheap buckets first, which lifts the floor while leaving the
-distribution broadly alone — exactly the observed signature. It does not fully
-close the gap, since +18% still exceeds ONS's own maximum for that step, though
-their index day moves between the 2nd and 3rd Tuesday and half-term dates vary,
-so the effect would show up in their data as variance rather than a median shift.
+The half-term hypothesis was tested and is **mostly wrong**. European returns are
++2 weeks, so the October trip departs 13 Oct and returns 27 Oct, inside UK autumn
+half-term, while the September trip is term-time on both legs. That is real, but
+half-term recurs every year and is therefore already in ONS's baseline — the only
+thing that varies is which side of it the return falls, and that is worth far
+less than the anomaly. Measured across 19 years, splitting on whether the October
+return lands in the half-term week:
+
+```
+return IN half-term      n= 8   median Sep->Oct  -2.8%
+return NOT in half-term  n=11   median Sep->Oct  -7.4%
+```
+
+So the alignment is worth about **4.6 percentage points**. The anomaly is ~21
+points above the −3.3% median. Half-term accounts for at most a quarter of it,
+and no year in 19 — including every favourable alignment — reached +18%.
+
+What remains is **unexplained**. One amplifier worth testing: our nine European
+routes are leisure-weighted (AGP, ALC, FAO, PMI, NAP are beach destinations),
+where ONS's sample is broader and unpublished, so our basket should be more
+half-term sensitive than theirs. Whether that closes a 4.6-point effect into a
+21-point one is exactly what the per-route split answers.
 
 **The test that settles it:** if half-term is the cause, the rise concentrates in
 the leisure routes (AGP, ALC, FAO, PMI, NAP) and is weak on the business routes
