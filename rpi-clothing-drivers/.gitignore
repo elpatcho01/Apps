@@ -1,0 +1,4 @@
+# Generated output. Re-create it by running the fetcher:
+#   python fetch_clothing_drivers.py
+clothing_drivers/
+__pycache__/
