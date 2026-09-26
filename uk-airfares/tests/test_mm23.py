@@ -261,3 +261,42 @@ class TestBuildRows:
                           run_id="r1", fetched_ts=ts)
         assert rows[0]["fetched_ts"] == ts and rows[0]["run_id"] == "r1"
         assert rows[0]["basis"] == "Jan 1987=100"
+
+
+class TestAnnualSeries:
+    """Weights are annual, so mm23 leaves `months` empty and fills `years`.
+
+    The first live run said so in as many words -- "CJXW: 'months' had 0 entries
+    and none were readable" -- which is the strict-failure design paying for
+    itself: an empty months list is a true fact about an annual series, and a
+    fetcher that returned zero rows quietly would have been read as "ONS publish
+    no weight".
+    """
+
+    def test_a_weight_series_reads_the_years_block(self):
+        payload = {"months": [], "years": [{"date": "2025", "value": "5.1"},
+                                           {"date": "2026", "value": "4.8"}]}
+        rows = parse_series(payload, BY_CDID["CJXW"])
+        assert [(r["period"].isoformat(), str(r["value"])) for r in rows] == [
+            ("2025-01-01", "5.1"), ("2026-01-01", "4.8")]
+
+    def test_an_annual_value_is_anchored_to_january(self):
+        """A weight applies to the whole year, and the table partitions by date."""
+        rows = parse_series({"years": [{"date": "2026", "value": "4.8"}]},
+                            BY_CDID["CZHM"])
+        assert rows[0]["period"] == dt.date(2026, 1, 1)
+
+    def test_a_monthly_series_still_ignores_the_years_block(self):
+        payload = {"months": [{"date": "2026 AUG", "value": "125.8"}],
+                   "years": [{"date": "2026", "value": "999"}]}
+        rows = parse_series(payload, BY_CDID["D7EH"])
+        assert len(rows) == 1 and str(rows[0]["value"]) == "125.8"
+
+    def test_the_error_names_the_block_it_looked_in(self):
+        with pytest.raises(Mm23Error, match="'years' had 0 entries"):
+            parse_series({"years": []}, BY_CDID["CJXW"])
+
+    def test_declared_frequency_matches_what_the_series_is(self):
+        assert BY_CDID["CJXW"].frequency == "annual"
+        assert BY_CDID["CZHM"].frequency == "annual"
+        assert all(s.frequency == "monthly" for s in SERIES if s.kind != "weight")

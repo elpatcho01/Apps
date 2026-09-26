@@ -571,7 +571,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 489 tests, no network
+python -m pytest                                    # 494 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -1012,6 +1012,32 @@ uses a geometric mean, which given identical inputs is the entire difference
 between them. `index.py` already implements Jevons, Dutot and Carli, so that
 comparison is a short test rather than a project.
 
+### What the first successful fetch settled
+
+476 months back to January 1987, nine of eleven series. Three things it resolved:
+
+**The bulletin figures were right.** D7MB reads Aug 2025 +2.1%, Sep 2025 −28.8%,
+Aug 2026 +6.2% — exactly the numbers this project had been quoting from prose, and
+the index (D7EH) reproduces them to 0.1pp. The quoting was accurate; it just
+wasn't verifiable until now.
+
+**Air fares are falling year-on-year.** D7IT reads **−8.0%** for August 2026
+(−11.6% in July), which is the opposite impression to the one the bulletin's
+monthly commentary leaves. Air fares added to the *monthly* change and subtract
+from the *annual* rate.
+
+**The annual rate has a threshold worth watching.** September 2026's annual rate is
+215.1 × (1 + m) ÷ 166.5 − 1, so it **turns positive if the monthly fall is
+shallower than −22.6%** — and the central estimate is around −24%. The monthly
+print is nearly certain in direction; the annual rate is a coin toss sitting on
+top of it.
+
+**Weights are annual, not monthly.** CJXW and CZHM returned zero monthly entries,
+reported as "'months' had 0 entries and none were readable" rather than silently
+yielding nothing — the strict-failure design paying for itself, since an empty
+months list is a true fact about an annual series and not a parser fault. They are
+now declared `frequency="annual"` and read from the payload's `years` block.
+
 ### The first live run wrote nothing, and every test had passed
 
 `mm23.py` fetched and parsed all eleven series correctly on its first live run,
@@ -1267,7 +1293,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              489 tests, no network required
+└── tests/              494 tests, no network required
 ```
 
 ## Non-goals

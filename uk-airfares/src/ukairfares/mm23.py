@@ -78,11 +78,23 @@ class Series:
     nothing in the values themselves would give that away.
     """
 
-    __slots__ = ("cdid", "kind", "measure", "label", "basis", "why")
+    __slots__ = ("cdid", "kind", "measure", "label", "basis", "why", "frequency")
 
-    def __init__(self, cdid, kind, measure, label, basis=None, why=""):
+    def __init__(self, cdid, kind, measure, label, basis=None, why="",
+                 frequency="monthly"):
         self.cdid, self.kind, self.measure = cdid.upper(), kind, measure
         self.label, self.basis, self.why = label, basis, why
+        # Weights are set once a year, so mm23 carries them in the payload's
+        # `years` block and leaves `months` empty. The first live run reported
+        # exactly that -- "'months' had 0 entries" for both weight series -- which
+        # is the diagnostic working: an empty months list is a real ONS fact about
+        # an annual series, not a parser failure, and the fix is to read the block
+        # the value actually lives in.
+        self.frequency = frequency
+
+    @property
+    def block(self) -> str:
+        return "months" if self.frequency == "monthly" else "years"
 
     @property
     def url(self) -> str:
@@ -103,7 +115,8 @@ SERIES: tuple[Series, ...] = (
            why="The annual rate, which the annually-rebased sub-indices cannot yield."),
     Series("CJXW", "weight", "cpi", "CPI WEIGHTS 07.3.3: Passenger transport by air",
            why="How much air fares can move the headline. Without it a large "
-               "monthly swing cannot be turned into a contribution."),
+               "monthly swing cannot be turned into a contribution.",
+           frequency="annual"),
     Series("CHBR", "index", "rpi", "RPI: Fares and other travel costs",
            "Jan 1987=100",
            "Where RPI keeps air fares -- diluted with rail and bus, but running "
@@ -122,7 +135,8 @@ SERIES: tuple[Series, ...] = (
            "Jan 1987=100",
            "The subgroup air fares actually sits in -- one level closer than CHBR."),
     Series("CZHM", "weight", "rpi", "RPI: Weights (parts per 1000), fares and other travel costs",
-           why="Needed before any claim about how much of CHBR is air."),
+           why="Needed before any claim about how much of CHBR is air.",
+           frequency="annual"),
 )
 
 BY_CDID = {s.cdid: s for s in SERIES}
@@ -132,7 +146,7 @@ _MONTHS = {m: i for i, m in enumerate(
      "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"), start=1)}
 
 
-def _period(raw: Any) -> dt.date | None:
+def _period(raw: Any, *, year_only: bool = False) -> dt.date | None:
     """First of the month from ONS's date spellings.
 
     Seen in the wild as "2026 AUG"; also handles "2026 August", "AUG 2026" and
@@ -146,6 +160,14 @@ def _period(raw: Any) -> dt.date | None:
     except ValueError:
         pass
     parts = [p for p in text.split() if p]
+    if year_only:
+        # An annual observation is dated "2026". Anchored to January so it sorts
+        # and partitions with everything else, and because a weight applies to
+        # the whole year rather than to a month within it.
+        for part in parts:
+            if part.isdigit() and len(part) == 4:
+                return dt.date(int(part), 1, 1)
+        return None
     year = month = None
     for part in parts:
         token = part.upper()[:3]
@@ -180,10 +202,11 @@ def parse_series(payload: Any, series: Series) -> list[dict[str, Any]]:
             raise Mm23Error(f"{series.cdid}: response was not JSON: {exc}") from exc
     if not isinstance(payload, dict):
         raise Mm23Error(f"{series.cdid}: expected an object, got {type(payload).__name__}")
-    months = payload.get("months")
+    block = series.block
+    months = payload.get(block)
     if not isinstance(months, list):
         raise Mm23Error(
-            f"{series.cdid}: no 'months' list in the response. Keys present: "
+            f"{series.cdid}: no {block!r} list in the response. Keys present: "
             f"{sorted(payload)[:15]}. The endpoint shape may have changed."
         )
 
@@ -193,7 +216,9 @@ def parse_series(payload: Any, series: Series) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             skipped += 1
             continue
-        period = _period(item.get("date") or f"{item.get('year','')} {item.get('month','')}")
+        period = _period(
+            item.get("date") or f"{item.get('year','')} {item.get('month','')}",
+            year_only=series.frequency == "annual")
         value = _value(item.get("value"))
         if period is None or value is None:
             skipped += 1
@@ -201,11 +226,12 @@ def parse_series(payload: Any, series: Series) -> list[dict[str, Any]]:
         rows.append({"period": period, "value": value})
     if not rows:
         raise Mm23Error(
-            f"{series.cdid}: 'months' had {len(months)} entries and none were "
+            f"{series.cdid}: {block!r} had {len(months)} entries and none were "
             f"readable. First entry: {months[0] if months else None!r}"
         )
     if skipped:
-        log.warning("%s: %d of %d monthly entries unreadable", series.cdid, skipped, len(months))
+        log.warning("%s: %d of %d %s entries unreadable",
+                    series.cdid, skipped, len(months), block)
     rows.sort(key=lambda r: r["period"])
     return rows
 
