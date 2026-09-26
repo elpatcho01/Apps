@@ -99,6 +99,42 @@ jobs:
           echo "::notice::backfill ${ARGS[*]}"
           python -m ukairfares.backfill "${ARGS[@]}" | tee backfill-summary.json
 
+      # The monthly published record, which the ad hoc sub-indices are not.
+      #
+      # Those six series are rebased to January = 100 every year, which severs
+      # year-on-year by construction, and the release is annual and lagged -- to
+      # February 2026 at the time of writing. So when ONS published August 2026
+      # air fares on 16 September, the honest answer from our own data was "we do
+      # not have it", and five figures quoted in the project's analysis came from
+      # bulletin prose rather than a series anyone could query.
+      #
+      # mm23 is the dataset behind the bulletin: the CPI air fares index, its
+      # monthly and annual rates, its basket weight, and the RPI fares group.
+      # Independent of the ad hoc release, so it runs even when that step fails.
+      - name: Fetch the ONS mm23 monthly series
+        id: mm23
+        continue-on-error: true
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: |
+          set -o pipefail
+          {
+            echo "### ONS mm23 monthly series"
+            echo ""
+            echo '```'
+            python -m ukairfares.mm23
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Warn if the mm23 fetch failed
+        if: steps.mm23.outcome == 'failure'
+        run: |
+          echo "::warning::mm23 fetch failed; the sub-index backfill is \
+          unaffected. Analysis of published levels and annual rates will fall \
+          back to bulletin prose until this succeeds. See the step log."
+
       # Allowed to fail. The sub-index backfill above is the valuable work and
       # has already been written by this point; weights only affect the weighted
       # "all" aggregate, and every reconstructed row carries

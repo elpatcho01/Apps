@@ -55,7 +55,7 @@ LIVE_SHAPED = {
         published_values=678,
         published_first=dt.date(2016, 1, 1), published_last=dt.date(2026, 2, 1),
     )],
-    "WHERE is_current AND index_value IS NOT NULL": [
+    "PARTITION BY index_month, haul_category, months_ahead": [
         dict(index_month=dt.date(2019, 6, 1), haul_category="european",
              months_ahead=1, index_value=224.92, basis="annual_january_100"),
     ],
@@ -64,6 +64,12 @@ LIVE_SHAPED = {
              ok=8, no_data=0, errors=0, mean_price_gbp=122.0, median_price_gbp=110.0,
              geomean_price_gbp=118.4, mean_cheapest_gbp=91.0, mean_mins_off_target=47.0,
              mean_quotes=7.6, mean_considered=3.1),
+    ],
+    "PARTITION BY period, cdid": [
+        dict(period=dt.date(2026, 8, 1), cdid="D7MB", value=6.2,
+             kind="monthly_rate", measure="cpi"),
+        dict(period=dt.date(1987, 1, 1), cdid="CHBR", value=100.0,
+             kind="index", measure="rpi"),
     ],
     "WHERE scrape_date = (SELECT d FROM latest)": [
         dict(scrape_date=dt.date(2026, 8, 17), route="LHR-EDI", haul_category="domestic",
@@ -84,7 +90,7 @@ class TestAlwaysLands:
         data = build_export(FakeReader({"": RuntimeError("bigquery is down")}), _config())
         assert data["schema_version"] == SCHEMA_VERSION
         assert set(data["errors"]) == {
-            "coverage", "published_series", "daily_by_series",
+            "coverage", "published_series", "mm23_series", "daily_by_series",
             "latest_routes", "routes_by_index_month", "reconstructions",
         }
         assert data["published_series"] == []
@@ -100,6 +106,50 @@ class TestAlwaysLands:
         data = build_export(FakeReader(), _config())
         assert data["errors"] == {}
         assert data["coverage"] == {}
+
+
+class TestVintageDeduplication:
+    """Shipping two values for one month with no way to tell which is current.
+
+    `is_current` reads like a dedup flag but cannot be one: the table is
+    append-only and every backfill run writes TRUE, with nothing going back to
+    clear the superseded vintage. A second run of the same release therefore
+    doubled the export -- 2004 rows for 1326 distinct keys, 678 doubled. The
+    values matched, so nothing was miscomputed; the next real ONS revision would
+    have arrived as two different values for one key instead.
+    """
+
+    def test_the_published_series_query_deduplicates_on_the_vintage(self):
+        reader = FakeReader(LIVE_SHAPED)
+        build_export(reader, _config())
+        published = next(q for q in reader.queries
+                         if "PARTITION BY index_month" in q)
+        assert "ROW_NUMBER() OVER" in published
+        assert "ORDER BY fetched_ts DESC" in published
+        assert "is_current" not in published, (
+            "is_current cannot deduplicate; relying on it is the bug")
+
+    def test_the_coverage_count_is_distinct_keys_not_rows(self):
+        """The digest prints this number; it read 2004 for a 1326-value release."""
+        reader = FakeReader(LIVE_SHAPED)
+        build_export(reader, _config())
+        coverage = next(q for q in reader.queries if "panel_rows" in q)
+        assert "COUNT(DISTINCT" in coverage.split("published_values")[0].rsplit("panel_last_day",1)[-1]
+        assert "WHERE is_current" not in coverage
+
+    def test_the_mm23_query_deduplicates_the_same_way(self):
+        reader = FakeReader(LIVE_SHAPED)
+        build_export(reader, _config())
+        mm23_query = next(q for q in reader.queries if "PARTITION BY period, cdid" in q)
+        assert "ROW_NUMBER() OVER" in mm23_query
+        assert "ORDER BY fetched_ts DESC" in mm23_query
+
+    def test_the_published_record_reaches_the_export(self):
+        """The point of the whole change: queryable, not quoted from prose."""
+        data = build_export(FakeReader(LIVE_SHAPED), _config())
+        cdids = {r["cdid"] for r in data["mm23_series"]}
+        assert cdids == {"D7MB", "CHBR"}
+        assert {r["measure"] for r in data["mm23_series"]} == {"cpi", "rpi"}
 
 
 class TestJsonSafety:

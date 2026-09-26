@@ -571,7 +571,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 450 tests, no network
+python -m pytest                                    # 487 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -960,6 +960,78 @@ Combinations missing any haul are skipped rather than partially weighted.
 
 ---
 
+## The published record, fetched rather than quoted
+
+For months the only ONS data this project loaded was the ad hoc sub-index
+release: six series, domestic/European/long-haul by advance window. Two
+properties of that release cost real answers.
+
+**It is rebased to January = 100 every year.** That severs year-on-year by
+construction, so those series can describe seasonality and nothing else. Every
+question about a published level or annual rate had to be answered from bulletin
+prose.
+
+**It is annual and lagged** — to February 2026 at the time of writing. So when
+ONS published August 2026 air fares on 16 September, the honest answer from our
+own data was "we do not have it", while five figures used in analysis (+6.2%,
++22.2%, +2.1%, −34.8%, −28.8%) came from bulletin text nobody could verify
+against a series.
+
+`mm23.py` closes that. It fetches the monthly dataset behind the bulletin:
+
+| CDID | what |
+|---|---|
+| `D7EH` | CPI INDEX 07.3.3 passenger transport by air (2015=100) — continuous, unrebased |
+| `D7MB` | CPI monthly rate — the month-on-month print itself |
+| `D7IT` | CPI annual rate |
+| `CJXW` | CPI weight — what turns a monthly swing into a contribution |
+| `CHBR` | RPI fares and other travel costs (Jan 1987=100) |
+| `CZFN` · `CZED` | RPI monthly and annual rates for that group |
+| `DOCW` · `DOCX` · `DOCY` | RPI rail · bus and coach · other travel costs |
+| `CZHM` | RPI weight for the fares group |
+
+### Why the RPI series are worth fetching, and the trap in them
+
+**RPI has no standalone air fares series.** Air sits inside "other travel costs"
+(`DOCY`), inside "fares and other travel costs" (`CHBR`), with rail and bus. That
+dilution is survivable for one specific reason: rail and bus fares are
+administered and barely move mid-year, so a September move in these series is
+very largely an air fares signal. `DOCW` and `DOCX` are fetched precisely so the
+administered part can be taken out rather than assumed away.
+
+It also buys **history**: RPI runs from January 1987 against CPI's 2001 and our
+sub-indices' 2007. That matters because every interval this project quotes for a
+September step is limited by having seen 19 of them — the 95% band on the
+September 2026 nowcast is ~19pp wide mostly for that reason.
+
+**The trap: RPI is not a leading indicator and must not be modelled as one.** Both
+measures are compiled from the *same price quotes* and published in the *same
+release on the same day*. There is no lead to exploit. What RPI offers is history
+and a measurement of the formula effect — RPI aggregates arithmetically where CPI
+uses a geometric mean, which given identical inputs is the entire difference
+between them. `index.py` already implements Jevons, Dutot and Carli, so that
+comparison is a short test rather than a project.
+
+### `is_current` never deduplicated anything
+
+Found while wiring the export. `ons_published_index` is append-only and vintaged,
+and both the export and the coverage count filtered on `is_current` — but every
+backfill run writes `is_current = TRUE` and nothing goes back to clear the flag on
+the vintage it supersedes. A second run of the same release therefore duplicated
+every row: **2004 rows for 1326 distinct (month, haul, window) keys, 678 of them
+doubled**, and the digest's "published values" headline read 2004.
+
+Values were identical, so nothing was miscomputed. The damage was latent: the
+next genuine ONS revision would have arrived as two different values for one key
+with nothing to say which was current — a silent corruption of the answer key
+this project scores itself against.
+
+Both queries now deduplicate on `fetched_ts` with `ROW_NUMBER()`, and the
+coverage count is of distinct keys. `is_current` is no longer load-bearing
+anywhere; the new `ons_mm23_series` table is read the same way from the start.
+
+---
+
 ## Making it like-for-like with ONS
 
 Our reconstruction produces a **mean fare in pounds** (~£350). ONS publish an
@@ -1162,6 +1234,7 @@ uk-airfares/
 │   ├── pull.py         Daily collection (Task 3)
 │   ├── onsfetch.py     CPI bulletin index-day parser
 │   ├── onsweights.py   Fetches + parses ONS weights and sub-indices
+│   ├── mm23.py         Fetches ONS's monthly published series (CPI air fares + RPI fares)
 │   ├── banks.py        Measures each route's departure bank from raw_response
 │   ├── matched.py      Replays matched-model vs re-picking, to decide on evidence
 │   ├── returnleg.py    Censuses raw_response for the return leg nobody controls
@@ -1172,7 +1245,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              450 tests, no network required
+└── tests/              487 tests, no network required
 ```
 
 ## Non-goals

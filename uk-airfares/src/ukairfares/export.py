@@ -56,7 +56,7 @@ log = logging.getLogger("ukairfares.export")
 #: Bump when the shape changes in a way a consumer would need to notice.
 #: 2 — adds `routes_by_index_month`, and `selection_margin_minutes` to the
 #: per-route and per-series sections.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 DEFAULT_OUT = pathlib.Path("reports/data/analytics.json")
 
@@ -67,12 +67,37 @@ SINGLE_ROW_SECTIONS = frozenset({"coverage"})
 # 678 values, 113 months, six series, and it does not depend on collection
 # having run. This is what makes a dashboard worth looking at before the panel
 # has any depth.
+# `is_current` cannot do the deduplication its name promises: every backfill run
+# writes is_current = TRUE, because the table is append-only and nothing goes
+# back to clear the flag on the vintage it supersedes. So a second run of the
+# same release duplicated every row -- 2004 rows for 1326 distinct
+# (month, haul, window) keys, 678 of them doubled. Values were identical, so no
+# analysis was wrong, but the next genuine ONS revision would have arrived as two
+# different values for one key with nothing to say which was current.
+# Deduplicating on fetched_ts here makes the flag non-load-bearing.
 PUBLISHED_SERIES = """
 SELECT index_month, haul_category, months_ahead,
        CAST(index_value AS FLOAT64) AS index_value, basis
 FROM `{published}`
-WHERE is_current AND index_value IS NOT NULL
+WHERE index_value IS NOT NULL
+QUALIFY ROW_NUMBER() OVER (
+  PARTITION BY index_month, haul_category, months_ahead ORDER BY fetched_ts DESC
+) = 1
 ORDER BY index_month, haul_category, months_ahead
+"""
+
+# --- ONS's published monthly record, straight from mm23 -----------------------
+# Small, and it earns its place: without it every statement about a published
+# level or annual rate has to be read out of bulletin prose, which is how this
+# project ended up quoting five figures it could not verify. Values only -- the
+# labels and provenance live in BigQuery, so the export stays compact while
+# remaining the offline source of truth for the analysis.
+MM23_SERIES = """
+SELECT period, cdid, CAST(value AS FLOAT64) AS value, kind, measure
+FROM `{mm23}`
+WHERE value IS NOT NULL
+QUALIFY ROW_NUMBER() OVER (PARTITION BY period, cdid ORDER BY fetched_ts DESC) = 1
+ORDER BY cdid, period
 """
 
 # --- Collection: one row per day, per series ---------------------------------
@@ -176,9 +201,15 @@ SELECT
   (SELECT COUNT(DISTINCT scrape_date) FROM `{view}`)         AS panel_days,
   (SELECT MIN(scrape_date) FROM `{view}`)                    AS panel_first_day,
   (SELECT MAX(scrape_date) FROM `{view}`)                    AS panel_last_day,
-  (SELECT COUNT(*) FROM `{published}` WHERE is_current)      AS published_values,
-  (SELECT MIN(index_month) FROM `{published}` WHERE is_current) AS published_first,
-  (SELECT MAX(index_month) FROM `{published}` WHERE is_current) AS published_last
+  -- DISTINCT, not COUNT(*): re-running the backfill appended a second vintage of
+  -- every row and `is_current` does not exclude it, so this reported 2004
+  -- published values where the release holds 1326. The digest prints this number.
+  (SELECT COUNT(DISTINCT FORMAT('%t|%s|%t', index_month, haul_category, months_ahead))
+     FROM `{published}` WHERE index_value IS NOT NULL)        AS published_values,
+  (SELECT MIN(index_month) FROM `{published}`)                AS published_first,
+  (SELECT MAX(index_month) FROM `{published}`)                AS published_last,
+  (SELECT COUNT(DISTINCT cdid) FROM `{mm23}`)                 AS mm23_series_count,
+  (SELECT MAX(period) FROM `{mm23}`)                          AS mm23_last_period
 """
 
 
@@ -213,8 +244,11 @@ def build_export(reader, config: Config, *, generated: dt.datetime | None = None
     }
 
     sections: dict[str, Callable[[], Any]] = {
-        "coverage": lambda: _rows(reader, COVERAGE.format(view=view, published=published)),
+        "coverage": lambda: _rows(reader, COVERAGE.format(
+            view=view, published=published, mm23=config.table_ref("ons_mm23_series"))),
         "published_series": lambda: _rows(reader, PUBLISHED_SERIES.format(published=published)),
+        "mm23_series": lambda: _rows(reader, MM23_SERIES.format(
+            mm23=config.table_ref("ons_mm23_series"))),
         "daily_by_series": lambda: _rows(reader, DAILY_BY_SERIES.format(view=view)),
         "latest_routes": lambda: _rows(reader, LATEST_ROUTES.format(view=view)),
         "routes_by_index_month": lambda: _rows(
