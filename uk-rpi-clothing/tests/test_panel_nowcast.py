@@ -96,3 +96,20 @@ def test_panel_section_mom_runs_end_to_end_on_mock():
     mom = panel.section_mom_from_panel(get(idx[1]), get(idx[8]), get(idx[9]), _maps(),
                                        {f"CS_{c}": 1.0 for c in p.categories})
     assert mom is not None and math.isfinite(mom)
+
+
+def test_ws3_backtest_runs_on_mock_and_skips_uncalibrated_origins():
+    import random
+    from rpiclothing import ws3
+    from rpiclothing.series import add_months
+    random.seed(0)
+    p = MockPanel(skus_per_cell=10)
+    chbj, d, lvl = {}, dt.date(2022, 1, 1), 300.0
+    while d <= dt.date(2025, 12, 1):
+        chbj[d] = lvl
+        lvl *= 1 + random.gauss(0.4, 1.5) / 100
+        d = add_months(d, 1)
+    targets = [add_months(dt.date(2023, 1, 1), k) for k in range(30)]
+    res = ws3.backtest(chbj, p, _maps(), {f"CS_{c}": 1.0 for c in p.categories}, targets, min_calibration=12)
+    assert res["scores"]["incumbent"]["n"] == 30
+    assert res["scores"]["panel_raw"]["n"] > res["scores"]["panel_calibrated"]["n"]
