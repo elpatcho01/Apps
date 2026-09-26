@@ -1,0 +1,36 @@
+# PINNED, including transitive dependencies -- a lock, not a range, for the
+# same reason as uk-airfares/requirements.txt: this runs unattended, and an
+# upstream release must not be able to change behaviour with no change on our
+# side. The weekly latest-deps canary in rpiclothing-ci installs unpinned.
+#
+# Direct dependencies:
+#     requests                 ONS fetches (cy.ons.gov.uk mirror)
+#     numpy                    Carli/Jevons aggregation and bootstraps
+#     google-cloud-bigquery    append-only storage
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.1
+cryptography==50.0.1
+google-api-core==2.39.0
+google-auth==2.58.1
+google-cloud-bigquery==3.45.2
+google-cloud-core==2.7.0
+google-crc32c==1.9.0
+google-resumable-media==2.10.2
+googleapis-common-protos==1.75.4
+grpcio==1.84.0
+grpcio-status==1.84.0
+idna==3.20
+numpy==2.4.6
+opentelemetry-api==1.45.0
+packaging==26.3
+proto-plus==1.28.4
+protobuf==7.36.2
+pyasn1==0.6.4
+pyasn1_modules==0.4.2
+pycparser==3.0
+python-dateutil==2.9.0.post0
+requests==2.34.2
+six==1.17.0
+typing_extensions==4.16.0
+urllib3==2.8.0

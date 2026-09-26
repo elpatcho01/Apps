@@ -1,0 +1,79 @@
+name: RPI clothing research run
+
+# Runs the data-dependent research steps (Task 0 probe, and later the WS1
+# backtest and the 2a reconstruction) against live ONS data.
+#
+# Why this exists as a push-triggered workflow: ons.gov.uk is unreachable from
+# the development sandbox by egress policy, so Actions is the only place that
+# can see ONS. Triggering on push to the development branch lets each code
+# change be checked against real data without a manual dispatch (dispatch only
+# works once a workflow file is on the default branch). Needs no secrets: it
+# reads public ONS data and writes nothing but its own artifact.
+
+on:
+  push:
+    branches:
+      - "claude/rpi-clothing-**"
+    paths:
+      - "uk-rpi-clothing/**"
+      - ".github/workflows/rpiclothing-probe.yml"
+      - "!uk-rpi-clothing/reports/**"
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "Research step to run: probe, ws1, quotes, all"
+        required: false
+        type: string
+        default: "all"
+
+concurrency:
+  group: rpiclothing-research-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: uk-rpi-clothing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-rpi-clothing/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Tests
+        env:
+          PYTHONPATH: src
+        run: python -m pytest
+
+      - name: Research steps
+        env:
+          PYTHONPATH: src
+          STEP: ${{ inputs.step }}
+        run: |
+          set -o pipefail
+          mkdir -p out
+          # Empty on push (dispatch defaults do not apply); treat as "all".
+          if [ -z "$STEP" ]; then STEP=all; fi
+          echo "::notice::research step=$STEP"
+          python -m rpiclothing.research --step "$STEP" --out-dir out | tee out/research.log
+
+      - name: Upload outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpiclothing-research-${{ github.run_id }}
+          path: uk-rpi-clothing/out/
+          if-no-files-found: ignore
+          retention-days: 30
