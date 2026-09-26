@@ -14,9 +14,9 @@ import logging
 import pathlib
 import sys
 
-from . import probe
+from . import probe, ws1
 
-STEPS = ("probe",)
+STEPS = ("probe", "ws1")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,7 +33,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"unknown step(s): {unknown}; known: {STEPS}", file=sys.stderr)
         return 2
     if "probe" in steps:
-        probe.main(["--out", str(out / "probe.json")])
+        probe.main(["--out", str(out / "probe.json"),
+                    "--checks", "mm23,seasonal,wedge,contribution,price_quotes"])
+    if "ws1" in steps:
+        ws1.main(["--out", str(out / "ws1.json")])
     return 0
 
 

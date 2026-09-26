@@ -25,6 +25,7 @@ import io
 import logging
 import os
 import re
+import time
 from typing import Any, Iterable
 
 import requests
@@ -52,6 +53,15 @@ _MONTHS = {
     )
 }
 _MONTH_LABEL = re.compile(r"^\s*(\d{4})\s+([A-Z]{3})\s*$")
+_YEAR_LABEL = re.compile(r"^\s*(\d{4})\s*$")
+
+#: Minimum spacing between requests, and the retry schedule for 429/5xx. The
+#: mirror rate-limits a crawl of dataset editions (observed: HTTP 429 after a
+#: few dozen rapid requests), so every request is paced and a 429 honours
+#: Retry-After before giving up.
+MIN_INTERVAL_S = float(os.environ.get("ONS_MIN_INTERVAL_S", "0.6"))
+RETRY_DELAYS_S = (2, 5, 15, 30, 60)
+_last_request = [0.0]
 
 
 class OnsFetchError(RuntimeError):
@@ -75,20 +85,26 @@ class Series:
     cdid: str
     title: str
     source_url: str
-    #: Monthly observations only, sorted by date.
+    #: Monthly observations, sorted by date. May be empty for an annual-only
+    #: series (the RPI weights are published once a year).
     values: tuple[tuple[dt.date, float], ...]
     release_date: str | None = None
+    #: Annual observations, {year: value}.
+    annual: tuple[tuple[int, float], ...] = ()
 
     def as_dict(self) -> dict[dt.date, float]:
         return dict(self.values)
 
-    @property
-    def first(self) -> tuple[dt.date, float]:
-        return self.values[0]
+    def annual_dict(self) -> dict[int, float]:
+        return dict(self.annual)
 
     @property
-    def last(self) -> tuple[dt.date, float]:
-        return self.values[-1]
+    def first(self) -> tuple[dt.date, float] | None:
+        return self.values[0] if self.values else None
+
+    @property
+    def last(self) -> tuple[dt.date, float] | None:
+        return self.values[-1] if self.values else None
 
 
 def parse_timeseries_json(payload: dict[str, Any], source_url: str) -> Series:
@@ -102,6 +118,15 @@ def parse_timeseries_json(payload: dict[str, Any], source_url: str) -> Series:
     months = payload.get("months")
     if not cdid or not isinstance(months, list):
         raise OnsFetchError(f"{source_url}: not a time-series payload (keys={sorted(payload)})")
+    annual: list[tuple[int, float]] = []
+    for row in payload.get("years") or []:
+        y = _YEAR_LABEL.match(str(row.get("date", "")))
+        raw = str(row.get("value", "")).strip()
+        if y and raw:
+            try:
+                annual.append((int(y.group(1)), float(raw)))
+            except ValueError:
+                continue
     out: list[tuple[dt.date, float]] = []
     for row in months:
         d = parse_month_label(str(row.get("date", "")))
@@ -112,8 +137,8 @@ def parse_timeseries_json(payload: dict[str, Any], source_url: str) -> Series:
             out.append((d, float(raw)))
         except ValueError as exc:
             raise OnsFetchError(f"{source_url}: unparseable value {raw!r} at {d}") from exc
-    if not out:
-        raise OnsFetchError(f"{source_url}: {cdid} has no monthly observations")
+    if not out and not annual:
+        raise OnsFetchError(f"{source_url}: {cdid} has no observations")
     out.sort()
     return Series(
         cdid=cdid,
@@ -121,14 +146,31 @@ def parse_timeseries_json(payload: dict[str, Any], source_url: str) -> Series:
         source_url=source_url,
         values=tuple(out),
         release_date=desc.get("releaseDate"),
+        annual=tuple(sorted(annual)),
     )
 
 
-def _get(session: requests.Session, url: str, *, timeout: int = 60) -> requests.Response:
-    resp = session.get(url, timeout=timeout, headers={"User-Agent": USER_AGENT})
-    if resp.status_code != 200:
+def _get(
+    session: requests.Session, url: str, *, timeout: int = 60, sleep=time.sleep
+) -> requests.Response:
+    for attempt in range(len(RETRY_DELAYS_S) + 1):
+        wait = MIN_INTERVAL_S - (time.monotonic() - _last_request[0])
+        if wait > 0:
+            sleep(wait)
+        _last_request[0] = time.monotonic()
+        resp = session.get(url, timeout=timeout, headers={"User-Agent": USER_AGENT})
+        if resp.status_code == 200:
+            return resp
+        if resp.status_code in (429, 500, 502, 503, 504) and attempt < len(RETRY_DELAYS_S):
+            delay = float(RETRY_DELAYS_S[attempt])
+            ra = resp.headers.get("Retry-After", "")
+            if ra.strip().isdigit():
+                delay = max(delay, float(ra))
+            log.warning("%s: HTTP %s, retrying in %.0fs", url, resp.status_code, delay)
+            sleep(delay)
+            continue
         raise OnsFetchError(f"{url}: HTTP {resp.status_code}")
-    return resp
+    raise OnsFetchError(f"{url}: retries exhausted")  # pragma: no cover
 
 
 def fetch_timeseries(
@@ -161,8 +203,19 @@ def parse_mm23_csv(text: str, source_url: str = "mm23.csv") -> dict[str, Series]
         (r[1] for r in rows if r and r[0].strip().lower() == "release date" and len(r) > 1), None
     )
     cols: dict[int, list[tuple[dt.date, float]]] = {i: [] for i in range(1, len(cdids))}
+    ann: dict[int, list[tuple[int, float]]] = {i: [] for i in range(1, len(cdids))}
     for r in rows:
         if not r:
+            continue
+        y = _YEAR_LABEL.match(r[0])
+        if y:
+            for i in range(1, min(len(r), len(cdids))):
+                v = r[i].strip()
+                if v:
+                    try:
+                        ann[i].append((int(y.group(1)), float(v)))
+                    except ValueError:
+                        continue
             continue
         d = parse_month_label(r[0])
         if d is None:
@@ -177,7 +230,7 @@ def parse_mm23_csv(text: str, source_url: str = "mm23.csv") -> dict[str, Series]
     out: dict[str, Series] = {}
     for i, vals in cols.items():
         cdid = cdids[i].strip().upper()
-        if not cdid or not vals:
+        if not cdid or not (vals or ann[i]):
             continue
         vals.sort()
         out[cdid] = Series(
@@ -186,6 +239,7 @@ def parse_mm23_csv(text: str, source_url: str = "mm23.csv") -> dict[str, Series]
             source_url=source_url,
             values=tuple(vals),
             release_date=release,
+            annual=tuple(sorted(ann[i])),
         )
     return out
 
@@ -217,6 +271,36 @@ def fetch_json(path_or_url: str, *, session: requests.Session | None = None) -> 
         return resp.json()
     except ValueError as exc:
         raise OnsFetchError(f"{url}: response is not JSON") from exc
+
+
+def dataset_editions(
+    landing_path: str = PRICE_QUOTES_DATASET_PATH, *, session: requests.Session | None = None
+) -> list[str]:
+    """Edition URIs listed on a dataset landing page, in the page's order."""
+    landing = fetch_json(landing_path.rstrip("/") + "/data", session=session)
+    return [ed["uri"] for ed in landing.get("datasets") or [] if isinstance(ed, dict) and ed.get("uri")]
+
+
+def edition_downloads(uri: str, *, session: requests.Session | None = None) -> list[dict[str, str]]:
+    """Files attached to one dataset edition."""
+    page = fetch_json(uri.rstrip("/") + "/data", session=session)
+    desc = page.get("description") or {}
+    out = []
+    for kind in ("downloads", "supplementaryFiles"):
+        for f in page.get(kind) or []:
+            name = f.get("file") if isinstance(f, dict) else None
+            if name:
+                out.append(
+                    {
+                        "edition": str(desc.get("edition") or ""),
+                        "release_date": str(desc.get("releaseDate") or ""),
+                        "title": str(f.get("title") or ""),
+                        "file": name,
+                        "uri": uri,
+                        "url": f"{base_url()}/file?uri={uri.rstrip('/')}/{name}",
+                    }
+                )
+    return out
 
 
 def dataset_download_links(

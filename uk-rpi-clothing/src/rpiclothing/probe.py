@@ -18,6 +18,7 @@ import json
 import logging
 import math
 import re
+import statistics
 import sys
 import traceback
 import zipfile
@@ -81,13 +82,14 @@ def _series_summary(s: onsfetch.Series) -> dict[str, Any]:
         "title": s.title,
         "source_url": s.source_url,
         "release_date": s.release_date,
-        "first": [s.first[0].isoformat(), s.first[1]],
-        "last": [s.last[0].isoformat(), s.last[1]],
+        "first": [s.first[0].isoformat(), s.first[1]] if s.first else None,
+        "last": [s.last[0].isoformat(), s.last[1]] if s.last else None,
+        "annual_tail": list(s.annual[-12:]),
         "n_months": len(s.values),
         "jun2026": d.get(jun26),
         "jun2025": d.get(dt.date(2025, 6, 1)),
         "yoy_jun2026_pct": yoy(d, jun26),
-        "tail": [[k.isoformat(), v] for k, v in s.values[-15:]],
+        "tail": [[k.isoformat(), v] for k, v in s.values[-4:]],
     }
 
 
@@ -101,39 +103,103 @@ def check_series(session: requests.Session) -> dict[str, Any]:
     return out
 
 
-def check_mm23(session: requests.Session) -> dict[str, Any]:
-    mm23 = onsfetch.fetch_mm23(session=session)
+def check_mm23_from(mm23: dict[str, onsfetch.Series]) -> dict[str, Any]:
     hits: dict[str, Any] = {"n_series": len(mm23)}
     for cdid in TARGET_CDIDS:
         s = mm23.get(cdid)
         hits[f"title_{cdid}"] = s.title if s else None
     def rows(ss):
         return [
-            {"cdid": s.cdid, "title": s.title, "first": s.first[0].isoformat(),
-             "last": [s.last[0].isoformat(), s.last[1]]}
+            {"cdid": s.cdid, "title": s.title,
+             "first": s.first[0].isoformat() if s.first else None,
+             "last": [s.last[0].isoformat(), s.last[1]] if s.last else None,
+             "annual_tail": list(s.annual[-3:])}
             for s in ss
         ]
-    hits["clothing_titles"] = rows(
-        [s for s in mm23.values() if re.search(r"cloth|footwear", s.title, re.I)]
-    )[:120]
-    hits["rpi_weight_titles"] = rows(
-        [s for s in mm23.values() if re.search(r"rpi", s.title, re.I) and re.search(r"weight", s.title, re.I)]
-    )[:120]
+    hits["annual_only_clothing_or_weight"] = rows(
+        [s for s in mm23.values() if not s.values
+         and re.search(r"cloth|footwear|weight", s.title, re.I)]
+    )[:80]
+    hits["weight_titles_any"] = rows(
+        [s for s in mm23.values() if re.search(r"weight", s.title, re.I)
+         and re.search(r"cloth|footwear|rpi", s.title, re.I)]
+    )[:80]
+    hits["rpi_clothing_subsections"] = rows(
+        [s for s in mm23.values() if s.title.lower().startswith("rpi")
+         and re.search(r"cloth|footwear|outerwear", s.title, re.I)]
+    )[:40]
     hits["formula_effect_titles"] = rows(
         [s for s in mm23.values() if re.search(r"formula", s.title, re.I)]
     )[:60]
     # The weight series itself, year by year, for anything that looks like the
     # RPI clothing & footwear weight.
-    weights = {}
-    for s in mm23.values():
-        t = s.title.lower()
-        if "rpi" in t and "weight" in t and ("cloth" in t or "footwear" in t):
-            by_year: dict[int, float] = {}
-            for d, v in s.values:
-                by_year.setdefault(d.year, v)
-            weights[s.cdid] = {"title": s.title, "by_year_first_month": by_year}
-    hits["rpi_clothing_weights"] = weights
+    for cdid in ("CZHJ", "CZFY", "CZGN"):
+        s = mm23.get(cdid)
+        hits[f"series_{cdid}"] = (
+            {"title": s.title, "annual": list(s.annual), "n_monthly": len(s.values)} if s else None
+        )
     return hits
+
+
+def check_contribution(
+    chbj: dict[dt.date, float], chaw: dict[dt.date, float],
+    czfy: dict[dt.date, float], weights: dict[int, float],
+) -> dict[str, Any]:
+    """Trap 1 against ONS's own published contribution (CZFY, pp, 2dp).
+
+    Compares the exact chain-linked formula and the naive w x MoM, both using
+    the published weights, and infers the weight each year by least squares
+    from CZFY as an independent check on the weight series.
+    """
+    from .series import contribution_bp, effective_weight_ppt
+
+    rows = []
+    for d in month_range(dt.date(2010, 1, 1), max(czfy)):
+        if d not in czfy:
+            continue
+        exact = contribution_bp(chbj, chaw, weights, d)
+        m = mom(chbj).get(d)
+        w = weights.get(d.year if d.month > 1 else d.year - 1)
+        naive = None if (m is None or w is None) else w / 1000 * m * 100
+        naive_cal = None if (m is None or weights.get(d.year) is None) else weights[d.year] / 1000 * m * 100
+        if exact is None:
+            continue
+        rows.append((d, czfy[d] * 100, exact, naive, naive_cal))
+    def err(i):
+        e = [abs(r[i] - r[1]) for r in rows if r[i] is not None]
+        return {"mae_bp": round(statistics.fmean(e), 3), "max_bp": round(max(e), 3), "n": len(e)}
+    by_month = {}
+    for mth in range(1, 13):
+        sel = [r for r in rows if r[0].month == mth and r[0].year >= 2016]
+        if sel:
+            by_month[mth] = {
+                "published_mean_bp": round(statistics.fmean(r[1] for r in sel), 2),
+                "exact_mean_bp": round(statistics.fmean(r[2] for r in sel), 2),
+                "naive_mean_bp": round(statistics.fmean(r[3] for r in sel if r[3] is not None), 2),
+                "effective_weight_mean": round(statistics.fmean(
+                    effective_weight_ppt(chbj, chaw, weights, r[0]) for r in sel), 2),
+            }
+    # implied weight per chain year: CZFY = w * f, f = exact / w
+    implied = {}
+    for y in sorted({(r[0].year if r[0].month > 1 else r[0].year - 1) for r in rows}):
+        sel = [r for r in rows if (r[0].year if r[0].month > 1 else r[0].year - 1) == y]
+        wy = weights.get(y)
+        if not wy or len(sel) < 6:
+            continue
+        f = [r[2] / wy for r in sel]
+        num = sum(fi * r[1] for fi, r in zip(f, sel))
+        den = sum(fi * fi for fi in f)
+        if den:
+            implied[y] = {"published_w": wy, "implied_w": round(num / den, 2)}
+    return {
+        "exact_vs_published": err(2),
+        "naive_chainyear_weight_vs_published": err(3),
+        "naive_calendar_weight_vs_published": err(4),
+        "by_month_2016on": by_month,
+        "implied_weights": implied,
+        "last_12": [[r[0].isoformat(), r[1], round(r[2], 2), None if r[3] is None else round(r[3], 2)]
+                    for r in rows[-12:]],
+    }
 
 
 def check_seasonal(chbj: dict[dt.date, float]) -> dict[str, Any]:
@@ -229,13 +295,16 @@ def _open_table(blob: bytes, name: str) -> tuple[list[str], list[dict[str, str]]
 
 
 def check_price_quotes(session: requests.Session) -> dict[str, Any]:
-    links = onsfetch.dataset_download_links(session=session)
+    editions = onsfetch.dataset_editions(session=session)
+    links = []
+    for uri in editions[:10]:
+        links.extend(onsfetch.edition_downloads(uri, session=session))
     names = [l["file"] for l in links]
     out: dict[str, Any] = {
-        "n_files": len(links),
-        "files_head": links[:12],
-        "files_tail": links[-6:],
-        "editions": sorted({l["edition"] for l in links})[-40:],
+        "n_editions": len(editions),
+        "editions_head": editions[:15],
+        "editions_tail": editions[-8:],
+        "files_first_10_editions": [(l["edition"], l["file"], l["release_date"]) for l in links],
     }
     quotes = [l for l in links if "pricequote" in l["file"].lower().replace("_", "").replace("-", "")]
     items = [l for l in links if "itemind" in l["file"].lower().replace("_", "").replace("-", "")]
@@ -254,15 +323,13 @@ def check_price_quotes(session: requests.Session) -> dict[str, Any]:
             "n_rows": len(rows),
             "n_clothing_like_rows": len(clothing),
             "n_clothing_like_items": len(item_counts),
-            "clothing_items": [
-                {"item_id": k[0], "desc": k[1], "n": n} for k, n in sorted(item_counts.items())
-            ][:200],
+            "clothing_items": [f"{k[0]}|{k[1]}|{n}" for k, n in sorted(item_counts.items())][:200],
             "indicator_box_all": Counter(r.get("INDICATOR_BOX", "") for r in rows).most_common(20),
             "indicator_box_clothing": Counter(r.get("INDICATOR_BOX", "") for r in clothing).most_common(20),
             "validity_clothing": Counter(r.get("VALIDITY", "") for r in clothing).most_common(10),
             "shop_type_clothing": Counter(r.get("SHOP_TYPE", "") for r in clothing).most_common(10),
             "stratum_type_clothing": Counter(r.get("STRATUM_TYPE", "") for r in clothing).most_common(10),
-            "sample_rows": clothing[:5],
+            "sample_rows": clothing[:3],
             "item_id_prefixes_clothing": Counter((r.get("ITEM_ID") or "")[:2] for r in clothing).most_common(10),
         }
     if items:
@@ -277,28 +344,39 @@ def check_price_quotes(session: requests.Session) -> dict[str, Any]:
     return out
 
 
-def run(out_path: str | None) -> dict[str, Any]:
+CHECKS = ("series", "mm23", "seasonal", "baseline", "wedge", "contribution", "price_quotes")
+
+
+def run(out_path: str | None, checks: tuple[str, ...] = CHECKS) -> dict[str, Any]:
     session = requests.Session()
     report: dict[str, Any] = {
         "generated_ts": dt.datetime.now(dt.timezone.utc).isoformat(),
         "ons_base": onsfetch.base_url(),
         "checks": {},
     }
-    series = _check(report, "series", lambda: check_series(session))
-    _check(report, "mm23", lambda: check_mm23(session))
-    chbj = d7bw = None
+    if "series" in checks:
+        _check(report, "series", lambda: check_series(session))
+    mm23 = None
     try:
-        chbj = onsfetch.fetch_timeseries("CHBJ", session=session).as_dict()
-        d7bw = onsfetch.fetch_timeseries("D7BW", session=session).as_dict()
+        mm23 = onsfetch.fetch_mm23(session=session)
     except Exception as exc:  # noqa: BLE001
-        report["checks"]["fetch_for_analysis"] = {"ok": False, "error": str(exc)}
-    if chbj:
-        _check(report, "seasonal", lambda: check_seasonal(chbj))
-        _check(report, "baseline_grid", lambda: check_baseline_grid(chbj))
-    if chbj and d7bw:
-        _check(report, "wedge", lambda: check_wedge(chbj, d7bw))
-    _check(report, "price_quotes", lambda: check_price_quotes(session))
-    del series
+        report["checks"]["fetch_mm23"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    if mm23 and "mm23" in checks:
+        _check(report, "mm23", lambda: check_mm23_from(mm23))
+    get = (lambda c: mm23[c].as_dict()) if mm23 else None
+    if mm23:
+        chbj, d7bw, chaw = get("CHBJ"), get("D7BW"), get("CHAW")
+        if "seasonal" in checks:
+            _check(report, "seasonal", lambda: check_seasonal(chbj))
+        if "baseline" in checks:
+            _check(report, "baseline_grid", lambda: check_baseline_grid(chbj))
+        if "wedge" in checks:
+            _check(report, "wedge", lambda: check_wedge(chbj, d7bw))
+        if "contribution" in checks and "CZFY" in mm23 and "CZHJ" in mm23:
+            _check(report, "contribution", lambda: check_contribution(
+                chbj, chaw, get("CZFY"), mm23["CZHJ"].annual_dict()))
+    if "price_quotes" in checks:
+        _check(report, "price_quotes", lambda: check_price_quotes(session))
     if out_path:
         with open(out_path, "w", encoding="utf-8") as fh:
             json.dump(report, fh, indent=1, default=str, sort_keys=True)
@@ -308,15 +386,18 @@ def run(out_path: str | None) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="probe.json")
+    ap.add_argument("--checks", default=",".join(CHECKS))
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO)
-    report = run(args.out)
+    report = run(args.out, tuple(c.strip() for c in args.checks.split(",")))
     # Echo without the bulky 'all' grid, which is in the artifact.
     slim = json.loads(json.dumps(report, default=str))
     bg = slim["checks"].get("baseline_grid", {}).get("result")
     if isinstance(bg, dict):
         bg.pop("all", None)
-    print(json.dumps(slim, indent=1, sort_keys=True))
+    # One line per check keeps the job log readable and parseable.
+    for name, val in slim["checks"].items():
+        print(f"PROBE::{name}::" + json.dumps(val, sort_keys=True, separators=(",", ":")))
     failed = [k for k, v in report["checks"].items() if not v.get("ok")]
     print(f"\nPROBE: {len(report['checks']) - len(failed)} ok, {len(failed)} failed: {failed}")
     return 0
