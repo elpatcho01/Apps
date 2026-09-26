@@ -124,7 +124,10 @@ jobs:
             echo "### ONS mm23 monthly series"
             echo ""
             echo '```'
-            python -m ukairfares.mm23
+            # 2>&1 so a traceback lands in the summary too. The first run of this
+            # step failed after fetching everything correctly, and the summary
+            # showed an empty code block: the reason was in the log only.
+            python -m ukairfares.mm23 2>&1
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 

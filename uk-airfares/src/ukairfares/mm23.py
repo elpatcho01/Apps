@@ -261,7 +261,14 @@ def render(fetched: dict[str, list[dict[str, Any]]], *, months: int = 14) -> str
 
 def run_fetch(config: Config, *, writer=None, session=None,
               cdids: list[str] | None = None) -> dict[str, list[dict[str, Any]]]:
-    writer = writer or bq.BigQueryWriter(config.project)
+    # build_writer, not BigQueryWriter directly: it honours DRY_RUN, which is how
+    # this runs without credentials.
+    writer = writer or bq.build_writer(config)
+    # Fully qualified, because the client demands 'project.dataset.table' and
+    # rejects a bare name. The first live run died here after fetching and
+    # parsing eleven series correctly -- every test passed because DryRunWriter
+    # ignores the table argument entirely, so nothing checked what was passed.
+    table = TABLE if config.dry_run else config.table_ref(TABLE)
     session = session or requests.Session()
     run_id = str(uuid.uuid4())
     fetched_ts = dt.datetime.now(dt.timezone.utc)
@@ -280,7 +287,7 @@ def run_fetch(config: Config, *, writer=None, session=None,
             failures.append(f"{series.cdid}: {exc}")
             continue
         rows = build_rows(series, observations, run_id=run_id, fetched_ts=fetched_ts)
-        writer.append(TABLE, rows)
+        writer.append(table, rows)
         out[series.cdid] = observations
 
     if failures:

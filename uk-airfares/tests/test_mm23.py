@@ -151,9 +151,27 @@ class FakeSession:
 class FakeConfig:
     project = "proj"
     dataset = "ds"
+    dry_run = False
 
     def table_ref(self, table):
         return f"proj.ds.{table}"
+
+
+class RecordingWriter(bq.DryRunWriter):
+    """DryRunWriter, but it remembers the table name it was handed.
+
+    DryRunWriter accepts any string as a table and discards it, which is exactly
+    why the first live run failed: every test passed while the code passed a bare
+    'ons_mm23_series' that the BigQuery client refuses.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.tables: list[str] = []
+
+    def append(self, table, rows):
+        self.tables.append(table)
+        return super().append(table, rows)
 
 
 class TestRunFetch:
@@ -173,6 +191,26 @@ class TestRunFetch:
         assert row["basis"] == "2015=100" and row["is_current"] is True
         assert row["source_url"].endswith("/d7eh/mm23/data")
         assert row["run_id"] and row["fetched_ts"].tzinfo is not None
+
+    def test_the_table_is_fully_qualified(self):
+        """'project.dataset.table' or the client raises ValueError on write.
+
+        The regression: eleven series fetched and parsed correctly, then the
+        write died on a bare table name, and the step reported green because it
+        is continue-on-error.
+        """
+        writer = RecordingWriter()
+        mm23.run_fetch(FakeConfig(), writer=writer,
+                       session=self._session(["D7EH"]), cdids=["D7EH"])
+        assert writer.tables == ["proj.ds.ons_mm23_series"]
+
+    def test_a_dry_run_uses_the_bare_name_the_dry_writer_expects(self):
+        config = FakeConfig()
+        config.dry_run = True
+        writer = RecordingWriter()
+        mm23.run_fetch(config, writer=writer,
+                       session=self._session(["D7EH"]), cdids=["D7EH"])
+        assert writer.tables == ["ons_mm23_series"]
 
     def test_one_dead_series_does_not_cost_the_others(self):
         """The CPI index is load-bearing; an RPI subgroup going missing is not."""

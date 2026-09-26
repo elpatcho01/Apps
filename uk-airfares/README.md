@@ -571,7 +571,7 @@ exchanging a token for your credentials — do not omit it.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest                                    # 487 tests, no network
+python -m pytest                                    # 489 tests, no network
 DRY_RUN=1 FARE_PROVIDER=mock PYTHONPATH=src \
   python -m ukairfares.pull --scrape-date 2026-08-11 --dry-run-out /tmp/dry.ndjson
 ```
@@ -1012,6 +1012,28 @@ uses a geometric mean, which given identical inputs is the entire difference
 between them. `index.py` already implements Jevons, Dutot and Carli, so that
 comparison is a short test rather than a project.
 
+### The first live run wrote nothing, and every test had passed
+
+`mm23.py` fetched and parsed all eleven series correctly on its first live run,
+then died on the write:
+
+```
+ValueError: Could not parse table_id. Expected a table ID such as
+'project.dataset.table', but got ons_mm23_series.
+```
+
+The client requires a fully-qualified reference and the module passed a bare
+name. What let it through is the interesting part: **`DryRunWriter` accepts any
+string as a table and discards it**, so every test in the suite exercised the
+write path without ever checking what was written to. The fake was more
+permissive than the real thing in exactly the dimension that mattered.
+
+The step is `continue-on-error`, so the job reported success with a warning
+annotation, and the run summary showed an empty code block — the traceback was in
+the step log only. Both are fixed: tests now use a writer that records the table
+name, and the step captures stderr into the summary so a failure is legible where
+someone reads it.
+
 ### `is_current` never deduplicated anything
 
 Found while wiring the export. `ons_published_index` is append-only and vintaged,
@@ -1245,7 +1267,7 @@ uk-airfares/
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              487 tests, no network required
+└── tests/              489 tests, no network required
 ```
 
 ## Non-goals
