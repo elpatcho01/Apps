@@ -994,15 +994,34 @@ against a series.
 
 **RPI has no standalone air fares series.** Air sits inside "other travel costs"
 (`DOCY`), inside "fares and other travel costs" (`CHBR`), with rail and bus. That
-dilution is survivable for one specific reason: rail and bus fares are
-administered and barely move mid-year, so a September move in these series is
-very largely an air fares signal. `DOCW` and `DOCX` are fetched precisely so the
-administered part can be taken out rather than assumed away.
+dilution is survivable for one specific reason, and the data confirms it:
 
-It also buys **history**: RPI runs from January 1987 against CPI's 2001 and our
-sub-indices' 2007. That matters because every interval this project quotes for a
-September step is limited by having seen 19 of them — the 95% band on the
-September 2026 nowcast is ~19pp wide mostly for that reason.
+```
+August -> September step, 2001-2025, median (sd)
+  rail fares    DOCW    -0.3%  (0.7)     administered, inert
+  bus and coach DOCX    -0.5%  (1.0)     administered, inert
+  other travel  DOCY   -13.0%  (6.3)     this is the air signal
+  whole group   CHBR    -8.1%  (5.2)     air, diluted by the two above
+```
+
+So September's move in DOCY is essentially all air. Regressing DOCY's monthly step
+on the CPI air fares rate over 308 months from 2001 gives a slope of **0.503** with
+**r = +0.94**: air behaves like about half of "other travel costs" by weight, and
+tracks it closely. DOCY ÷ 0.503 is therefore a usable independent read on the air
+print — a cross-check from a different formula and weighting, though not a leading
+one, since both publish in the same release.
+
+What remains undone: the **formula effect** cannot be measured from mm23, because
+that needs the RPI air fares *item* index, which mm23 does not carry at any level.
+
+**It does NOT buy history, and that argument was wrong.** The claim here was that
+RPI from January 1987 against CPI's 2001 would roughly double the number of
+observed Septembers. The data killed it: DOCY's August→September step over
+1987–2000 has a median of **+0.2% with a standard deviation of 0.3pp** — dead
+flat — because air fares were collected *quarterly* until 2001 and the same
+collection feeds both measures. The pre-2001 CPI monthly rates are mostly exact
+zeros for the same reason. The usable window is 2001 onward, 25 Septembers, and it
+is the same 25 for RPI and CPI.
 
 **The trap: RPI is not a leading indicator and must not be modelled as one.** Both
 measures are compiled from the *same price quotes* and published in the *same
@@ -1011,6 +1030,25 @@ and a measurement of the formula effect — RPI aggregates arithmetically where 
 uses a geometric mean, which given identical inputs is the entire difference
 between them. `index.py` already implements Jevons, Dutot and Carli, so that
 comparison is a short test rather than a project.
+
+### The bounce-back effect is real, and our proxy said it was not
+
+Before the real series was in hand, the aggregate was approximated by an
+equal-weight average of the six ad hoc sub-indices. On that proxy, regressing the
+September step on the August step gave r = −0.32 with residual variance equal to
+unconditional variance — about **0% of variance explained** — and the conclusion
+drawn was that the mean reversion visible in individual series "washes out in
+aggregation".
+
+On the actual published series, 2001–2025: **r = −0.58, slope −0.411, R² = 0.34**.
+The effect is there and it is the single best predictor of the September step among
+those tested (the August index level and the two-month July+August move are close
+behind at r ≈ −0.56; the annual rate is useless at r = −0.20).
+
+The proxy was not merely noisier — it pointed the opposite way on a question of
+substance. Equal-sixths weighting across six series with very different seasonal
+amplitudes destroyed the signal. Worth remembering before any future analysis
+leans on a synthetic aggregate where a published one exists.
 
 ### What the first successful fetch settled
 
