@@ -14,9 +14,9 @@ import logging
 import pathlib
 import sys
 
-from . import probe, ws1
+from . import probe, wedge, ws1, ws2a
 
-STEPS = ("probe", "ws1")
+STEPS = ("probe", "ws1", "wedge", "ws2a")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO)
     out = pathlib.Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    steps = STEPS if args.step == "all" else tuple(s.strip() for s in args.step.split(","))
+    steps = tuple(s for s in STEPS if s != "probe") if args.step == "all" else tuple(s.strip() for s in args.step.split(","))
     unknown = [s for s in steps if s not in STEPS]
     if unknown:
         print(f"unknown step(s): {unknown}; known: {STEPS}", file=sys.stderr)
@@ -35,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
     if "probe" in steps:
         probe.main(["--out", str(out / "probe.json"),
                     "--checks", "price_quotes"])
+    if "ws2a" in steps:
+        ws2a.main(["--cache", "cache", "--out", str(out / "ws2a.json")])
+    if "wedge" in steps:
+        wedge.main(["--out", str(out / "wedge.json")])
     if "ws1" in steps:
         ws1.main(["--out", str(out / "ws1.json")])
     return 0

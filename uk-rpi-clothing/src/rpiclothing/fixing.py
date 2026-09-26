@@ -62,7 +62,14 @@ VARIANCE_CANDIDATES: tuple[str, ...] = ("unconditional", "regime", "shrunk", "ra
 #: the complexity order and any win they record is labelled as such.
 EMPIRICAL_CANDIDATES: tuple[str, ...] = ("empirical", "empirical_month")
 
-ALL_CANDIDATES: tuple[str, ...] = VARIANCE_CANDIDATES + EMPIRICAL_CANDIDATES
+#: Added AFTER research run 3: the empirical normal fans lifted h1 90%
+#: coverage only from 78.5% to 83%, with 50% coverage already about right --
+#: the signature of fat tails, which no normal fan can fix. This candidate
+#: uses the empirical distribution of past out-of-sample errors directly
+#: (shifted onto the point forecast), scored with the ensemble CRPS.
+QUANTILE_CANDIDATES: tuple[str, ...] = ("empirical_quantile",)
+
+ALL_CANDIDATES: tuple[str, ...] = VARIANCE_CANDIDATES + EMPIRICAL_CANDIDATES + QUANTILE_CANDIDATES
 
 NOMINAL_COVERAGE: tuple[float, ...] = (0.5, 0.8, 0.9)
 
@@ -369,6 +376,29 @@ def crps_normal(mu: float, sigma: float, x: float) -> float:
     return sigma * (z * (2 * _Phi(z) - 1) + 2 * _phi(z) - 1 / math.sqrt(math.pi))
 
 
+def crps_ensemble(sample: Sequence[float], x: float) -> float:
+    """CRPS of an empirical distribution: E|X - x| - 0.5 E|X - X'|.
+
+    Uses the sorted-sample identity for E|X - X'| so it is O(n log n)."""
+    xs = sorted(sample)
+    n = len(xs)
+    if n == 0:
+        return math.nan
+    t1 = sum(abs(v - x) for v in xs) / n
+    t2 = sum((2 * (i + 1) - n - 1) * v for i, v in enumerate(xs)) * 2 / (n * n)
+    return t1 - 0.5 * t2
+
+
+def empirical_quantile(sample: Sequence[float], q: float) -> float:
+    xs = sorted(sample)
+    if not xs:
+        return math.nan
+    pos = q * (len(xs) - 1)
+    lo = int(math.floor(pos))
+    hi = min(lo + 1, len(xs) - 1)
+    return xs[lo] + (xs[hi] - xs[lo]) * (pos - lo)
+
+
 @dataclasses.dataclass
 class FanScore:
     candidate: str
@@ -403,10 +433,21 @@ def backtest_fans(
     raw: dict[str, dict[int, list[tuple[dt.date, float, float, float]]]] = {
         c: {h: [] for h in horizons} for c in candidates
     }
+    samples: dict[int, list[tuple[dt.date, float, list[float]]]] = {h: [] for h in horizons}
     for o in origins:
         if o not in level:
             continue
+        if "empirical_quantile" in candidates:
+            errs = past_errors(level, changes, o, point, hmax,
+                               lookback_years=variance_years or 10, cache=cache)
+            path = seasonal_drift_path(level, o, hmax, point, changes=changes)
+            for h in horizons:
+                tgt = add_months(o, h)
+                if tgt in level and len(errs[h]) >= 12:
+                    samples[h].append((tgt, 100.0 * (level[tgt] / path[h] - 1.0), [e for _, e in errs[h]]))
         for c in candidates:
+            if c in QUANTILE_CANDIDATES:
+                continue
             pts = fan(level, o, hmax, FanSpec(point, c, variance_years), changes=changes, cache=cache)
             for h in horizons:
                 p = pts[h - 1]
@@ -417,6 +458,15 @@ def backtest_fans(
     out: dict[str, dict] = {}
     for c in candidates:
         out[c] = {}
+        if c in QUANTILE_CANDIDATES:
+            for h in horizons:
+                out[c][h] = _score_quantile(c, h, samples[h])
+                if by_month:
+                    out[c].setdefault("by_month", {})[h] = {
+                        m: _score_quantile(c, h, [r for r in samples[h] if r[0].month == m])
+                        for m in range(1, 13)
+                    }
+            continue
         for h in horizons:
             out[c][h] = _score(c, h, raw[c][h])
             if by_month:
@@ -434,6 +484,20 @@ def _score(c: str, h: int, rows: list[tuple[dt.date, float, float, float]]) -> F
     cov = {k: statistics.fmean(1.0 if abs(e) <= _Z[k] * sd else 0.0 for _, e, sd, _ in rows)
            for k in NOMINAL_COVERAGE}
     return FanScore(c, h, len(rows), crps, cov, statistics.fmean(sd for *_, sd, _ in rows))
+
+
+def _score_quantile(c: str, h: int, rows: list[tuple[dt.date, float, list[float]]]) -> FanScore:
+    if not rows:
+        return FanScore(c, h, 0, math.nan, {k: math.nan for k in NOMINAL_COVERAGE}, math.nan)
+    crps = statistics.fmean(crps_ensemble(s, e) for _, e, s in rows)
+    cov = {}
+    for k in NOMINAL_COVERAGE:
+        lo, hi = (1 - k) / 2, 1 - (1 - k) / 2
+        cov[k] = statistics.fmean(
+            1.0 if empirical_quantile(s, lo) <= e <= empirical_quantile(s, hi) else 0.0
+            for _, e, s in rows)
+    sd = statistics.fmean(statistics.pstdev(s) for _, _, s in rows)
+    return FanScore(c, h, len(rows), crps, cov, sd)
 
 
 def select_simplest(

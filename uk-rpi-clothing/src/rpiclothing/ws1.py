@@ -79,7 +79,8 @@ def run(
     out["selection_calibration_first"] = alt
     chosen = selection["1"]["chosen"]
     last = max(chbj)
-    spec = fixing.FanSpec(INCUMBENT, chosen)
+    spec = fixing.FanSpec(
+        INCUMBENT, chosen if chosen not in fixing.QUANTILE_CANDIDATES else "empirical")
     pts = fixing.fan(chbj, last, 12, spec)
     out["fan_from_latest"] = [
         {"target": p.target.isoformat(), "h": p.horizon, "mean": round(p.mean_level, 2),
@@ -92,7 +93,14 @@ def run(
     out["month_sd_by_candidate_latest"] = {
         c: {str(p.target.month): round(math.sqrt(p.month_var), 3)
             for p in fixing.fan(chbj, last, 12, fixing.FanSpec(INCUMBENT, c))}
-        for c in fixing.ALL_CANDIDATES
+        for c in fixing.VARIANCE_CANDIDATES + fixing.EMPIRICAL_CANDIDATES
+    }
+    # Empirical quantiles of past out-of-sample errors, pct of level, by horizon.
+    errs = fixing.past_errors(chbj, mom(chbj), last, INCUMBENT, 12)
+    out["empirical_error_quantiles_latest"] = {
+        str(h): {str(q): round(fixing.empirical_quantile([e for _, e in errs[h]], q), 3)
+                 for q in (0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95)}
+        for h in (1, 3, 6, 12)
     }
     return out
 

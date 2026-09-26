@@ -152,3 +152,15 @@ def test_fan_drift_share_grows_with_horizon():
 def test_default_origins_are_the_briefs_121():
     o = fixing.default_origins()
     assert len(o) == 121 and o[0] == dt.date(2015, 6, 1) and o[-1] == dt.date(2025, 6, 1)
+
+
+def test_crps_ensemble_matches_normal_for_large_sample():
+    import random as _r
+    _r.seed(4)
+    s = [_r.gauss(0, 1) for _ in range(20000)]
+    assert fixing.crps_ensemble(s, 0.7) == pytest.approx(fixing.crps_normal(0, 1, 0.7), abs=0.01)
+
+
+def test_empirical_quantile_interpolates():
+    assert fixing.empirical_quantile([0, 1, 2, 3, 4], 0.5) == 2
+    assert fixing.empirical_quantile([0, 10], 0.25) == 2.5

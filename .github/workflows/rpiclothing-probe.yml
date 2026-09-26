@@ -36,7 +36,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: uk-rpi-clothing
@@ -51,6 +51,18 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
+
+      # The ONS price-quote history (2010 on, ~200 monthly files) takes a
+      # while to fetch at a polite pace. Parsed clothing rows are cached
+      # between runs so each run downloads only months it has not seen.
+      # Keyed per run with a prefix restore, so the cache accumulates.
+      - name: Restore quote cache
+        uses: actions/cache@v4
+        with:
+          path: uk-rpi-clothing/cache
+          key: rpiclothing-quotes-${{ github.run_id }}
+          restore-keys: |
+            rpiclothing-quotes-
 
       - name: Tests
         env:
