@@ -51,17 +51,32 @@ def run(
     scores = fixing.backtest_fans(chbj, origins, HORIZONS, INCUMBENT, by_month=True)
     out: dict[str, Any] = {"incumbent_point": INCUMBENT.label(), "n_origins": len(origins)}
     out["scores"] = {
-        c: {str(h): _score_dict(scores[c][h]) for h in HORIZONS} for c in fixing.VARIANCE_CANDIDATES
+        c: {str(h): _score_dict(scores[c][h]) for h in HORIZONS} for c in fixing.ALL_CANDIDATES
     }
     out["h1_by_month"] = {
         c: {str(m): _score_dict(scores[c]["by_month"][1][m]) for m in range(1, 13)}
-        for c in fixing.VARIANCE_CANDIDATES
+        for c in fixing.ALL_CANDIDATES
     }
     selection = {}
     for h in HORIZONS:
         choice, why = fixing.select_fan_candidate(scores, h)
         selection[str(h)] = why
     out["selection"] = selection
+    # Alternative rule, reported alongside and NOT used unless chosen by the
+    # user: calibration first. Only fans whose mean coverage error at h is
+    # within 0.03 are eligible; then the 5%/simplest rule on CRPS.
+    alt = {}
+    for h in HORIZONS:
+        try:
+            _, why = fixing.select_simplest(
+                {c: scores[c][h].crps for c in fixing.ALL_CANDIDATES},
+                fixing.ALL_CANDIDATES,
+                eligible=lambda c, h=h: scores[c][h].coverage_error <= 0.03,
+            )
+        except ValueError:
+            why = {"chosen": None, "note": "no candidate within 0.03 coverage error"}
+        alt[str(h)] = why
+    out["selection_calibration_first"] = alt
     chosen = selection["1"]["chosen"]
     last = max(chbj)
     spec = fixing.FanSpec(INCUMBENT, chosen)
@@ -77,7 +92,7 @@ def run(
     out["month_sd_by_candidate_latest"] = {
         c: {str(p.target.month): round(math.sqrt(p.month_var), 3)
             for p in fixing.fan(chbj, last, 12, fixing.FanSpec(INCUMBENT, c))}
-        for c in fixing.VARIANCE_CANDIDATES
+        for c in fixing.ALL_CANDIDATES
     }
     return out
 

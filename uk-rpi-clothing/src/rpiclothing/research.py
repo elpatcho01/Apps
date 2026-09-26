@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if "probe" in steps:
         probe.main(["--out", str(out / "probe.json"),
-                    "--checks", "mm23,seasonal,wedge,contribution,price_quotes"])
+                    "--checks", "price_quotes"])
     if "ws1" in steps:
         ws1.main(["--out", str(out / "ws1.json")])
     return 0

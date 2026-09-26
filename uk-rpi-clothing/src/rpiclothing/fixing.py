@@ -53,6 +53,17 @@ SALE_TRANSITION_MONTHS: frozenset[int] = frozenset({1, 2, 7, 8, 9})
 
 VARIANCE_CANDIDATES: tuple[str, ...] = ("unconditional", "regime", "shrunk", "raw")
 
+#: Added AFTER the first live backtest (research run 2, 2026-09-26), which
+#: showed every residual-based candidate under-covering at h1 (nominal 90%
+#: band covering 76-79% of outcomes): in-sample residual variance understates
+#: out-of-sample error, because the seasonal factors and drift are themselves
+#: estimated. These size the fan from the origin's own past *out-of-sample*
+#: errors instead. They were chosen after seeing results, so they sit last in
+#: the complexity order and any win they record is labelled as such.
+EMPIRICAL_CANDIDATES: tuple[str, ...] = ("empirical", "empirical_month")
+
+ALL_CANDIDATES: tuple[str, ...] = VARIANCE_CANDIDATES + EMPIRICAL_CANDIDATES
+
 NOMINAL_COVERAGE: tuple[float, ...] = (0.5, 0.8, 0.9)
 
 _Z = {0.5: 0.6744897501960817, 0.8: 1.2815515655446004, 0.9: 1.6448536269514722}
@@ -138,6 +149,69 @@ def shrink_log_variances(
     return {m: v * scale for m, v in out.items()}
 
 
+# --- empirical (out-of-sample) variances ----------------------------------------
+
+
+def past_errors(
+    level: Mapping[dt.date, float],
+    changes: Mapping[dt.date, float],
+    origin: dt.date,
+    point: SeasonalDriftSpec,
+    horizons: int,
+    *,
+    lookback_years: int = 10,
+    cache: dict | None = None,
+) -> dict[int, list[tuple[dt.date, float]]]:
+    """Out-of-sample errors (pct of level) of the point model, known at ``origin``.
+
+    For every past origin o' within ``lookback_years`` and every h with
+    o'+h <= origin, the error the model actually made. Targets in excluded
+    years are skipped. ``cache`` memoises paths across origins.
+    """
+    out: dict[int, list[tuple[dt.date, float]]] = {h: [] for h in range(1, horizons + 1)}
+    first = add_months(dt.date(origin.year - lookback_years, origin.month, 1), 0)
+    o = first
+    while o < origin:
+        if o in level:
+            key = (o, horizons)
+            path = cache.get(key) if cache is not None else None
+            if path is None:
+                path = seasonal_drift_path(level, o, horizons, point, changes=changes)
+                if cache is not None:
+                    cache[key] = path
+            for h in range(1, horizons + 1):
+                tgt = add_months(o, h)
+                if tgt > origin or tgt not in level or tgt.year in point.exclude_years:
+                    continue
+                out[h].append((tgt, 100.0 * (level[tgt] / path[h] - 1.0)))
+        o = add_months(o, 1)
+    return out
+
+
+def empirical_variances(
+    errs: Mapping[int, Sequence[tuple[dt.date, float]]], horizons: int, by_month: bool
+) -> dict[int, dict[int, float]]:
+    """{h: {target_month: variance}} from past errors (mean square, bias kept in).
+
+    ``by_month`` conditions on the target's calendar month, log-shrunk toward
+    the horizon's pooled value exactly as for residual variances.
+    """
+    out: dict[int, dict[int, float]] = {}
+    for h in range(1, horizons + 1):
+        es = errs.get(h, [])
+        if len(es) < 12:
+            out[h] = {m: math.nan for m in range(1, 13)}
+            continue
+        pooled = statistics.fmean(e * e for _, e in es)
+        if not by_month:
+            out[h] = {m: pooled for m in range(1, 13)}
+            continue
+        per = {m: [e for d, e in es if d.month == m] for m in range(1, 13)}
+        raw = {m: statistics.fmean(x * x for x in v) if len(v) > 1 else math.nan for m, v in per.items()}
+        out[h] = shrink_log_variances(raw, {m: len(v) for m, v in per.items()}, pooled)
+    return out
+
+
 # --- the fan ------------------------------------------------------------------
 
 
@@ -204,8 +278,11 @@ def fan(
     spec: FanSpec,
     *,
     changes: Mapping[dt.date, float] | None = None,
+    cache: dict | None = None,
 ) -> list[FanPoint]:
     changes = changes if changes is not None else mom(level)
+    if spec.variance in EMPIRICAL_CANDIDATES:
+        return _empirical_fan(level, changes, origin, horizons, spec, cache=cache)
     known = {d: v for d, v in changes.items() if d <= origin}
     start = spec.variance_start
     if spec.variance_years is not None:
@@ -233,6 +310,43 @@ def fan(
                 drift_var=dvar,
             )
         )
+    return out
+
+
+def _empirical_fan(
+    level: Mapping[dt.date, float],
+    changes: Mapping[dt.date, float],
+    origin: dt.date,
+    horizons: int,
+    spec: FanSpec,
+    *,
+    cache: dict | None,
+) -> list[FanPoint]:
+    """Fan whose h-step variance is the empirical mean-square past h-step error.
+
+    No residual/drift decomposition is imposed; for reporting, the drift share
+    is backed out against the pooled residual-based h-step variance (floored at
+    0). The one-month MoM variance for the exposure table uses the h=1
+    empirical variance for the target's month.
+    """
+    errs = past_errors(level, changes, origin, spec.point, horizons,
+                       lookback_years=spec.variance_years or 10, cache=cache)
+    ev = empirical_variances(errs, horizons, by_month=(spec.variance == "empirical_month"))
+    path = seasonal_drift_path(level, origin, horizons, spec.point, changes=changes)
+    known = {d: v for d, v in changes.items() if d <= origin}
+    start = add_months(dt.date(origin.year - (spec.variance_years or 10), origin.month, 1), 1)
+    mv = monthly_variances(monthly_residuals(known, start=start, end=origin), "unconditional")
+    out, acc = [], 0.0
+    for h in range(1, horizons + 1):
+        tgt = add_months(origin, h)
+        var = ev[h][tgt.month]
+        if math.isnan(var):
+            var = ev[h][1] if not math.isnan(ev[h][1]) else mv[1] * h
+        acc += mv[tgt.month]
+        share_d = max(0.0, 1.0 - acc / var) if var > 0 else 0.0
+        m1 = ev[1][tgt.month] if not math.isnan(ev[1][tgt.month]) else mv[tgt.month]
+        out.append(FanPoint(h, tgt, path[h], math.sqrt(var), 1.0 - share_d, share_d,
+                            month_var=m1, drift_var=0.0))
     return out
 
 
@@ -274,7 +388,7 @@ def backtest_fans(
     origins: Sequence[dt.date],
     horizons: Sequence[int],
     point: SeasonalDriftSpec,
-    candidates: Sequence[str] = VARIANCE_CANDIDATES,
+    candidates: Sequence[str] = ALL_CANDIDATES,
     *,
     variance_years: int | None = 10,
     by_month: bool = False,
@@ -285,6 +399,7 @@ def backtest_fans(
     """
     changes = mom(level)
     hmax = max(horizons)
+    cache: dict = {}
     raw: dict[str, dict[int, list[tuple[dt.date, float, float, float]]]] = {
         c: {h: [] for h in horizons} for c in candidates
     }
@@ -292,7 +407,7 @@ def backtest_fans(
         if o not in level:
             continue
         for c in candidates:
-            pts = fan(level, o, hmax, FanSpec(point, c, variance_years), changes=changes)
+            pts = fan(level, o, hmax, FanSpec(point, c, variance_years), changes=changes, cache=cache)
             for h in horizons:
                 p = pts[h - 1]
                 if p.target not in level:
@@ -363,7 +478,7 @@ def select_fan_candidate(
     inc = scores["unconditional"][horizon].coverage_error
     return select_simplest(
         {c: s[horizon].crps for c, s in scores.items()},
-        VARIANCE_CANDIDATES,
+        ALL_CANDIDATES,
         eligible=lambda c: scores[c][horizon].coverage_error <= inc + coverage_slack,
     )
 

@@ -294,53 +294,83 @@ def _open_table(blob: bytes, name: str) -> tuple[list[str], list[dict[str, str]]
     return list(reader.fieldnames or []), rows
 
 
+def _summ(rows: list[dict[str, str]], clothing: list[dict[str, str]], desc_key: str, id_key: str) -> dict[str, Any]:
+    items = Counter((r.get(id_key), r.get(desc_key)) for r in clothing)
+    cells = {}
+    for r in clothing:
+        cells.setdefault((r.get(id_key), r.get("STRATUM_CELL")), set()).add(r.get("STRATUM_WEIGHT"))
+    out = {
+        "n_rows": len(rows),
+        "n_clothing_rows": len(clothing),
+        "n_clothing_items": len(items),
+        "clothing_items": [f"{k[0]}|{k[1]}|{n}" for k, n in sorted(items.items())],
+        "n_strata": len(cells),
+        "strata_with_inconsistent_weight": sum(1 for v in cells.values() if len(v) > 1),
+        "sample_rows": clothing[:4],
+    }
+    for col in ("INDICATOR_BOX", "VALIDITY", "SHOP_TYPE", "STRATUM_TYPE", "REGION",
+                "INDEX_ALGORITHM_RPI", "BASE_VALIDITY", "ORIG_INDICATOR_BOX"):
+        if clothing and col in clothing[0]:
+            out[f"counts_{col}"] = Counter(r.get(col, "") for r in clothing).most_common(15)
+    # Do the published relatives equal price / base price?
+    for suffix in ("_RPI", "_CPI", ""):
+        rel, base = f"PRICE_RELATIVE{suffix}", f"BASE_PRICE{suffix}"
+        if clothing and rel in clothing[0] and base in clothing[0]:
+            diffs, n = [], 0
+            for r in clothing:
+                try:
+                    pr, bp, rr = float(r["PRICE"]), float(r[base]), float(r[rel])
+                except (ValueError, KeyError):
+                    continue
+                if bp > 0 and pr > 0:
+                    diffs.append(abs(pr / bp - rr))
+                    n += 1
+            if diffs:
+                diffs.sort()
+                out[f"relative_vs_price_over_base{suffix or '_single'}"] = {
+                    "n": n, "median_absdiff": diffs[len(diffs) // 2], "p95_absdiff": diffs[int(0.95 * len(diffs))],
+                }
+    if clothing and "BASE_PRICE_RPI" in clothing[0] and "BASE_PRICE_CPI" in clothing[0]:
+        same = sum(1 for r in clothing if r.get("BASE_PRICE_RPI") == r.get("BASE_PRICE_CPI"))
+        out["share_rpi_base_equals_cpi_base"] = round(same / len(clothing), 4)
+    return out
+
+
 def check_price_quotes(session: requests.Session) -> dict[str, Any]:
     editions = onsfetch.dataset_editions(session=session)
-    links = []
-    for uri in editions[:10]:
-        links.extend(onsfetch.edition_downloads(uri, session=session))
-    names = [l["file"] for l in links]
-    out: dict[str, Any] = {
-        "n_editions": len(editions),
-        "editions_head": editions[:15],
-        "editions_tail": editions[-8:],
-        "files_first_10_editions": [(l["edition"], l["file"], l["release_date"]) for l in links],
+    short = [e.rstrip("/").rsplit("/", 1)[-1] for e in editions]
+    out: dict[str, Any] = {"n_editions": len(editions), "edition_names": short}
+    def first_file(pred_ed, pred_file):
+        for uri, name in zip(editions, short):
+            if pred_ed(name):
+                for f in onsfetch.edition_downloads(uri, session=session):
+                    if pred_file(f["file"].lower()):
+                        return f
+        return None
+    targets = {
+        "quotes_2026_08": (lambda n: n == "pricequotesaugust2026", lambda f: "pricequote" in f),
+        "segments_2026_08": (lambda n: n == "consumptionsegmentindicesaugust2026", lambda f: f.endswith(".csv")),
+        "quotes_2025_12": (lambda n: "pricequotes" in n and "2025" in n and "december" in n, lambda f: "pricequote" in f),
+        "quotes_2019_any": (lambda n: "pricequotes" in n and "2019" in n, lambda f: "pricequote" in f or f.endswith(".csv") or f.endswith(".zip")),
+        "itemindices_2019": (lambda n: "itemindices" in n and "2019" in n, lambda f: f.endswith(".csv") or f.endswith(".zip")),
     }
-    quotes = [l for l in links if "pricequote" in l["file"].lower().replace("_", "").replace("-", "")]
-    items = [l for l in links if "itemind" in l["file"].lower().replace("_", "").replace("-", "")]
-    out["n_quote_files"] = len(quotes)
-    out["n_item_index_files"] = len(items)
-    out["quote_file_names_sample"] = [q["file"] for q in quotes[:5]] + [q["file"] for q in quotes[-5:]]
-    out["other_file_names_sample"] = [n for n in names if n not in {q["file"] for q in quotes + items}][:30]
-    if quotes:
-        q = quotes[0]
-        fields, rows = _open_table(onsfetch.download(q["url"], session=session), q["file"])
-        clothing = [r for r in rows if CLOTHING_WORDS.search(r.get("ITEM_DESC", "") or "")]
-        item_counts = Counter((r.get("ITEM_ID"), r.get("ITEM_DESC")) for r in clothing)
-        out["latest_quotes"] = {
-            "file": q["file"],
-            "fields": fields,
-            "n_rows": len(rows),
-            "n_clothing_like_rows": len(clothing),
-            "n_clothing_like_items": len(item_counts),
-            "clothing_items": [f"{k[0]}|{k[1]}|{n}" for k, n in sorted(item_counts.items())][:200],
-            "indicator_box_all": Counter(r.get("INDICATOR_BOX", "") for r in rows).most_common(20),
-            "indicator_box_clothing": Counter(r.get("INDICATOR_BOX", "") for r in clothing).most_common(20),
-            "validity_clothing": Counter(r.get("VALIDITY", "") for r in clothing).most_common(10),
-            "shop_type_clothing": Counter(r.get("SHOP_TYPE", "") for r in clothing).most_common(10),
-            "stratum_type_clothing": Counter(r.get("STRATUM_TYPE", "") for r in clothing).most_common(10),
-            "sample_rows": clothing[:3],
-            "item_id_prefixes_clothing": Counter((r.get("ITEM_ID") or "")[:2] for r in clothing).most_common(10),
-        }
-    if items:
-        it = items[0]
-        fields, rows = _open_table(onsfetch.download(it["url"], session=session), it["file"])
-        out["latest_item_indices"] = {
-            "file": it["file"],
-            "fields": fields,
-            "n_rows": len(rows),
-            "sample_rows": rows[:3],
-        }
+    for key, (pe, pf) in targets.items():
+        try:
+            f = first_file(pe, pf)
+            if f is None:
+                out[key] = {"error": "no matching edition/file"}
+                continue
+            fields, rows = _open_table(onsfetch.download(f["url"], session=session), f["file"])
+            desc_key = "CS_DESC" if "CS_DESC" in fields else "ITEM_DESC"
+            id_key = "CS_ID" if "CS_ID" in fields else "ITEM_ID"
+            clothing = [r for r in rows if CLOTHING_WORDS.search(r.get(desc_key, "") or "")]
+            summ = _summ(rows, clothing, desc_key, id_key) if "PRICE" in fields else {
+                "n_rows": len(rows), "sample_clothing_rows": clothing[:6],
+                "n_clothing_rows": len(clothing),
+            }
+            out[key] = {"file": f["file"], "edition": f["edition"], "fields": fields, **summ}
+        except Exception as exc:  # noqa: BLE001
+            out[key] = {"error": f"{type(exc).__name__}: {exc}"}
     return out
 
 
