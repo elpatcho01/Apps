@@ -33,6 +33,18 @@ Candidates are paired by ORDINAL, not by proximity: the 2nd Tuesday of October
 against the 2nd Tuesday of November. Pairing a 2nd Tuesday against a 3rd would
 compare nights five weeks apart and call it a month.
 
+WHAT THE FIRST RUN OF THIS FOUND
+--------------------------------
+Its first real query failed with "No matching signature for operator IN UNNEST
+for argument types: DATE, ARRAY<STRING>". `bq._to_query_param` typed every list
+as ARRAY<STRING>, so no `IN UNNEST(@param)` holding dates could run at all --
+including `reconcile`'s own PANEL_QUERY, which passes scrape dates exactly that
+way. Reconciliation would have hit the same error the first time it got that
+far, and it never had: every run so far stops earlier, at index-day
+confirmation. So fixing the index-day parser on its own would have bought a new
+red run rather than a reconstruction. Worth recording, because that is the
+entire argument for exercising a path before you need it.
+
 WHAT THIS IS NOT
 ----------------
 Not a nowcast, and not publishable. It is read-only -- it writes nothing to
