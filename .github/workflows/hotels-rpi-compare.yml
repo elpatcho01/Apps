@@ -1,0 +1,107 @@
+name: Accommodation RPI comparison
+
+# Fetches the RPI series that sits nearest to CPI class 11.2.0.1 and reports its
+# month-on-month changes alongside the CPI target.
+#
+# WHY A WORKFLOW AND NOT A LOCAL SCRIPT
+#
+# ons.gov.uk is refused by egress policy in the development sandbox (403 to
+# CONNECT, confirmed against the proxy status endpoint), so no ONS series can be
+# fetched where this code is written. The runner can reach ONS -- that is how the
+# published-series backfill works -- so the runner is where this has to run. Same
+# arrangement, same reason, as hotels-backfill-ons.
+#
+# WHAT IT NEEDS: nothing. No Google Cloud, no Workload Identity, no BigQuery, no
+# SerpApi key, no secrets of any kind. It reads three public ONS endpoints and
+# writes a step summary. It also never touches BigQuery, so it cannot disturb the
+# append-only panel, and it is dispatch-only so it costs nothing on a schedule.
+#
+# WHAT TO LOOK AT IN THE SUMMARY
+#   rpi_placement              where hotel spending actually sits in RPI
+#   series[].ons_title         the title ONS returned -- this is the check that
+#                              a four-letter series code landed where intended
+#   title_matches_expectation  false means the ID is wrong, not that RPI is odd
+#   series_with_unexpected_titles  should be empty; anything listed is a bad ID
+#   errors                     a 404 here means the series does not exist, which
+#                              for the `rpi_candidate` rows is an expected answer
+#
+# The identifiers were read off search results rather than a published catalogue,
+# so the run is a probe: it reports what each ID actually resolved to instead of
+# assuming. A wrong ID that silently became a number in a table is precisely the
+# failure this is built to avoid.
+
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "How many recent months to report per series."
+        required: false
+        type: string
+        default: "15"
+
+concurrency:
+  group: hotels-rpi
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch the RPI series
+        env:
+          PYTHONPATH: src
+          MONTHS: ${{ inputs.months || '15' }}
+        run: |
+          # Without this, the exit status is tee's, not the command's, so a
+          # non-zero exit is silently swallowed and the run reports green.
+          set -o pipefail
+          python -m ukhotels.rpi --months "$MONTHS" | tee rpi-summary.json
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "### RPI comparison"
+            echo ""
+            echo "RPI has no hotels class. Hotel spending enters RPI inside the "
+            echo "**UK holidays** section of the **Leisure services** group, which "
+            echo "also contains self-catering, caravans and holiday centres — so "
+            echo "this is a context series, not an answer key for 11.2.0.1."
+            echo ""
+            echo "Check \`ons_title\` on each series: that is what confirms a "
+            echo "four-letter ONS code resolved to the series it was meant to."
+            echo ""
+            if [ -s rpi-summary.json ]; then
+              echo '```json'
+              cat rpi-summary.json
+              echo '```'
+            else
+              echo "No summary produced — the run failed before completing."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpi-comparison-${{ github.run_id }}
+          path: uk-hotels/rpi-summary.json
+          if-no-files-found: ignore
+          retention-days: 30
