@@ -181,3 +181,67 @@ def test_implausible_index_values_are_rejected():
     assert not backfill._plausible_index(Decimal("2025"))
     assert not backfill._plausible_index(Decimal("0.31"))
     assert not backfill._plausible_index(None)
+
+
+# ---------------------------------------------------------------------------
+# A wrong series identifier returns the wrong series, not an error
+# ---------------------------------------------------------------------------
+
+
+def _timeseries_payload(title: str):
+    return {
+        "description": {"title": title},
+        "months": [{"date": "2026 JAN", "value": "112.3"}],
+    }
+
+
+def test_a_series_whose_title_is_a_different_class_is_refused():
+    """The three months of canteen prices this would have prevented.
+
+    `d7ex` was a best-guess identifier for the CPI 11.2 aggregate. It was wrong
+    by one letter and it resolved: ONS answered 200 with "CPI INDEX 11.1.2 :
+    CANTEENS", so from August to November 2026 every backfill loaded canteen
+    prices into the published-index table tagged coicop_class='11.2'. Nothing
+    raised, the row count looked right, and the month coverage looked right.
+    """
+    with pytest.raises(backfill.BackfillError) as excinfo:
+        backfill.parse_timeseries(
+            _timeseries_payload("CPI INDEX 11.1.2 : CANTEENS 2015=100"),
+            "d7ex", "CPI INDEX 11.2 Accommodation services", "11.2",
+            "https://example.invalid/d7ex",
+        )
+    assert "11.1.2" in str(excinfo.value)
+    assert "identifier is wrong" in str(excinfo.value)
+
+
+def test_the_class_code_comparison_is_exact_not_a_prefix():
+    """"11.2" must not be satisfied by "11.2.0.1", nor "11.1.2" by containing it.
+
+    A substring test would accept both the parent for the child and, worse, the
+    canteens series for the accommodation aggregate.
+    """
+    with pytest.raises(backfill.BackfillError):
+        backfill.parse_timeseries(
+            _timeseries_payload("CPI INDEX 11.2.0.1 Hotels, motels 2015=100"),
+            "l7ie", "x", "11.2", "https://example.invalid/x",
+        )
+    ok = backfill.parse_timeseries(
+        _timeseries_payload("CPI INDEX 11.2 : ACCOMMODATION SERVICES 2015=100"),
+        "d7cx", "x", "11.2", "https://example.invalid/x",
+    )
+    assert len(ok) == 1
+
+
+def test_the_reference_year_cannot_be_read_as_a_class_code():
+    """"2015=100" has no dot, so it cannot match; a bare year must not trip this."""
+    rows = backfill.parse_timeseries(
+        _timeseries_payload("CPI INDEX 11.2.0.1 Hotels, motels 2015=100"),
+        "l7ie", "x", "11.2.0.1", "https://example.invalid/x",
+    )
+    assert len(rows) == 1
+
+
+def test_the_accommodation_aggregate_identifier_is_the_corrected_one():
+    ids = {series_id for series_id, _, _ in backfill.TIMESERIES}
+    assert "d7cx" in ids, "11.2 aggregate must use d7cx"
+    assert "d7ex" not in ids, "d7ex is CPI 11.1.2 CANTEENS"

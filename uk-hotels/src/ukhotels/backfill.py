@@ -86,8 +86,16 @@ USER_AGENT = "uk-hotel-nowcasting/0.1 (research pipeline; contact via repository
 TIMESERIES: tuple[tuple[str, str, str], ...] = (
     ("l7ie", "CPI INDEX 11.2.0.1 Hotels, motels and similar accommodation services", "11.2.0.1"),
     ("l7ig", "CPI INDEX 11.2.0.2 Holiday centres, camping sites, youth hostels", "11.2.0.2"),
-    ("d7ex", "CPI INDEX 11.2 Accommodation services", "11.2"),
+    # Was `d7ex` from first commit until 2026-11-04. One letter out, and it
+    # resolved: `d7ex` is "CPI INDEX 11.1.2 : CANTEENS". So every backfill since
+    # August loaded canteen prices into this table tagged coicop_class='11.2'.
+    ("d7cx", "CPI INDEX 11.2 Accommodation services", "11.2"),
 )
+
+#: A dotted COICOP code at the start of an ONS series title, e.g. the "11.2.0.1"
+#: in "CPI INDEX 11.2.0.1 Hotels, motels ...". Requires at least one dot, so the
+#: "2015" of "2015=100" cannot match.
+_TITLE_CLASS_CODE = re.compile(r"\b(\d+(?:\.\d+)+)\b")
 
 #: Ad hoc release located at time of writing (January 2025 to July 2025).
 #: Override with --release-url; --discover looks for a newer vintage.
@@ -185,6 +193,28 @@ def parse_timeseries(
     description = payload.get("description") or {}
     label = str(description.get("title") or series_name)
 
+    # A WRONG SERIES ID DOES NOT 404. IT RETURNS SOMEBODY ELSE'S PRICES.
+    #
+    # This is the absence-vs-breakage trap in its purest form. `d7ex` was a
+    # best-guess identifier for the 11.2 aggregate, and the guess was wrong by
+    # one letter -- but ONS answered 200 with "CPI INDEX 11.1.2 : CANTEENS", so
+    # from August to November every backfill loaded canteen prices into the
+    # published-index table under coicop_class='11.2'. Nothing failed. The row
+    # count looked right, the month coverage looked right, and the only clue was
+    # a series_name nobody read.
+    #
+    # So the title now has to agree with the class we asked for. ONS put the
+    # class code in the title of every one of these series, and the comparison
+    # is exact rather than a prefix test: "11.2" must not be satisfied by
+    # "11.2.0.1", and "11.1.2" must not be waved through for containing "11.2".
+    title_code = _TITLE_CLASS_CODE.search(label)
+    if title_code and title_code.group(1) != coicop:
+        raise BackfillError(
+            f"{series_id}: asked for COICOP {coicop} but ONS returned "
+            f"{title_code.group(1)!r} -- {label!r}. The identifier is wrong; "
+            f"nothing was loaded for this class."
+        )
+
     out: list[Observation] = []
     for entry in months:
         if not isinstance(entry, dict):
@@ -235,9 +265,15 @@ def fetch_timeseries(
 ) -> list[Observation]:
     """Load every configured item-class series. One failure does not stop the rest.
 
-    Partial success is the right behaviour here: `d7ex` in particular is a
-    best-guess series id for the 11.2 aggregate, and losing the whole backfill
-    because one of three identifiers is wrong would be a poor trade.
+    Partial success is the right behaviour here: losing 11.2.0.1, the class this
+    pipeline actually reconstructs, because the 11.2 aggregate's identifier is
+    wrong would be a poor trade.
+
+    Note what "one failure" now includes. Until 2026-11-04 this only caught a
+    series that failed to FETCH, which is why a wrong identifier returning a
+    valid payload for the wrong class sailed through for three months. The
+    identity check in parse_timeseries raises BackfillError, so it lands in the
+    same per-series handler and skips that class instead of poisoning it.
     """
     session = _session(session)
     out: list[Observation] = []

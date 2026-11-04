@@ -98,7 +98,7 @@ SERIES: tuple[tuple[str, str, str], ...] = (
     ("doee", "candidate: RPI UK holidays related series", "rpi_candidate"),
     # --- what this pipeline actually reconstructs, for scale ---------------
     ("l7ie", "CPI INDEX 11.2.0.1 Hotels, motels and similar accommodation", "cpi_target"),
-    ("d7ex", "CPI INDEX 11.2 Accommodation services", "cpi_target"),
+    ("d7cx", "CPI INDEX 11.2 Accommodation services", "cpi_target"),
 )
 
 
@@ -210,7 +210,20 @@ def _title_matches(result: SeriesResult) -> bool:
     expected = result.expected.lower()
     if not title:
         return False
-    family = "rpi" if expected.startswith("rpi") else "cpi"
+    # The family is whichever of the two the expectation mentions, NOT whatever
+    # the string happens to start with. The first version keyed off
+    # startswith("rpi"), so the two rows whose expectation begins "candidate:"
+    # were tested as though they were CPI series and reported as mismatches
+    # although the identifier was right -- chms really is the RPI UK holidays
+    # index. A false alarm on a check like this is expensive: it trains you to
+    # skim past the one that matters, which in the same run was d7ex returning
+    # canteens.
+    if "rpi" in expected:
+        family = "rpi"
+    elif "cpi" in expected:
+        family = "cpi"
+    else:
+        return False
     if family not in title:
         return False
     for token in ("holiday", "leisure", "accommodation", "hotel", "all items", "travel"):

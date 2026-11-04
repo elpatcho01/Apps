@@ -104,3 +104,24 @@ def test_the_stated_placement_names_the_section_hotels_actually_sit_in():
     assert "Leisure services" in rpi.__doc__
     assert "640406" in rpi.__doc__
     del placement
+
+
+def test_a_candidate_row_is_not_tested_as_though_it_were_a_cpi_series():
+    """The first version keyed the family off startswith(), not membership.
+
+    Both `rpi_candidate` expectations begin "candidate:", so they were checked
+    for the string "cpi" and reported as mismatches although the identifier was
+    right -- chms really is the RPI UK holidays index. A false alarm here is
+    expensive: it teaches you to skim the mismatch list, which in the same run
+    also contained d7ex returning canteens.
+    """
+    candidate = rpi.parse_series(
+        payload([("2026 JAN", "400.1")], "RPI: Leisure services: UK Holidays (Jan 1994=100)"),
+        "chms", "candidate: RPI UK holidays index (Jan 1994=100)", "rpi_candidate",
+    )
+    assert rpi._title_matches(candidate)
+
+
+def test_the_corrected_accommodation_aggregate_id_is_used_here_too():
+    ids = {series_id for series_id, _, _ in rpi.SERIES}
+    assert "d7cx" in ids and "d7ex" not in ids
