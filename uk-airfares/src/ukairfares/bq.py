@@ -170,7 +170,37 @@ def _to_query_param(bigquery, name: str, value: Any):
     if isinstance(value, Decimal):
         return bigquery.ScalarQueryParameter(name, "NUMERIC", value)
     if isinstance(value, (list, tuple)):
-        return bigquery.ArrayQueryParameter(name, "STRING", [str(v) for v in value])
+        # The element type is INFERRED, not assumed to be STRING.
+        #
+        # It was hardcoded to STRING, and BigQuery does not coerce: a list of
+        # dates against a DATE column fails with "No matching signature for
+        # operator IN UNNEST for argument types: DATE, ARRAY<STRING>". That made
+        # every `IN UNNEST(@param)` query with non-string values unrunnable --
+        # including reconcile's own panel query, which passes scrape dates that
+        # way. It had never surfaced because reconcile always failed earlier, at
+        # index-day confirmation, so the query was never once reached.
+        #
+        # bool before int and datetime before date: each is a subclass of the
+        # other, so the looser test would swallow the tighter one.
+        first = next((v for v in value if v is not None), None)
+        if isinstance(first, bool):
+            element_type = "BOOL"
+        elif isinstance(first, int):
+            element_type = "INT64"
+        elif isinstance(first, float):
+            element_type = "FLOAT64"
+        elif isinstance(first, dt.datetime):
+            element_type = "TIMESTAMP"
+        elif isinstance(first, dt.date):
+            element_type = "DATE"
+        elif isinstance(first, Decimal):
+            element_type = "NUMERIC"
+        else:
+            element_type = "STRING"
+        elements = (
+            [str(v) for v in value] if element_type == "STRING" else list(value)
+        )
+        return bigquery.ArrayQueryParameter(name, element_type, elements)
     return bigquery.ScalarQueryParameter(name, "STRING", str(value))
 
 

@@ -215,3 +215,57 @@ def test_property_churn_shows_up_as_a_missing_property_not_a_price_move():
         key = (row["location"], row["property_token"])
         if row["status"] == "ok" and key in kept:
             assert kept[key] == row["price_gbp"]
+
+
+# ---------------------------------------------------------------------------
+# Query parameter typing
+# ---------------------------------------------------------------------------
+
+
+class _FakeBigQuery:
+    """Just enough of the client library to record what was constructed."""
+
+    class ScalarQueryParameter:
+        def __init__(self, name, type_, value):
+            self.name, self.type_, self.value = name, type_, value
+
+    class ArrayQueryParameter:
+        def __init__(self, name, element_type, values):
+            self.name, self.element_type, self.values = name, element_type, values
+
+
+def test_an_array_of_dates_is_typed_date_not_string():
+    """BigQuery does not coerce ARRAY<STRING> to DATE.
+
+    The element type was hardcoded to STRING, so every `IN UNNEST(@param)` with
+    non-string values failed with "No matching signature for operator IN UNNEST
+    for argument types: DATE, ARRAY<STRING>". That included reconcile's own
+    panel query, which passes scrape dates exactly this way; it had never
+    surfaced because reconcile always failed earlier, at index-day
+    confirmation, so the query was never reached.
+    """
+    param = bq._to_query_param(
+        _FakeBigQuery, "months", [dt.date(2026, 10, 1), dt.date(2026, 11, 1)]
+    )
+    assert param.element_type == "DATE"
+    assert param.values == [dt.date(2026, 10, 1), dt.date(2026, 11, 1)]
+
+
+def test_bool_is_typed_before_int_and_datetime_before_date():
+    """Each is a subclass of the other, so the looser test would swallow it."""
+    assert bq._to_query_param(_FakeBigQuery, "f", [True, False]).element_type == "BOOL"
+    assert bq._to_query_param(_FakeBigQuery, "n", [1, 2]).element_type == "INT64"
+    stamps = [dt.datetime(2026, 10, 1, 12, 0)]
+    assert bq._to_query_param(_FakeBigQuery, "t", stamps).element_type == "TIMESTAMP"
+
+
+def test_an_array_of_strings_still_stringifies():
+    param = bq._to_query_param(_FakeBigQuery, "ids", ["a", "b"])
+    assert param.element_type == "STRING"
+    assert param.values == ["a", "b"]
+
+
+def test_an_empty_array_falls_back_to_string_without_raising():
+    param = bq._to_query_param(_FakeBigQuery, "empty", [])
+    assert param.element_type == "STRING"
+    assert param.values == []
