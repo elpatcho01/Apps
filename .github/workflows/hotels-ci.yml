@@ -10,17 +10,28 @@ name: Accommodation CI
 # scheduled-workflow inactivity clock from expiring. Those commits change no
 # code, so testing them is noise, and a red CI run on a generated report would
 # misrepresent the state of the pipeline.
+#
+# The uk-airfares paths below are its copies of the modules this project shares
+# with it. tests/test_parity.py holds the two copies to each other, and it can
+# only do that if a change on the airfares side also runs this CI -- three fixes
+# in 2026 landed in one project and not the other, and nothing noticed.
 on:
   push:
     paths:
       - "uk-hotels/**"
       - "!uk-hotels/reports/**"
       - ".github/workflows/hotels-*.yml"
+      - "uk-airfares/src/ukairfares/onsfetch.py"
+      - "uk-airfares/src/ukairfares/bq.py"
+      - "uk-airfares/src/ukairfares/onscal.py"
   pull_request:
     paths:
       - "uk-hotels/**"
       - "!uk-hotels/reports/**"
       - ".github/workflows/hotels-*.yml"
+      - "uk-airfares/src/ukairfares/onsfetch.py"
+      - "uk-airfares/src/ukairfares/bq.py"
+      - "uk-airfares/src/ukairfares/onscal.py"
   workflow_dispatch:
 
 jobs:
