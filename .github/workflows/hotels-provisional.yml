@@ -1,0 +1,165 @@
+name: Accommodation provisional relative
+
+# Computes matched-sample month-on-month relatives WITHOUT a confirmed ONS index
+# day, under each reading of the candidate index days.
+#
+# WHY THIS EXISTS
+#
+# `reconcile` will not attribute nights to a CPI month until ONS confirm that
+# month's index day, and that refusal is right: filing the correct prices under
+# the wrong month produces a plausible number, which is worse than no number.
+# But as of 2026-11-04 the index-day parser cannot read September 2026's
+# bulletin, reconciliation has failed every scheduled run since 2026-10-21, and
+# the reconstruction table is empty -- so the aggregation path has never once
+# been exercised against real collected data. This answers only the question
+# "does the machinery produce a sane figure", and says so in its own output.
+#
+# IT IS READ-ONLY. It issues SELECTs and writes nothing. A provisional figure
+# must never land in the append-only panel, where it could not be removed and
+# would eventually be read as a real reconstruction by someone who never saw the
+# caveat. The module is tested for the absence of every writer entry point.
+#
+# NOT ON A SCHEDULE, deliberately. This is a diagnostic for a specific blocked
+# state; once the index-day parser is fixed, `reconcile` supersedes it and a
+# recurring provisional number would just be a second answer competing with the
+# real one.
+#
+# WHAT TO LOOK AT IN THE SUMMARY
+#   relatives[].candidate      candidate_1 / candidate_2 / pooled. If the three
+#                              agree to a few tenths, the unknown index day does
+#                              not matter much for that month. Sharp
+#                              disagreement IS the finding.
+#   relatives[].*.match_rate   properties priced in both months. Low means the
+#                              sample is eroding, and the relative is thin.
+#   relatives[].*.n_matched    below 3 and the formula refuses rather than
+#                              returning noise.
+#   status                     always PROVISIONAL_NOT_PUBLISHABLE.
+
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "Stay months, comma-separated YYYY-MM. Blank = every month in the panel."
+        required: false
+        type: string
+      min_matched:
+        description: "Minimum properties priced in both months."
+        required: false
+        type: string
+        default: "3"
+  push:
+    paths:
+      - ".github/workflows/hotels-provisional.yml"
+      - "uk-hotels/src/ukhotels/provisional.py"
+
+concurrency:
+  group: hotels-provisional
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # Skips cleanly until Google Cloud is configured rather than failing at the
+  # auth step: an expected absence is a notice, not an error. Secrets cannot be
+  # read in a job-level `if`, hence a job.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          WIF: ${{ secrets.GCP_WIF_PROVIDER }}
+          SA: ${{ secrets.GCP_SA_EMAIL }}
+          PROJECT: ${{ secrets.GCP_PROJECT }}
+        run: |
+          if [ -n "${WIF}" ] && [ -n "${SA}" ] && [ -n "${PROJECT}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Google Cloud is not configured yet; skipping." >&2
+          fi
+
+  provisional:
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Compute the provisional relatives
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+          MONTHS: ${{ inputs.months }}
+          MIN_MATCHED: ${{ inputs.min_matched || '3' }}
+        run: |
+          # Without this, the exit status is tee's, not the command's, so a
+          # non-zero exit is silently swallowed and the run reports green.
+          set -o pipefail
+
+          # Flags built in bash, not in a GitHub expression ternary -- an empty
+          # string is falsy there, so the false branch always wins.
+          ARGS=(--min-matched "$MIN_MATCHED")
+          if [ -n "$MONTHS" ]; then
+            IFS=',' read -ra WANTED <<< "$MONTHS"
+            for m in "${WANTED[@]}"; do
+              trimmed="$(echo "$m" | tr -d '[:space:]')"
+              [ -n "$trimmed" ] && ARGS+=(--month "$trimmed")
+            done
+          fi
+          echo "::notice::provisional ${ARGS[*]}" >&2
+          python -m ukhotels.provisional "${ARGS[@]}" | tee provisional-summary.json
+
+      - name: Publish summary
+        if: always()
+        run: |
+          {
+            echo "### Provisional month-on-month relative"
+            echo ""
+            echo "**Not a nowcast and not publishable.** Computed without a "
+            echo "confirmed ONS index day, under each reading of the candidate "
+            echo "index days, because reconciliation has produced no rows at all."
+            echo ""
+            echo "If \`candidate_1\`, \`candidate_2\` and \`pooled\` agree to a few "
+            echo "tenths of a point, the unknown index day does not matter much "
+            echo "for that month. Sharp disagreement is itself the finding."
+            echo ""
+            if [ -s provisional-summary.json ]; then
+              echo '```json'
+              cat provisional-summary.json
+              echo '```'
+            else
+              echo "No summary produced — the run failed before completing."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provisional-${{ github.run_id }}
+          path: uk-hotels/provisional-summary.json
+          if-no-files-found: ignore
+          retention-days: 30
