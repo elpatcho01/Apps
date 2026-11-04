@@ -30,7 +30,22 @@ name: Accommodation RPI comparison
 # assuming. A wrong ID that silently became a number in a table is precisely the
 # failure this is built to avoid.
 
+# The `push` trigger is scoped to this probe's own two files, and it is the
+# right trigger for what this is rather than a convenience. The whole purpose of
+# the module is to check that a list of four-letter ONS series identifiers still
+# resolves to the series it claims; changing that list is exactly the moment the
+# check is worth running, and leaving it to a human to remember to dispatch is
+# how an ID silently rots into pointing at somebody else's series.
+#
+# It is also the only way this session can run it at all: dispatching a workflow
+# needs `actions: write`, which the GitHub integration here does not have (403
+# "Resource not accessible by integration", via both the API and the gh CLI),
+# while pushing is permitted.
 on:
+  push:
+    paths:
+      - ".github/workflows/hotels-rpi-compare.yml"
+      - "uk-hotels/src/ukhotels/rpi.py"
   workflow_dispatch:
     inputs:
       months:
