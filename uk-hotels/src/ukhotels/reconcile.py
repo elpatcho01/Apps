@@ -57,6 +57,7 @@ from .onscal import (
     COLLECTION_ALIGNMENTS,
     STAY_NIGHT_KINDS,
     add_months,
+    candidate_index_days,
     collection_date_for,
     stay_nights,
 )
@@ -188,13 +189,43 @@ def implied_collection_dates(index_day: dt.date, *, advance_days: int = 42) -> l
     return sorted(dates)
 
 
+#: How far a held collection date may sit from an implied one and still stand in
+#: for it. One constant, used both by the substitution below and by the
+#: predates-the-panel test, so the two can never disagree about what "near"
+#: means -- if they did, a month could be declared stale by one and then
+#: substituted into by the other.
+SUBSTITUTION_WINDOW_DAYS = 3
+
+
+def last_useful_collection_date(index_month: dt.date, *, advance_days: int = 42) -> dt.date:
+    """The latest scrape date that could contribute to `index_month`.
+
+    Knowable WITHOUT the bulletin, which is the point: the index day is always
+    the 2nd or 3rd Tuesday, so the union of both candidates' implied collection
+    dates, across both alignments, plus the substitution window, bounds every
+    date the month could ever draw on. A panel that started after this date can
+    never reconstruct the month, whatever ONS later confirm.
+
+    This is NOT the uk-airfares rule (3rd Tuesday + 7 days), and copying that
+    rule verbatim would have left the original failure in place. Air fares
+    collect on the index day; accommodation collects six weeks before the stay
+    night. Measured from the stay night, September 2026 looks covered by a
+    panel that began 2026-09-01; measured from collection, its last useful date
+    was 2026-08-13 plus the window, and it predates the panel entirely.
+    """
+    second, third = candidate_index_days(index_month.year, index_month.month)
+    implied = set(implied_collection_dates(second, advance_days=advance_days))
+    implied |= set(implied_collection_dates(third, advance_days=advance_days))
+    return max(implied) + dt.timedelta(days=SUBSTITUTION_WINDOW_DAYS)
+
+
 def resolve_collection_dates(
     reader,
     table: str,
     index_day: dt.date,
     *,
     advance_days: int = 42,
-    window_days: int = 3,
+    window_days: int = SUBSTITUTION_WINDOW_DAYS,
 ) -> tuple[list[dt.date], int]:
     """Which collection dates we actually hold, and how far they are off.
 
@@ -525,13 +556,62 @@ def run_reconcile(
             evidence="supplied via --index-day",
         )
     else:
-        index_day = fetch_index_day(index_month)
-        log.info("confirmed index day: %s (%s)", index_day.index_day, index_day.source_url)
-        log.info("evidence: %s", index_day.evidence)
+        index_day = None  # resolved below, once we know we actually need it
 
     if reader is None:
         reader = bq.BigQueryWriter(config.project)
     writer = writer or bq.build_writer(config)
+
+    # WHETHER THIS MONTH PREDATES THE PANEL IS DECIDED BEFORE THE BULLETIN.
+    #
+    # Ported from uk-airfares af19722, where a July bulletin that did not parse
+    # failed the run over a month collection had never covered. The same
+    # ordering failed here every day from 2026-10-21: September 2026's bulletin
+    # did not parse, and the run went red -- over a month whose nights were
+    # priced in late July and early August, before this panel existed. A loud
+    # failure for something no one can act on teaches people to ignore the red.
+    first_day = collection_start(reader, config.scrapes_ref)
+    last_useful = last_useful_collection_date(index_month, advance_days=config.advance_days)
+
+    # Why this month cannot be reconstructed, if it cannot. Worked out once and
+    # reused, so an empty panel is reported as an empty panel rather than as a
+    # month that "predates" a panel that does not exist.
+    if first_day is None:
+        stale_reason = (
+            "the panel holds no successful scrapes at all, so "
+            f"{index_month:%B %Y} cannot be reconstructed. Expected until the "
+            "collector has run at least once."
+        )
+    elif first_day > last_useful:
+        stale_reason = (
+            f"collection started {first_day}, after the last date that could "
+            f"contribute to {index_month:%B %Y} ({last_useful}). Collection runs six "
+            "weeks before the stay night, so this month predates the panel and "
+            "always will."
+        )
+    else:
+        stale_reason = None
+
+    if index_day is None:
+        # The bulletin is still fetched for a stale month, deliberately: a parser
+        # that has broken is worth hearing about a month early, as a notice,
+        # rather than on the first day it matters, as a red run.
+        try:
+            index_day = fetch_index_day(index_month)
+        except IndexDayNotFound:
+            if stale_reason is None:
+                raise
+            raise NoCollectionYet(
+                f"{stale_reason} Noting separately that the bulletin did not parse: "
+                "that WILL fail the run once collection covers the month being "
+                "reconciled. Run the reconcile workflow with dump_bulletin ticked "
+                "to see the page."
+            ) from None
+        log.info("confirmed index day: %s (%s)", index_day.index_day, index_day.source_url)
+        log.info("evidence: %s", index_day.evidence)
+
+    if stale_reason is not None:
+        raise NoCollectionYet(stale_reason)
 
     implied = implied_collection_dates(index_day.index_day, advance_days=config.advance_days)
     log.info(
@@ -543,16 +623,13 @@ def run_reconcile(
         reader, config.scrapes_ref, index_day.index_day, advance_days=config.advance_days
     )
     if not dates_used:
-        # Before calling this a failure, establish whether collection had even
-        # started. See NoCollectionYet for why the two cases must not be merged.
-        first_day = collection_start(reader, config.scrapes_ref)
-        if first_day is None:
-            raise NoCollectionYet(
-                "the panel holds no successful scrapes at all, so "
-                f"{index_day.index_month:%B %Y} cannot be reconstructed. Expected "
-                "until the collector has run at least once."
-            )
-        if first_day > min(implied):
+        # `stale_reason` was decided against the LATER candidate, so it can be
+        # None for a month that still predates the panel under the index day ONS
+        # actually confirmed. Refine with the confirmed day's own dates. The
+        # earlier test stays conservative on purpose: wrongly calling a month
+        # stale skips it forever, while wrongly calling it live costs one more
+        # check here.
+        if first_day > max(implied) + dt.timedelta(days=SUBSTITUTION_WINDOW_DAYS):
             raise NoCollectionYet(
                 f"collection started {first_day}, after the {index_day.index_month:%B %Y} "
                 f"nights would have been priced ({min(implied)} to {max(implied)}). "

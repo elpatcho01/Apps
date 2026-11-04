@@ -34,6 +34,11 @@ on:
         description: "Confirmed index day (YYYY-MM-DD), skipping the bulletin fetch."
         required: false
         type: string
+      dump_bulletin:
+        description: "Print what the bulletin parser sees, and reconcile nothing."
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: hotels-reconcile
@@ -129,7 +134,28 @@ jobs:
           Per-region reconstructions are unaffected; the weighted national \
           aggregate stays flagged weights_are_placeholder."
 
+      # ons.gov.uk is refused by egress policy in the development sandbox, so a
+      # parse failure cannot be diagnosed where the code is written. This step
+      # runs in the one place that can see the page. Ported from uk-airfares
+      # af19722, along with the parser fix that its first dump made possible.
+      - name: Dump the bulletin
+        if: inputs.dump_bulletin
+        env:
+          PYTHONPATH: src
+          INDEX_MONTH: ${{ inputs.index_month }}
+        run: |
+          # Blank means last month, the same default reconcile itself uses.
+          MONTH="${INDEX_MONTH:-$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)}"
+          python -m ukhotels.onsfetch --dump --month "$MONTH" | tee bulletin-dump.txt
+          {
+            echo "### Bulletin dump for $MONTH"
+            echo '```'
+            cat bulletin-dump.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Reconstruct sub-indices
+        if: ${{ !inputs.dump_bulletin }}
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
@@ -150,6 +176,7 @@ jobs:
       # scored too because it has years of history where the ad hoc release has
       # months, and a wildly different answer between them is itself a signal.
       - name: Score against published ONS values
+        if: ${{ !inputs.dump_bulletin }}
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
           BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}

@@ -372,3 +372,111 @@ def test_errors_are_in_percentage_points_of_change_not_levels():
     cell = report["by_cell"]["london/all/both"]
     assert cell["best_variant_mae_pp"] == pytest.approx(0.0, abs=1e-6)
     assert cell["best_variant_splice_mae_index_points"] == pytest.approx(0.0, abs=1e-6)
+
+
+# --- the bulletin is not needed for a month that predates the panel ---------
+
+
+class TestBulletinNotNeededForAStaleMonth:
+    """The 2026-10-21 to 2026-10-25 failures, and why the fix is not a copy.
+
+    September 2026's bulletin did not parse and reconcile exited 1 every day --
+    over a month this panel could never reconstruct. Collection began
+    2026-09-01; September's nights were priced 2026-07-28 to 2026-08-13.
+
+    uk-airfares fixed the same ordering in af19722, but its rule (3rd Tuesday
+    + 7 days) assumes collection happens ON the index day. Here it happens six
+    weeks before the stay night, so the bound has to come from the implied
+    collection dates instead.
+    """
+
+    PANEL_START = dt.date(2026, 9, 1)
+
+    def _run(self, month, first_day):
+        return reconcile.run_reconcile(
+            make_config(), index_month=month,
+            reader=StubReader(dates=[], first_day=first_day),
+            writer=bq.DryRunWriter(),
+        )
+
+    def _unparseable(self, monkeypatch):
+        def boom(month):
+            raise reconcile.IndexDayNotFound(f"no index day for {month:%B %Y}")
+        monkeypatch.setattr(reconcile, "fetch_index_day", boom)
+
+    def test_september_2026_is_not_fatal(self, monkeypatch):
+        """The exact production failure: now a clean, explained exit."""
+        self._unparseable(monkeypatch)
+        with pytest.raises(reconcile.NoCollectionYet) as exc:
+            self._run(dt.date(2026, 9, 1), self.PANEL_START)
+        assert "predates the panel" in str(exc.value)
+        assert "WILL fail the run" in str(exc.value), "the parse breakage must still be said"
+
+    def test_october_2026_is_fatal_because_the_panel_covers_it(self, monkeypatch):
+        """October's earliest collection date is 2026-09-01 -- the panel's first day.
+
+        So October is live, only just, and a broken parse there must stop the run:
+        silence would skip the first month this pipeline can actually reconstruct.
+        """
+        self._unparseable(monkeypatch)
+        with pytest.raises(reconcile.IndexDayNotFound):
+            self._run(dt.date(2026, 10, 1), self.PANEL_START)
+
+    def test_the_airfares_rule_copied_verbatim_would_have_left_september_red(self):
+        """Why this is a port and not a paste.
+
+        Measured from the stay night, as uk-airfares does, September looks
+        covered by a panel starting 2026-09-01. Measured from collection, it
+        ended weeks before.
+        """
+        _, third = onscal.candidate_index_days(2026, 9)
+        airfares_rule_predates = self.PANEL_START > third + dt.timedelta(days=7)
+        assert airfares_rule_predates is False, "airfares' rule calls September live"
+
+        last_useful = reconcile.last_useful_collection_date(dt.date(2026, 9, 1))
+        assert self.PANEL_START > last_useful, "hotels' rule calls it stale, correctly"
+        assert last_useful == dt.date(2026, 8, 13) + dt.timedelta(
+            days=reconcile.SUBSTITUTION_WINDOW_DAYS
+        )
+
+    def test_last_useful_date_covers_both_candidates(self):
+        """The bound must use the LATER candidate, or a live month gets skipped."""
+        month = dt.date(2026, 10, 1)
+        second, third = onscal.candidate_index_days(2026, 10)
+        latest = max(
+            reconcile.implied_collection_dates(second)
+            + reconcile.implied_collection_dates(third)
+        )
+        assert reconcile.last_useful_collection_date(month) == latest + dt.timedelta(
+            days=reconcile.SUBSTITUTION_WINDOW_DAYS
+        )
+
+    def test_a_parseable_bulletin_for_a_stale_month_still_exits_clean(self, monkeypatch):
+        monkeypatch.setattr(reconcile, "fetch_index_day", lambda m: IndexDayResult(
+            index_month=dt.date(2026, 9, 1), index_day=dt.date(2026, 9, 15),
+            ordinal=3, source_url="x", evidence="y"))
+        with pytest.raises(reconcile.NoCollectionYet, match="predates the panel"):
+            self._run(dt.date(2026, 9, 1), self.PANEL_START)
+
+    def test_an_empty_panel_is_reported_as_empty_not_as_predating_it(self, monkeypatch):
+        """The first version said an empty panel's month "predates the panel".
+
+        True in a narrow sense and useless as a diagnosis: the action for an
+        empty panel is "has the collector ever run?", not "this month is too
+        old". The bulletin is still fetched, so the parse breakage is reported
+        alongside -- early warning, not a red run.
+        """
+        self._unparseable(monkeypatch)
+        with pytest.raises(reconcile.NoCollectionYet) as exc:
+            self._run(dt.date(2026, 10, 1), None)
+        assert "no successful scrapes at all" in str(exc.value)
+        assert "predates the panel" not in str(exc.value)
+        assert "WILL fail the run" in str(exc.value)
+
+    def test_the_predates_window_and_the_substitution_window_are_one_constant(self):
+        """If they differed, one could call a month stale that the other would fill."""
+        import inspect
+        default = inspect.signature(reconcile.resolve_collection_dates).parameters[
+            "window_days"
+        ].default
+        assert default == reconcile.SUBSTITUTION_WINDOW_DAYS

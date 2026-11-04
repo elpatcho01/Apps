@@ -1,0 +1,121 @@
+name: Accommodation bulletin parser check
+
+# Runs the index-day parser against the LIVE ONS bulletins for recent months, and
+# dumps what the parser saw for any month that fails.
+#
+# WHY THIS EXISTS
+#
+# Hotels reconciliation failed every scheduled run from 2026-10-21 with "Dates
+# seen but rejected: [2026-02-28]". uk-airfares had diagnosed and fixed that exact
+# failure on 2026-08-19 -- both projects parse the same ONS bulletin -- but the fix
+# was never copied across, and nothing could notice: a parser that matches the
+# wrong sentence fails only on the one day a month it is asked a question that
+# matters, and the unit tests run against fixtures, not against ONS.
+#
+# So this checks the parser against the real page whenever the parser changes.
+# That is precisely the moment a regression would enter, and it gives a verdict
+# weeks before the next bulletin depends on it rather than on the morning it does.
+#
+# READ-ONLY, NO SECRETS. It fetches public ONS pages and writes a step summary.
+# No Google Cloud, no BigQuery, no SerpApi. It cannot touch the panel.
+#
+# WHAT TO LOOK AT
+#   Every published month should show an index day on its 2nd or 3rd Tuesday.
+#   "not published yet" for the most recent month is normal before mid-month.
+#   Any month that fails gets a full dump: the rejected candidates with their
+#   surrounding text, and every occurrence of the phrases the date should sit
+#   near. That is enough to fix the pattern without fetching the page again.
+
+on:
+  push:
+    paths:
+      - ".github/workflows/hotels-bulletin-check.yml"
+      - "uk-hotels/src/ukhotels/onsfetch.py"
+  workflow_dispatch:
+    inputs:
+      months_back:
+        description: "How many recent months to check."
+        required: false
+        type: string
+        default: "4"
+
+concurrency:
+  group: hotels-bulletin-check
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uk-hotels
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: uk-hotels/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Parse recent bulletins
+        env:
+          PYTHONPATH: src
+          MONTHS_BACK: ${{ inputs.months_back || '4' }}
+        run: |
+          # No `set -e` for the loop body: one month failing must not stop the
+          # others being checked. Failures are counted and decided at the end.
+          set +e
+          FAILED=0
+          PARSED=0
+          {
+            echo "### Index-day parser against live bulletins"
+            echo ""
+            echo "| Month | Result |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for i in $(seq 1 "$MONTHS_BACK"); do
+            MONTH="$(date -u -d "$(date -u +%Y-%m-01) -$i month" +%Y-%m)"
+            OUT="$(python -m ukhotels.onsfetch --month "$MONTH" 2>parse-err.txt)"
+            RC=$?
+            case "$RC" in
+              0)
+                PARSED=$((PARSED + 1))
+                echo "$MONTH: $OUT"
+                echo "| $MONTH | \`$(echo "$OUT" | head -1)\` |" >> "$GITHUB_STEP_SUMMARY"
+                ;;
+              3)
+                echo "$MONTH: not published yet"
+                echo "| $MONTH | not published yet |" >> "$GITHUB_STEP_SUMMARY"
+                ;;
+              *)
+                FAILED=$((FAILED + 1))
+                echo "::error::$MONTH: $(cat parse-err.txt)" >&2
+                echo "| $MONTH | **FAILED** — dump below |" >> "$GITHUB_STEP_SUMMARY"
+                python -m ukhotels.onsfetch --dump --month "$MONTH" > "dump-$MONTH.txt" 2>&1
+                {
+                  echo ""
+                  echo "#### Dump for $MONTH"
+                  echo '```'
+                  cat "dump-$MONTH.txt"
+                  echo '```'
+                } >> "$GITHUB_STEP_SUMMARY"
+                ;;
+            esac
+          done
+
+          echo "parsed=$PARSED failed=$FAILED"
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED published bulletin(s) did not parse" >&2
+            exit 1
+          fi
+          if [ "$PARSED" -eq 0 ]; then
+            echo "::warning::no published bulletin in range was parsed; nothing was actually checked" >&2
+          fi
