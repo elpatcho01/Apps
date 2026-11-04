@@ -17,7 +17,19 @@ name: Accommodation provider smoke test
 # sandbox where it was built. So the field names and nesting are inferred rather
 # than observed, and this is the run that settles it.
 #
-# COST: 12 calls, one per region. The free tier allows 250 a month.
+# COST: 12 calls, one per region; 18 with probe_details ticked.
+#
+# probe_details answers whether pinned properties can be priced directly by
+# token -- the fix for a pinned panel that re-prices at a match rate of only
+# 0.40-0.64, because a pinned hotel is priced only on nights it ranks in a city
+# search's ~20 results. Look at detail_probe in the summary:
+#   coverage.priced_by_token     of the pinned hotels tonight's search MISSED,
+#                                how many still returned a rate by token. This
+#                                is the whole case for direct pricing.
+#   consistency.max_abs_pct_gap  for pinned hotels the search DID return, how
+#                                far the by-token rate sits from the list rate.
+#                                Large means switching source would break the
+#                                series at the switch.
 #
 # WHAT TO LOOK AT IN THE SUMMARY
 #   errors                    should be {}
@@ -49,7 +61,7 @@ on:
         type: boolean
         default: false
       probe_details:
-        description: "Spend 1 extra call probing whether the details endpoint carries cancellation/board."
+        description: "Spend 6 extra calls testing whether pinned hotels can be priced directly by token."
         required: false
         type: boolean
         default: false

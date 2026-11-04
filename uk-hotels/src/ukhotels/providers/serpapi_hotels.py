@@ -212,6 +212,28 @@ def _float(value: Any) -> float | None:
         return None
 
 
+def extract_nightly_rate(item: Any) -> Decimal | None:
+    """The nightly rate exactly as collection reads it, from one property object.
+
+    A function rather than inline in `_to_quote` so the detail probe can apply
+    the SAME rule to a single-property response. The question that decides
+    whether pinned properties can be priced directly is not "does the payload
+    contain a price-ish key" but "would collection read the same number off it"
+    -- and only the collection rule itself can answer that.
+    """
+    if not isinstance(item, dict):
+        return None
+    rate = item.get("rate_per_night") or {}
+    price = _decimal(rate.get("extracted_lowest")) if isinstance(rate, dict) else None
+    if price is None:
+        # `total_rate` is the whole-stay figure; for a one-night stay it equals
+        # the nightly rate, so it is a sound fallback here and only here. If
+        # NIGHTS ever stops being 1 this must be divided.
+        total = item.get("total_rate") or {}
+        price = _decimal(total.get("extracted_lowest")) if isinstance(total, dict) else None
+    return price
+
+
 class SerpApiHotelsProvider(AccommodationProvider):
     name = "serpapi_google_hotels"
     is_cached_source = False
@@ -395,17 +417,11 @@ class SerpApiHotelsProvider(AccommodationProvider):
             log.debug("property with no token: %r", item.get("name"))
             return None
 
-        rate = item.get("rate_per_night") or {}
-        price = _decimal(rate.get("extracted_lowest"))
-        if price is None:
-            # `total_rate` is the whole-stay figure; for a one-night stay it
-            # equals the nightly rate, so it is a sound fallback here and only
-            # here. If NIGHTS ever stops being 1 this must be divided.
-            total = item.get("total_rate") or {}
-            price = _decimal(total.get("extracted_lowest"))
+        price = extract_nightly_rate(item)
         if price is None:
             return None
 
+        rate = item.get("rate_per_night") or {}
         before_taxes = _decimal(rate.get("extracted_before_taxes_fees"))
 
         free_cancellation = parse_free_cancellation(item)

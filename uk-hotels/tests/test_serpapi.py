@@ -220,3 +220,90 @@ def test_vacation_rentals_are_excluded_at_the_query_too():
     assert provider_session.calls[0]["no_cache"] == "true"
     assert provider_session.calls[0]["adults"] == 2
     assert provider_session.calls[0]["currency"] == "GBP"
+
+
+# ---------------------------------------------------------------------------
+# The detail probe: can pinned properties be priced by token?
+# ---------------------------------------------------------------------------
+
+import datetime as _dt
+
+from ukhotels import discover as _discover
+from ukhotels.panel import PanelProperty as _PanelProperty
+from ukhotels.providers.serpapi_hotels import extract_nightly_rate
+
+
+def test_extract_nightly_rate_is_the_rule_collection_uses():
+    assert extract_nightly_rate({"rate_per_night": {"extracted_lowest": 120}}) == 120
+    assert extract_nightly_rate({"total_rate": {"extracted_lowest": 95}}) == 95
+    assert extract_nightly_rate({"rate_per_night": "n/a"}) is None
+    assert extract_nightly_rate("not a dict") is None
+
+
+class _DetailProvider:
+    def __init__(self, details):
+        self.details = details
+        self.calls = []
+
+    def property_details(self, token, **kw):
+        self.calls.append(token)
+        return self.details.get(token, {"error": "Hotel not found"})
+
+
+class _Cfg:
+    currency = "GBP"
+
+
+def _pinned(*tokens):
+    return {("london", "upscale"): [
+        _PanelProperty(location="london", tier="upscale", property_token=t,
+                       property_name=t, first_seen="2026-09-01",
+                       selection_basis="discovered")
+        for t in tokens
+    ]}
+
+
+def _run(provider, existing, listed):
+    return _discover._probe_details(
+        provider, _Cfg(), existing, listed,
+        check_in=_dt.date(2026, 12, 15), check_out=_dt.date(2026, 12, 16),
+    )
+
+
+def test_probe_tests_coverage_on_pinned_hotels_the_search_missed():
+    """The case direct pricing exists for: pinned, but not in tonight's top 20."""
+    provider = _DetailProvider({
+        "absent1": {"rate_per_night": {"extracted_lowest": 140}},
+        "absent2": {"error": "No prices for these dates"},
+    })
+    out = _run(provider, _pinned("absent1", "absent2"), listed={})
+    assert out["coverage"] == {"pinned_absent_from_search": 2, "priced_by_token": 1}
+    failed = next(c for c in out["cases"] if c["property_token"] == "absent2")
+    assert failed["error_text"] == "No prices for these dates"
+
+
+def test_probe_measures_consistency_against_the_list_rate():
+    """Switching source must not move the level, or the series breaks at the switch."""
+    provider = _DetailProvider({
+        "seen1": {"rate_per_night": {"extracted_lowest": 110}},
+        "seen2": {"rate_per_night": {"extracted_lowest": 200}},
+    })
+    out = _run(provider, _pinned("seen1", "seen2"), listed={"seen1": 100.0, "seen2": 200.0})
+    assert out["consistency"]["compared"] == 2
+    assert sorted(out["consistency"]["detail_over_list"]) == [1.0, 1.1]
+    assert out["consistency"]["max_abs_pct_gap"] == 10.0
+
+
+def test_probe_caps_its_own_spend():
+    tokens = [f"t{i}" for i in range(20)]
+    provider = _DetailProvider({})
+    _run(provider, _pinned(*tokens), listed={t: 100.0 for t in tokens[:10]})
+    assert len(provider.calls) == _discover.PROBE_LISTED + _discover.PROBE_UNLISTED
+
+
+def test_probe_never_raises_on_a_provider_error():
+    class Boom:
+        def property_details(self, token, **kw):
+            raise RuntimeError("quota exhausted")
+    out = _run(Boom(), _pinned("x"), listed={})
+    assert "quota exhausted" in out["cases"][0]["error"]

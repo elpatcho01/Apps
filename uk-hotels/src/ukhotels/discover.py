@@ -61,6 +61,78 @@ WHERE churn_status = 'left' AND is_panel_property
 """
 
 
+PROBE_LISTED = 3
+PROBE_UNLISTED = 3
+
+
+def _probe_details(provider, config, existing, listed_rates, *, check_in, check_out):
+    from .providers.serpapi_hotels import extract_nightly_rate
+
+    pinned = [p.property_token for props in existing.values() for p in props
+              if p.property_token]
+    listed = [t for t in pinned if t in listed_rates][:PROBE_LISTED]
+    unlisted = [t for t in pinned if t not in listed_rates][:PROBE_UNLISTED]
+    if not pinned:
+        # First run, nothing pinned yet: consistency can still be tested.
+        listed = list(listed_rates)[:PROBE_LISTED]
+
+    cases = []
+    for token, appeared in [(t, True) for t in listed] + [(t, False) for t in unlisted]:
+        case: dict[str, Any] = {"property_token": token, "appeared_in_search": appeared,
+                                "pinned": token in pinned}
+        try:
+            detail = provider.property_details(
+                token, check_in=check_in, check_out=check_out,
+                adults=panel.ADULTS, currency=config.currency,
+            )
+        except Exception as exc:  # noqa: BLE001 - a probe must never break discovery
+            case["error"] = f"{type(exc).__name__}: {exc}"
+            cases.append(case)
+            continue
+        rate = extract_nightly_rate(detail)
+        offers = [
+            float(o["rate_per_night"]["extracted_lowest"])
+            for key in ("prices", "featured_prices")
+            for o in (detail.get(key) or [])
+            if isinstance(o, dict) and isinstance(o.get("rate_per_night"), dict)
+            and isinstance(o["rate_per_night"].get("extracted_lowest"), (int, float))
+        ]
+        case.update({
+            # A diagnostic that cannot report its own failure is not one: the
+            # first version of this probe returned only the key "error".
+            "error_text": str(detail.get("error"))[:400] if detail.get("error") else None,
+            "rate_by_collection_rule": float(rate) if rate is not None else None,
+            "lowest_offer_rate": min(offers) if offers else None,
+            "n_offers": len(offers),
+            "list_rate": listed_rates.get(token),
+            "has_free_cancellation": "free_cancellation" in json.dumps(detail),
+            "top_level_keys": sorted(detail)[:40],
+        })
+        if rate is not None and case["list_rate"]:
+            case["detail_over_list"] = round(float(rate) / case["list_rate"], 3)
+        cases.append(case)
+
+    priced_unlisted = [c for c in cases if not c["appeared_in_search"]
+                       and c.get("rate_by_collection_rule") is not None]
+    ratios = [c["detail_over_list"] for c in cases if "detail_over_list" in c]
+    return {
+        "calls": len(cases),
+        "check_in": check_in.isoformat(),
+        "coverage": {
+            "pinned_absent_from_search": len(unlisted),
+            "priced_by_token": len(priced_unlisted),
+        },
+        "consistency": {
+            "compared": len(ratios),
+            "detail_over_list": ratios,
+            "max_abs_pct_gap": (
+                round(max(abs(r - 1) for r in ratios) * 100, 1) if ratios else None
+            ),
+        },
+        "cases": cases,
+    }
+
+
 def _probe_date(reference: dt.date | None = None) -> tuple[dt.date, dt.date]:
     """A stay night to draw the sample against.
 
@@ -137,7 +209,9 @@ def discover(
         "raw_property_keys": collections.Counter(),
     }
 
-    probe_token: str | None = None
+    #: token -> nightly rate as the list view reported it, for every property
+    #: any search returned. The detail probe compares against this.
+    listed_rates: dict[str, float] = {}
 
     for location in panel.LOCATIONS:
         try:
@@ -178,8 +252,8 @@ def discover(
             survey["price_present"][repr(quote.price is not None)] += 1
             for key in (quote.raw or {}):
                 survey["raw_property_keys"][key] += 1
-            if probe_token is None and quote.property_token:
-                probe_token = quote.property_token
+            if quote.property_token and quote.price is not None:
+                listed_rates.setdefault(quote.property_token, float(quote.price))
 
         sets = selection.comparable_sets(
             result.quotes,
@@ -233,34 +307,28 @@ def discover(
             }
             out.extend(kept)
 
-    # One call, to settle whether the detail endpoint carries the two controls
-    # the list view lacks. Reports the keys it returns rather than assuming.
-    if probe_details and probe_token and hasattr(provider, "property_details"):
-        try:
-            detail = provider.property_details(
-                probe_token, check_in=check_in, check_out=check_out,
-                adults=panel.ADULTS, currency=config.currency,
-            )
-            summary["detail_probe"] = {
-                "property_token": probe_token,
-                "top_level_keys": sorted(detail)[:40],
-                # The first probe reported only that the payload had one key,
-                # "error", and not what the error said -- which made it
-                # inconclusive and cost a whole round trip. A diagnostic that
-                # cannot report its own failure is not a diagnostic.
-                "error_text": str(detail.get("error"))[:400] if detail.get("error") else None,
-                "has_free_cancellation": "free_cancellation" in json.dumps(detail),
-                "has_board_or_breakfast": any(
-                    word in json.dumps(detail).lower()
-                    for word in ("breakfast", "board basis", "room_type", "bed_type")
-                ),
-                "n_prices": len(detail.get("prices") or []),
-                "price_keys": sorted(
-                    {k for p in (detail.get("prices") or []) if isinstance(p, dict) for k in p}
-                ),
-            }
-        except Exception as exc:  # noqa: BLE001 - a probe must never break discovery
-            summary["detail_probe"] = {"error": f"{type(exc).__name__}: {exc}"}
+    # THE QUESTION THAT DECIDES WHETHER PINNED PROPERTIES CAN BE PRICED DIRECTLY.
+    #
+    # The provisional run on 2026-11-04 showed the pinned panel re-prices at a
+    # match rate of only 0.40-0.64: a pinned hotel is priced only on nights it
+    # happens to rank in the ~20 results a city search returns. Pricing each
+    # pinned property by its token would fix that, at roughly 480 calls a month.
+    # Before anyone pays for that, two things must hold, and this tests both:
+    #
+    #   COVERAGE     a pinned hotel ABSENT from tonight's search still yields a
+    #                rate by token -- otherwise direct pricing buys nothing;
+    #   CONSISTENCY  for a pinned hotel PRESENT in the search, the by-token rate
+    #                agrees with the list rate -- otherwise switching source
+    #                breaks the series at the switch.
+    #
+    # Rates are read with `extract_nightly_rate`, collection's own rule, so the
+    # answer is "would collection read this", not "is there a price-ish key".
+    # Six calls: three of each, pinned properties first.
+    if probe_details and hasattr(provider, "property_details"):
+        summary["detail_probe"] = _probe_details(
+            provider, config, existing, listed_rates,
+            check_in=check_in, check_out=check_out,
+        )
 
     summary["field_survey"] = {
         field: dict(counter.most_common(40 if field == "raw_property_keys" else 12))
