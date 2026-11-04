@@ -38,7 +38,7 @@ import pathlib
 import sys
 from typing import Any, Callable
 
-from . import bq
+from . import bq, latest
 from .config import Config, ConfigError, PIPELINE_VERSION
 from .onscal import add_months, collection_days_for_index_month
 
@@ -108,9 +108,8 @@ RECONSTRUCTIONS = """
 SELECT index_month, location, property_tier, stay_night_kind,
        reconstructed_value, published_ons_value,
        n_observations, n_properties, index_day_exact, index_day_offset_days
-FROM `{index_table}`
-WHERE is_current
-  AND attribution_rule     = 'stay_month'
+FROM {index_source}
+WHERE attribution_rule     = 'stay_month'
   AND collection_alignment = 'per_night'
   AND sample_rule          = 'matched_census'
   AND agg_method           = 'geometric_mean'
@@ -128,8 +127,7 @@ SELECT series_source,
        MAX(index_month) AS last_month,
        COUNT(DISTINCT location) AS locations,
        STRING_AGG(DISTINCT basis) AS bases
-FROM `{published_table}`
-WHERE is_current
+FROM {published_source}
 GROUP BY 1
 ORDER BY 1
 """
@@ -327,7 +325,8 @@ def build_digest(
 
     # --- Reconstructions ---------------------------------------------------
     recon, err = _safe(
-        lambda: reader.query(RECONSTRUCTIONS.format(index_table=config.index_ref)),
+        lambda: reader.query(RECONSTRUCTIONS.format(
+            index_source=latest.latest_reconstruction(config.index_ref))),
         "reconstructions", concerns,
     )
     lines += ["## Reconstructions", "",
@@ -368,7 +367,8 @@ def build_digest(
     pub, err = _safe(
         lambda: reader.query(
             PUBLISHED_COVERAGE.format(
-                published_table=config.table_ref("accommodation_published_index")
+                published_source=latest.latest_published(
+                    config.table_ref("accommodation_published_index"))
             )
         ),
         "published series", concerns,

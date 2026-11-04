@@ -175,6 +175,22 @@ jobs:
       # the closer match to what we reconstruct; the national time series is
       # scored too because it has years of history where the ad hoc release has
       # months, and a wildly different answer between them is itself a signal.
+      # Runs the real scoring join against the live published table, with
+      # synthetic reconstruction rows standing in for real ones. Scoring that
+      # joins nothing reports INSUFFICIENT_DATA -- which is indistinguishable
+      # from genuinely having too little data, and is exactly how the "all" vs
+      # "uk" mismatch would have hidden for good. So the join is proven to work
+      # BEFORE its silence is believed. Reads only; writes nothing.
+      - name: Check the scoring join against the live table
+        if: ${{ !inputs.dump_bulletin }}
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: |
+          set -o pipefail
+          python -m ukhotels.validate --self-check | tee validation-self-check.json
+
       - name: Score against published ONS values
         if: ${{ !inputs.dump_bulletin }}
         env:
@@ -196,7 +212,7 @@ jobs:
           {
             echo "### Accommodation reconciliation"
             echo ""
-            for f in reconcile-summary.json validation-adhoc.json validation-timeseries.json; do
+            for f in reconcile-summary.json validation-self-check.json validation-adhoc.json validation-timeseries.json; do
               if [ -s "$f" ]; then
                 echo "#### $f"
                 echo '```json'
@@ -213,6 +229,7 @@ jobs:
           name: reconcile-${{ github.run_id }}
           path: |
             uk-hotels/reconcile-summary.json
+            uk-hotels/validation-self-check.json
             uk-hotels/validation-adhoc.json
             uk-hotels/validation-timeseries.json
           if-no-files-found: ignore

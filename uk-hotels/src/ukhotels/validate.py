@@ -49,7 +49,7 @@ import statistics
 import sys
 from typing import Any, Sequence
 
-from . import bq
+from . import bq, latest
 from .config import Config, ConfigError
 from .index import methodology_era
 
@@ -61,35 +61,38 @@ MIN_OVERLAP_MONTHS = 3
 
 #: Our reconstructions joined to ONS's published series.
 #:
-#: The join is on (index_month, location) and is restricted to a single
-#: `series_source`, because the three sources are on different bases and
-#: different geographies. Joining across them would silently compare a regional
+#: Restricted to a single `series_source`, because the sources are on different
+#: bases and geographies: joining across them would compare a regional
 #: January-2025=100 sub-index with a national 2015=100 item index and produce a
 #: number that looks fine and means nothing.
+#:
+#: Two conditions here were missing until 2026-11-04, and between them the
+#: pipeline could never have scored a single month:
+#:
+#:   LOCATION. Reconcile names the national aggregate "all"; ONS's national
+#:   series is stored as "uk". Joined on plain equality, no national row could
+#:   ever match -- and the regional key ends in 2025-07, so nothing else would.
+#:
+#:   CLASS. The national series carries 11.2.0.1, 11.2.0.2 and 11.2 for every
+#:   month. Without a class filter each reconstruction joins all three and is
+#:   scored against hotels, campsites, and the aggregate at once -- the last of
+#:   which held canteen prices until the d7ex fix.
+#:
+#: Neither is visible to the unit tests, which stub the reader and so never run
+#: this SQL. `--self-check` runs it for real against the live published table.
+#:
+#: `{recon_source}` and `{published_source}` are subqueries from `latest`, so
+#: "current" means the same thing here as in the digest and the export.
 SCORE_QUERY = """
-WITH latest_recon AS (
-  SELECT *, ROW_NUMBER() OVER (
-    PARTITION BY index_month, location, property_tier, stay_night_kind,
-                 attribution_rule, collection_alignment, sample_rule, agg_method
-    ORDER BY computed_ts DESC
-  ) AS rn
-  FROM `{table}`
-  WHERE reconstructed_value IS NOT NULL
-),
-latest_published AS (
-  SELECT *, ROW_NUMBER() OVER (
-    PARTITION BY index_month, location, series_source, coicop_class
-    ORDER BY fetched_ts DESC
-  ) AS rn
-  FROM `{published_table}`
-  WHERE index_value IS NOT NULL
-)
+WITH latest_recon AS {recon_source},
+latest_published AS {published_source}
 SELECT
   r.index_month, r.location, r.property_tier, r.stay_night_kind,
   r.attribution_rule, r.collection_alignment, r.sample_rule, r.agg_method,
   r.reconstructed_value,
   p.index_value AS published_ons_value,
   p.basis AS published_basis,
+  p.location AS published_location,
   p.series_source, p.coicop_class, p.methodology_era,
   r.n_observations, r.n_properties, r.n_properties_churned,
   r.index_day_exact, r.index_day_offset_days,
@@ -97,9 +100,9 @@ SELECT
 FROM latest_recon r
 JOIN latest_published p
   ON r.index_month = p.index_month
- AND r.location = p.location
-WHERE r.rn = 1 AND p.rn = 1
-  AND p.series_source = @series_source
+ AND p.location = {published_location}
+WHERE p.series_source = @series_source
+  AND p.coicop_class = @coicop_class
 ORDER BY r.index_month
 """
 
@@ -397,13 +400,183 @@ def run_validate(
 ) -> dict[str, Any]:
     reader = reader or bq.BigQueryWriter(config.project)
     rows = reader.query(
-        SCORE_QUERY.format(
-            table=config.index_ref,
+        score_query(
+            recon_source=latest.latest_reconstruction(
+                config.index_ref, where="reconstructed_value IS NOT NULL"
+            ),
             published_table=config.table_ref("accommodation_published_index"),
         ),
-        {"series_source": series_source},
+        {"series_source": series_source, "coicop_class": latest.TARGET_COICOP},
     )
     return build_report(rows, series_source=series_source)
+
+
+def score_query(*, recon_source: str, published_table: str) -> str:
+    return SCORE_QUERY.format(
+        recon_source=recon_source,
+        published_source=latest.latest_published(
+            published_table, where="index_value IS NOT NULL"
+        ),
+        published_location=latest.published_location_sql("r.location"),
+    )
+
+
+# --- live self-check ---------------------------------------------------------
+
+#: Columns SCORE_QUERY reads from the reconstruction side, with a BigQuery type
+#: and the value a synthetic row carries. Kept beside the query it serves.
+_SYNTHETIC_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("property_tier", "'all'"),
+    ("stay_night_kind", "'both'"),
+    ("attribution_rule", "'stay_month'"),
+    ("collection_alignment", "'per_night'"),
+    ("sample_rule", "'self_check'"),
+    ("agg_method", "'geometric_mean'"),
+    ("reconstructed_value", "CAST(100 AS NUMERIC)"),
+    ("n_observations", "0"),
+    ("n_properties", "0"),
+    ("n_properties_churned", "0"),
+    ("index_day_exact", "TRUE"),
+    ("index_day_offset_days", "0"),
+    ("weights_are_placeholder", "FALSE"),
+    ("source_is_cached", "FALSE"),
+    ("board_basis_known", "FALSE"),
+    ("rate_basis", "'self_check'"),
+)
+
+
+def synthetic_recon_source(rows: Sequence[tuple[dt.date, str]]) -> str:
+    """A reconstruction subquery made of literal rows -- no table is read or written.
+
+    The panel is append-only, so a synthetic row must never be written to test
+    a join. Instead the real query is run with this in place of the real table:
+    the published side is entirely real, which is the side the bugs were on.
+    """
+    structs = []
+    for month, location in rows:
+        fields = [f"DATE '{month.isoformat()}' AS index_month", f"'{location}' AS location"]
+        fields += [f"{value} AS {name}" for name, value in _SYNTHETIC_COLUMNS]
+        structs.append("STRUCT(" + ", ".join(fields) + ")")
+    return f"(SELECT * FROM UNNEST([{', '.join(structs)}]))"
+
+
+SELF_CHECK_MONTHS = """
+SELECT DISTINCT index_month
+FROM {published_source}
+WHERE series_source = @series_source AND coicop_class = @coicop_class
+  AND location = @location
+ORDER BY index_month DESC
+LIMIT 3
+"""
+
+SELF_CHECK_DUPLICATES = """
+SELECT
+  (SELECT COUNT(*) FROM `{table}`) AS raw_rows,
+  (SELECT COUNTIF(is_current) FROM `{table}`) AS raw_rows_flagged_current,
+  (SELECT COUNT(*) FROM {published_source}) AS latest_rows,
+  (SELECT COUNT(*) FROM `{table}` WHERE series_id IN ({excluded})) AS excluded_rows_in_table,
+  (SELECT COUNT(*) FROM {published_source} WHERE series_id IN ({excluded})) AS excluded_rows_visible
+"""
+
+
+def run_self_check(config: Config, *, reader=None) -> dict[str, Any]:
+    """Run the real scoring join against the real published table.
+
+    For each source, take the three latest published months at one location,
+    build matching synthetic reconstruction rows, and require that each joins
+    to exactly one published value, of the target class, at the right location.
+    The national case uses reconcile's own name for the national aggregate, so
+    it fails if the "all"/"uk" translation is ever lost.
+    """
+    reader = reader or bq.BigQueryWriter(config.project)
+    published_table = config.table_ref("accommodation_published_index")
+    published_source = latest.latest_published(published_table)
+
+    cases = (
+        ("timeseries", latest.NATIONAL_PUBLISHED_LOCATION,
+         latest.NATIONAL_RECONSTRUCTION_LOCATION),
+        ("adhoc_regional", "london", "london"),
+    )
+    results: list[dict[str, Any]] = []
+    failures: list[str] = []
+    skipped: list[str] = []
+    for source, published_location, recon_location in cases:
+        params = {"series_source": source, "coicop_class": latest.TARGET_COICOP,
+                  "location": published_location}
+        month_rows = reader.query(
+            SELF_CHECK_MONTHS.format(published_source=published_source), params
+        )
+        months = [bq_date(r["index_month"]) for r in month_rows]
+        if not months:
+            # An absence, not a broken join: nothing has been backfilled for this
+            # source yet. Recorded, and never reported as a pass.
+            skipped.append(f"{source}: no published {latest.TARGET_COICOP} months "
+                           f"at {published_location!r} to check against")
+            continue
+        joined = reader.query(
+            score_query(
+                recon_source=synthetic_recon_source([(m, recon_location) for m in months]),
+                published_table=published_table,
+            ),
+            {"series_source": source, "coicop_class": latest.TARGET_COICOP},
+        )
+        per_month: dict[str, int] = {}
+        for row in joined:
+            per_month[str(bq_date(row["index_month"]))] = per_month.get(
+                str(bq_date(row["index_month"])), 0) + 1
+            if row.get("coicop_class") != latest.TARGET_COICOP:
+                failures.append(f"{source}: joined class {row.get('coicop_class')!r}")
+            if row.get("published_location") != published_location:
+                failures.append(f"{source}: joined location {row.get('published_location')!r}")
+        for m in months:
+            n = per_month.get(str(m), 0)
+            if n != 1:
+                failures.append(
+                    f"{source}: synthetic {recon_location!r} row for {m} joined {n} "
+                    "published row(s); exactly 1 is required"
+                )
+        results.append({"series_source": source, "reconstruction_location": recon_location,
+                        "published_location": published_location,
+                        "months_checked": [str(m) for m in months],
+                        "joins_per_month": per_month})
+
+    dupes = reader.query(SELF_CHECK_DUPLICATES.format(
+        table=published_table, published_source=published_source,
+        excluded=", ".join(f"'{s}'" for s in sorted(latest.EXCLUDED_PUBLISHED_SERIES)),
+    ))[0]
+    if dupes.get("excluded_rows_visible"):
+        failures.append(f"{dupes['excluded_rows_visible']} excluded-series row(s) still visible")
+
+    # Three outcomes, not two. A check that verified nothing must not say PASS
+    # -- a report that cannot see data must not say the data is fine -- but nor
+    # is it a failure: it is the expected state before the first backfill.
+    if failures:
+        status = "FAIL"
+    elif not results:
+        status = "NOTHING_CHECKED"
+    else:
+        status = "PASS"
+    return {
+        "self_check": status,
+        "failures": failures,
+        "skipped": skipped,
+        "join_cases": results,
+        "published_table": {k: dupes.get(k) for k in (
+            "raw_rows", "raw_rows_flagged_current", "latest_rows",
+            "excluded_rows_in_table", "excluded_rows_visible")},
+        "note": (
+            "raw_rows_flagged_current vs latest_rows is the size of the error the "
+            "stored is_current flag would have introduced; readers now ignore it."
+        ),
+    }
+
+
+def bq_date(value: Any) -> dt.date:
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    return dt.date.fromisoformat(str(value)[:10])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -421,6 +594,11 @@ def main(argv: list[str] | None = None) -> int:
             "agreement with it is weaker evidence."
         ),
     )
+    parser.add_argument(
+        "--self-check", action="store_true",
+        help="Run the real scoring join against the live published table with "
+             "synthetic reconstruction rows, and report whether it joins correctly.",
+    )
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args(argv)
     logging.basicConfig(
@@ -433,6 +611,26 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"::error::configuration error: {exc}", file=sys.stderr, flush=True)
         return 2
+
+    if args.self_check:
+        try:
+            result = run_self_check(config)
+        except Exception as exc:  # noqa: BLE001
+            print(f"::error::self-check could not run: {exc}", file=sys.stderr, flush=True)
+            log.exception("self-check failed to run")
+            return 1
+        print(json.dumps(result, indent=2, default=str))
+        for failure in result["failures"]:
+            print(f"::error::{failure}", file=sys.stderr, flush=True)
+        for skipped in result["skipped"]:
+            print(f"::warning::self-check skipped {skipped}", file=sys.stderr, flush=True)
+        if result["self_check"] == "NOTHING_CHECKED":
+            print("::warning::self-check verified nothing: no published values to "
+                  "join against yet", file=sys.stderr, flush=True)
+        # Unlike scoring, a failed self-check IS a failure: it means the join
+        # would silently never score, or score against the wrong thing.
+        # NOTHING_CHECKED is an absence and exits 0, with the warning above.
+        return 1 if result["self_check"] == "FAIL" else 0
 
     try:
         report = run_validate(config, series_source=args.series_source)

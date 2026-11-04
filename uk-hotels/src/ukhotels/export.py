@@ -50,7 +50,7 @@ import pathlib
 import sys
 from typing import Any, Callable
 
-from . import bq
+from . import bq, latest
 from .config import Config, ConfigError, PIPELINE_VERSION
 
 log = logging.getLogger("ukhotels.export")
@@ -66,8 +66,8 @@ SINGLE_ROW_SECTIONS = frozenset({"coverage"})
 PUBLISHED_SERIES = """
 SELECT index_month, location, series_source, series_id, coicop_class,
        CAST(index_value AS FLOAT64) AS index_value, basis, methodology_era
-FROM `{published}`
-WHERE is_current AND index_value IS NOT NULL
+FROM {published_source}
+WHERE index_value IS NOT NULL
 ORDER BY series_source, index_month, location
 """
 
@@ -126,8 +126,7 @@ SELECT index_month, location, property_tier, stay_night_kind,
        n_observations, n_properties, n_properties_churned,
        index_day_exact, index_day_offset_days,
        weights_are_placeholder, board_basis_known, rate_basis, tax_basis
-FROM `{index_table}`
-WHERE is_current
+FROM {index_source}
 ORDER BY index_month, location, property_tier
 """
 
@@ -139,9 +138,9 @@ SELECT
   (SELECT COUNT(DISTINCT property_token) FROM `{view}`)        AS properties,
   (SELECT MIN(scrape_date) FROM `{view}`)                      AS panel_first_day,
   (SELECT MAX(scrape_date) FROM `{view}`)                      AS panel_last_day,
-  (SELECT COUNT(*) FROM `{published}` WHERE is_current)        AS published_values,
-  (SELECT MIN(index_month) FROM `{published}` WHERE is_current) AS published_first,
-  (SELECT MAX(index_month) FROM `{published}` WHERE is_current) AS published_last
+  (SELECT COUNT(*) FROM {published_source})        AS published_values,
+  (SELECT MIN(index_month) FROM {published_source}) AS published_first,
+  (SELECT MAX(index_month) FROM {published_source}) AS published_last
 """
 
 
@@ -193,13 +192,15 @@ def build_export(
     }
 
     sections: dict[str, Callable[[], Any]] = {
-        "coverage": lambda: _rows(reader, COVERAGE.format(view=view, published=published)),
-        "published_series": lambda: _rows(reader, PUBLISHED_SERIES.format(published=published)),
+        "coverage": lambda: _rows(reader, COVERAGE.format(
+            view=view, published_source=latest.latest_published(published))),
+        "published_series": lambda: _rows(reader, PUBLISHED_SERIES.format(
+            published_source=latest.latest_published(published))),
         "daily_by_region": lambda: _rows(reader, DAILY_BY_REGION.format(view=view)),
         "latest_properties": lambda: _rows(reader, LATEST_PROPERTIES.format(view=view)),
         "accommodation_property_churn": lambda: _rows(reader, CHURN.format(churn_view=churn_view)),
         "reconstructions": lambda: _rows(
-            reader, RECONSTRUCTIONS.format(index_table=config.index_ref)
+            reader, RECONSTRUCTIONS.format(index_source=latest.latest_reconstruction(config.index_ref))
         ),
     }
 

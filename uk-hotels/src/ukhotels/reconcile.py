@@ -53,6 +53,7 @@ from typing import Any, Iterable
 
 from . import bq, panel
 from .config import Config, ConfigError, PIPELINE_VERSION
+from .latest import NATIONAL_RECONSTRUCTION_LOCATION
 from .onscal import (
     COLLECTION_ALIGNMENTS,
     STAY_NIGHT_KINDS,
@@ -460,7 +461,7 @@ def _weighted_aggregates(
     """
     grouped: dict[tuple, dict[str, dict[str, Any]]] = {}
     for row in region_rows:
-        if row["location"] == "all":
+        if row["location"] == NATIONAL_RECONSTRUCTION_LOCATION:
             continue
         key = (
             row["index_month"],
@@ -500,7 +501,7 @@ def _weighted_aggregates(
         out.append(
             {
                 **template,
-                "location": "all",
+                "location": NATIONAL_RECONSTRUCTION_LOCATION,
                 "reconstructed_value": _quantise(value),
                 "n_observations": sum(r["n_observations"] for r in by_region.values()),
                 "n_properties": sum(r["n_properties"] for r in by_region.values()),

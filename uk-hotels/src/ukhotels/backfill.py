@@ -71,6 +71,7 @@ from typing import Any, Iterable
 import requests
 
 from . import bq
+from .latest import NATIONAL_PUBLISHED_LOCATION
 from .config import Config, ConfigError
 from .index import detect_basis, methodology_era
 
@@ -126,9 +127,9 @@ REGION_ALIASES: dict[str, str] = {
     "wales": "wales",
     "scotland": "scotland",
     "northern ireland": "northern_ireland",
-    "united kingdom": "uk",
-    "uk": "uk",
-    "all": "uk",
+    "united kingdom": NATIONAL_PUBLISHED_LOCATION,
+    "uk": NATIONAL_PUBLISHED_LOCATION,
+    "all": NATIONAL_PUBLISHED_LOCATION,
 }
 
 
@@ -226,7 +227,7 @@ def parse_timeseries(
         out.append(
             Observation(
                 index_month=month,
-                location="uk",
+                location=NATIONAL_PUBLISHED_LOCATION,
                 index_value=value,
                 series_source="timeseries",
                 series_id=series_id,
@@ -621,7 +622,7 @@ def coverage_report(observations: list[Observation]) -> dict[str, Any]:
             series = sorted(
                 (o.index_month, float(o.index_value))
                 for o in observations
-                if o.series_source == source and o.location == "uk"
+                if o.series_source == source and o.location == NATIONAL_PUBLISHED_LOCATION
             )
             if series:
                 out[source]["detected_basis"] = detect_basis(series)
