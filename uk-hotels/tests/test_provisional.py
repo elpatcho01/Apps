@@ -192,3 +192,30 @@ def test_the_report_states_in_its_payload_that_nothing_was_written():
     # run() needs BigQuery; the flag it reports is a module-level guarantee, so
     # assert on the constant the report is built from instead of mocking a client.
     assert provisional.RPI_FIT["independent"] is False
+
+
+def test_pinned_panel_and_census_are_computed_separately():
+    """The census match rate is not the panel's match rate.
+
+    The first provisional run reported ~0.48 for the census and that number was
+    quoted as the reason to buy more SerpApi capacity. The panel was never
+    measured on its own. Pinned properties are a subset; the census also holds
+    every one-off hotel that happened to rank in the top 20 one night.
+    """
+    rows = []
+    for token in ("p1", "p2", "p3"):  # pinned, priced both months
+        r1 = row("2026-10-01", "2026-10-13", "2026-10-13", token, 100.0)
+        r2 = row("2026-11-01", "2026-11-10", "2026-11-10", token, 110.0)
+        r1["is_panel_property"] = r2["is_panel_property"] = True
+        rows += [r1, r2]
+    for token in ("x1", "x2", "x3"):  # census-only, October only
+        rows.append(row("2026-10-01", "2026-10-13", "2026-10-13", token, 500.0))
+
+    out = {(r["candidate"], r["scope"], r["sample_rule"]): r
+           for r in provisional.relatives(provisional.build_cells(rows))
+           if not r.get("skipped")}
+    pinned = out[("candidate_1", "all", "pinned_panel")]["jevons"]
+    census = out[("candidate_1", "all", "matched_census")]["jevons"]
+    assert pinned["match_rate"] == 1.0
+    assert census["match_rate"] == 0.5
+    assert pinned["mom_pct"] == census["mom_pct"] == 10.0

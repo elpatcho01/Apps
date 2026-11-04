@@ -117,7 +117,8 @@ WITH latest_run AS (
 )
 SELECT
   s.index_month_stay, s.index_day, s.stay_night_kind, s.check_in,
-  s.location, s.property_tier, s.property_token, s.price_gbp, s.rate_basis
+  s.location, s.property_tier, s.property_token, s.price_gbp, s.rate_basis,
+  s.is_panel_property
 FROM `{table}` AS s
 JOIN latest_run AS l
   ON s.scrape_date = l.scrape_date AND s.run_id = l.run_id
@@ -159,6 +160,9 @@ class Cell:
     index_month: dt.date
     candidate: str
     scope: str
+    #: "pinned_panel" (the committed sample only) or "matched_census" (every
+    #: comparable property the search returned). Reconcile computes both.
+    sample_rule: str
     #: property_token -> rate, geometrically averaged over that month's nights.
     rates: dict[str, float]
     n_nights: int
@@ -193,8 +197,8 @@ def build_cells(rows: Sequence[dict[str, Any]]) -> list[Cell]:
     index_days = [d for d in (_as_date(r.get("index_day")) for r in rows) if d]
     ordinals = candidate_ordinals(index_days)
 
-    buckets: dict[tuple[dt.date, str, str, str], list[float]] = {}
-    nights: dict[tuple[dt.date, str, str], set[dt.date]] = {}
+    buckets: dict[tuple[dt.date, str, str, str, str], list[float]] = {}
+    nights: dict[tuple[dt.date, str, str, str], set[dt.date]] = {}
 
     for row in rows:
         month = _as_date(row.get("index_month_stay"))
@@ -212,38 +216,48 @@ def build_cells(rows: Sequence[dict[str, Any]]) -> list[Cell]:
         tier = str(row.get("property_tier") or "unknown")
         night = _as_date(row.get("check_in"))
 
-        for cand in (candidate, "pooled"):
-            for scope in ("all", tier):
-                buckets.setdefault((month, cand, scope, token), []).append(rate)
-                if night:
-                    nights.setdefault((month, cand, scope), set()).add(night)
+        # Every row is in the census; only committed panel properties are in
+        # the pinned sample. The two answer different questions -- "what did
+        # the market do" versus "what did these hotels do" -- and their match
+        # rates differ enormously, which is the point of computing both.
+        rules = ["matched_census"]
+        if row.get("is_panel_property"):
+            rules.append("pinned_panel")
 
-    grouped: dict[tuple[dt.date, str, str], dict[str, float]] = {}
-    for (month, cand, scope, token), values in buckets.items():
-        grouped.setdefault((month, cand, scope), {})[token] = _geomean(values)
+        for rule in rules:
+            for cand in (candidate, "pooled"):
+                for scope in ("all", tier):
+                    buckets.setdefault((month, cand, scope, rule, token), []).append(rate)
+                    if night:
+                        nights.setdefault((month, cand, scope, rule), set()).add(night)
+
+    grouped: dict[tuple[dt.date, str, str, str], dict[str, float]] = {}
+    for (month, cand, scope, rule, token), values in buckets.items():
+        grouped.setdefault((month, cand, scope, rule), {})[token] = _geomean(values)
 
     return [
         Cell(
             index_month=month,
             candidate=cand,
             scope=scope,
+            sample_rule=rule,
             rates=rates,
-            n_nights=len(nights.get((month, cand, scope), ())),
+            n_nights=len(nights.get((month, cand, scope, rule), ())),
         )
-        for (month, cand, scope), rates in sorted(
-            grouped.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2])
-        )
+        for (month, cand, scope, rule), rates in sorted(grouped.items())
     ]
 
 
 def relatives(cells: Sequence[Cell], *, min_matched: int = 3) -> list[dict[str, Any]]:
     """Every consecutive-month relative available, per reading and scope."""
-    by_key: dict[tuple[str, str], dict[dt.date, Cell]] = {}
+    by_key: dict[tuple[str, str, str], dict[dt.date, Cell]] = {}
     for cell in cells:
-        by_key.setdefault((cell.candidate, cell.scope), {})[cell.index_month] = cell
+        by_key.setdefault(
+            (cell.candidate, cell.scope, cell.sample_rule), {}
+        )[cell.index_month] = cell
 
     out: list[dict[str, Any]] = []
-    for (candidate, scope), months in sorted(by_key.items()):
+    for (candidate, scope, sample_rule), months in sorted(by_key.items()):
         ordered = sorted(months)
         for earlier, later in zip(ordered, ordered[1:]):
             # Consecutive calendar months only. A gap must not be reported as a
@@ -257,6 +271,7 @@ def relatives(cells: Sequence[Cell], *, min_matched: int = 3) -> list[dict[str, 
                     "to_month": later.isoformat()[:7],
                     "candidate": candidate,
                     "scope": scope,
+                    "sample_rule": sample_rule,
                     "skipped": "spans a methodology break; the two months are "
                                "not measuring the same thing",
                 })
@@ -268,6 +283,7 @@ def relatives(cells: Sequence[Cell], *, min_matched: int = 3) -> list[dict[str, 
                 "to_month": later.isoformat()[:7],
                 "candidate": candidate,
                 "scope": scope,
+                "sample_rule": sample_rule,
                 "methodology_era": methodology_era(later),
                 "n_properties_from": len(base),
                 "n_properties_to": len(current),
@@ -347,6 +363,7 @@ def run(config: Config, *, months: Sequence[dt.date] | None = None,
                 "index_month": c.index_month.isoformat()[:7],
                 "candidate": c.candidate,
                 "scope": c.scope,
+                "sample_rule": c.sample_rule,
                 "n_properties": len(c.rates),
                 "n_nights": c.n_nights,
             }

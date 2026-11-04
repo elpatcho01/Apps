@@ -1,7 +1,19 @@
-name: Accommodation provisional relative
+name: Accommodation read-only BigQuery checks
 
-# Computes matched-sample month-on-month relatives WITHOUT a confirmed ONS index
-# day, under each reading of the candidate index days.
+# Two read-only checks against the live BigQuery tables, run whenever the code
+# they exercise changes:
+#
+#   1. the scoring join's self-check -- the real validation SQL, run against the
+#      real published table with synthetic reconstruction rows, proving that a
+#      national reconstruction meets exactly one national 11.2.0.1 value;
+#   2. provisional matched-sample relatives WITHOUT a confirmed ONS index day,
+#      under each reading of the candidate index days, for the pinned panel and
+#      the census separately.
+#
+# Both exist to exercise paths before real data depends on them. The scoring
+# join could never have matched a national row ("all" vs "uk") and nobody could
+# have known until January, because unit tests stub the reader and never run
+# the SQL. The relatives exist because reconciliation had produced no rows.
 #
 # WHY THIS EXISTS
 #
@@ -51,6 +63,8 @@ on:
     paths:
       - ".github/workflows/hotels-provisional.yml"
       - "uk-hotels/src/ukhotels/provisional.py"
+      - "uk-hotels/src/ukhotels/validate.py"
+      - "uk-hotels/src/ukhotels/latest.py"
 
 concurrency:
   group: hotels-provisional
@@ -107,6 +121,20 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
+      # continue-on-error so the relatives below still run if the join is
+      # broken -- the two answer different questions -- with the job failed at
+      # the end, so a broken join is never a green run.
+      - name: Check the scoring join against the live table
+        id: selfcheck
+        continue-on-error: true
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          BQ_DATASET: ${{ vars.BQ_DATASET || secrets.BQ_DATASET }}
+          PYTHONPATH: src
+        run: |
+          set -o pipefail
+          python -m ukhotels.validate --self-check | tee self-check.json
+
       - name: Compute the provisional relatives
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
@@ -136,6 +164,16 @@ jobs:
         if: always()
         run: |
           {
+            echo "### Scoring-join self-check"
+            echo ""
+            if [ -s self-check.json ]; then
+              echo '```json'
+              cat self-check.json
+              echo '```'
+            else
+              echo "No self-check output — it failed before completing."
+            fi
+            echo ""
             echo "### Provisional month-on-month relative"
             echo ""
             echo "**Not a nowcast and not publishable.** Computed without a "
@@ -160,6 +198,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: provisional-${{ github.run_id }}
-          path: uk-hotels/provisional-summary.json
+          path: |
+            uk-hotels/provisional-summary.json
+            uk-hotels/self-check.json
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Fail the run if the scoring join is broken
+        if: steps.selfcheck.outcome == 'failure'
+        run: |
+          echo "::error::the scoring join self-check failed; validation would score wrongly or not at all" >&2
+          exit 1
