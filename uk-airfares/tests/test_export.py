@@ -216,7 +216,7 @@ class TestPerRouteHistory:
         build_export(reader, _config())
         sql = [q for q in reader.queries if "index_month_departure" in q]
         assert sql, "no query groups by index month"
-        assert "GROUP BY 1, 2, 3, 4" in sql[0]
+        assert "GROUP BY 1, 2, 3, 4, 5, 6" in sql[0]
         assert "route" in sql[0]
 
     def test_carries_the_spread_across_collection_days(self):
@@ -232,6 +232,45 @@ class TestPerRouteHistory:
         sql = [q for q in reader.queries if "index_month_departure" in q][0]
         assert "proj.ds.current_scrapes" in sql
         assert "proj.ds.airfare_scrapes" not in sql
+
+
+class TestDepartureDateIsAGroupingKey:
+    """One index month can be priced on two departure dates. The export must say which.
+
+    `pull.choose_ordinal` targets 2nd-Tuesday departures early in the collection
+    window and 3rd-Tuesday departures late in it. On 2026-09-12 that moved every
+    3-month quote from 8 to 15 December -- a week nearer Christmas -- and the
+    long-haul cheapest fare stepped from about 600 to over 1,000 overnight.
+    `routes_by_index_month` reported MIN(departure_date), so it said 8 December
+    for all fifteen days, and `daily_by_series` carried no date at all. The step
+    was read as a market move for two months before the daily trace was split
+    by ordinal.
+    """
+
+    def _sql(self, fragment):
+        reader = FakeReader(LIVE_SHAPED)
+        build_export(reader, _config())
+        return [q for q in reader.queries if fragment in q][0]
+
+    def test_routes_split_on_the_departure_date_rather_than_hiding_it(self):
+        sql = self._sql("index_month_departure")
+        assert "MIN(departure_date)" not in sql
+        select = sql.split("FROM")[0]
+        assert "departure_date, index_day_ordinal" in select
+        assert "GROUP BY 1, 2, 3, 4, 5, 6" in sql
+
+    def test_routes_show_which_collection_days_fed_each_date(self):
+        sql = self._sql("index_month_departure")
+        assert "first_scrape_date" in sql and "last_scrape_date" in sql
+
+    def test_daily_series_carry_the_departure_date_they_priced(self):
+        sql = self._sql("sole_candidate")
+        select = sql.split("FROM")[0]
+        assert "departure_date, index_day_ordinal" in select
+        assert "GROUP BY 1, 2, 3, 4, 5" in sql
+
+    def test_the_shape_change_is_announced(self):
+        assert SCHEMA_VERSION >= 4
 
 
 class TestSelectionMarginIsExported:

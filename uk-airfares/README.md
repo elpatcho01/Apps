@@ -377,6 +377,55 @@ So: **group by `index_month_departure`, never by `scrape_date`**, whenever the
 question is about fare movement. `routes_by_index_month` in the export exists for
 exactly this, at the route grain.
 
+### Group by departure date too: the 12 September step was a date switch
+
+Index month alone is still not fine enough. **One collection window prices two
+departure dates per window.** Until ONS confirm the month's index day,
+`pull.choose_ordinal` attributes each scrape to whichever candidate Tuesday is
+nearer. Days 8–11 September targeted 2nd-Tuesday departures, and from the 12th
+every scrape targeted 3rd-Tuesday departures. The index month stays the same, but
+the trip changes:
+
+```
+                 days 8-11 Sep (2nd Tue)       days 12-21 Sep (3rd Tue)   cheapest fare
+european 3m      dep  8 Dec, ret 22 Dec        dep 15 Dec, ret 29 Dec     £100-103 -> £113-115
+long_haul 3m     dep  8 Dec, ret 29 Dec        dep 15 Dec, ret  5 Jan     £577-604 -> £986-1,050
+long_haul 6m     dep  9 Mar                    dep 16 Mar                 £525-530 -> £571-613
+long_haul 1m     dep 13 Oct                    dep 20 Oct                 £669-844 -> £600-647
+```
+
+Overnight on the 12th, the long-haul 3-month cheapest comparable fare rose 70%.
+No market does that across six routes in one day. A departure a week nearer
+Christmas does. This was first read as a market move, partly because
+`mins_off_target` did not change. It wouldn't: the selection rule worked as
+intended, but on a different trip. Both export sections hid this.
+`routes_by_index_month` reported `MIN(departure_date)`, so all fifteen
+September days said 8 December. `daily_by_series` carried no date at all.
+The long-haul target-time change (09:00 → 12:00) also landed in those days,
+so long-haul's rule-selected fare has two confounds across the 12th. The
+cheapest fare is immune to the target time but not to the date.
+
+This repeats every month. In October the switch fell on the 17th (Nov 10 → 17,
+Jan 12 → 19, Apr 13 → 20). So a mean over a whole collection window is a
+blend of two trips, weighted by how many days fell either side of the switch.
+
+**How to read it.** Compare like with like: either the same ordinal on both
+sides of a step, or the dates ONS actually priced. Schema 4 of the export makes
+both possible. `daily_by_series` and `routes_by_index_month` now carry
+`departure_date` and `index_day_ordinal` and group on them, and
+`routes_by_index_month` adds `first_scrape_date`/`last_scrape_date` per date.
+What changes when the steps are re-read this way (panel to 26 Oct, assumed index
+days 15 Sep, 13 Oct, 17 Nov, 8 Dec):
+
+- **December 3-month is no longer exceptional.** Over the whole window it read
+  European +35% and long-haul +76% against normal steps of +21% and +39%. On
+  17 Nov → 8 Dec it is +14% and +46% (cheapest fare +13% and +6%): at or below
+  normal. If ONS turn out to have priced 15 December, it is +45% and +90%. So
+  the index-day question matters more for December than any market signal.
+- **The base dates are thin.** 13 Oct, 8 Dec and 9 Mar departures were priced
+  on four days only (8–11 Sep), and the long-haul ones under the old 09:00
+  target.
+
 ### Two live measurement problems, both found this way
 
 Placing the first two index months on the ONS calendar and checking each step

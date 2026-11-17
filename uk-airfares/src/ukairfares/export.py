@@ -56,7 +56,12 @@ log = logging.getLogger("ukairfares.export")
 #: Bump when the shape changes in a way a consumer would need to notice.
 #: 2 — adds `routes_by_index_month`, and `selection_margin_minutes` to the
 #: per-route and per-series sections.
-SCHEMA_VERSION = 3
+#: 3 — adds `mm23_series`.
+#: 4 — `daily_by_series` and `routes_by_index_month` carry the departure date
+#: and index-day ordinal each row priced, and `routes_by_index_month` splits on
+#: them instead of reporting MIN(departure_date). See "The 12 September step was
+#: a departure-date switch" in the README.
+SCHEMA_VERSION = 4
 
 DEFAULT_OUT = pathlib.Path("reports/data/analytics.json")
 
@@ -101,9 +106,15 @@ ORDER BY cdid, period
 """
 
 # --- Collection: one row per day, per series ---------------------------------
+# departure_date and index_day_ordinal are grouping keys, not decoration. One
+# scrape day prices one departure date per window, but which Tuesday that is
+# follows `pull.choose_ordinal`, so it changes mid-window: on 2026-09-12 every
+# series moved from 2nd- to 3rd-Tuesday departures (Dec 8 -> Dec 15 for 3-month)
+# and the export, which did not carry the date, made that read as a market move.
 DAILY_BY_SERIES = """
 SELECT
   scrape_date, haul_category, months_ahead,
+  departure_date, index_day_ordinal,
   COUNTIF(status = 'ok')      AS ok,
   COUNTIF(status = 'no_data') AS no_data,
   COUNTIF(status = 'error')   AS errors,
@@ -125,8 +136,8 @@ SELECT
   COUNTIF(status = 'ok' AND selection_margin_minutes IS NULL)
                                                       AS sole_candidate
 FROM `{view}`
-GROUP BY 1, 2, 3
-ORDER BY 1, 2, 3
+GROUP BY 1, 2, 3, 4, 5
+ORDER BY 1, 2, 3, 4, 5
 """
 
 # --- Per-route latest snapshot ------------------------------------------------
@@ -163,13 +174,22 @@ ORDER BY haul_category, route, months_ahead
 #
 # min/max span the collection days feeding that index month, so index-day timing
 # risk stays visible per route rather than only in the series average.
+#
+# Split by departure_date as well. A collection month feeds one index month per
+# window but up to two departure dates -- the 2nd- and 3rd-Tuesday hypotheses,
+# switched by `pull.choose_ordinal` partway through the window. This section
+# used to report MIN(departure_date) over both, so September's 3-month rows said
+# "2026-12-08" while ten of their fifteen days had priced 15 December: a week
+# nearer Christmas, and the whole of the +72% long-haul "level shift".
 ROUTES_BY_INDEX_MONTH = """
 SELECT
-  index_month_departure, route, haul_category, months_ahead,
+  index_month_departure, departure_date, index_day_ordinal,
+  route, haul_category, months_ahead,
   COUNT(*)                     AS days,
+  MIN(scrape_date)             AS first_scrape_date,
+  MAX(scrape_date)             AS last_scrape_date,
   COUNTIF(status = 'ok')       AS ok,
   COUNTIF(status = 'no_data')  AS no_data,
-  MIN(departure_date)          AS departure_date,
   MIN(return_date)             AS return_date,
   CAST(ROUND(AVG(price_gbp), 2) AS FLOAT64)           AS mean_price_gbp,
   CAST(ROUND(MIN(price_gbp), 2) AS FLOAT64)           AS min_price_gbp,
@@ -179,8 +199,8 @@ SELECT
   ROUND(AVG(selection_margin_minutes))                AS mean_selection_margin
 FROM `{view}`
 WHERE index_month_departure IS NOT NULL
-GROUP BY 1, 2, 3, 4
-ORDER BY 1, 3, 2, 4
+GROUP BY 1, 2, 3, 4, 5, 6
+ORDER BY 1, 2, 5, 4, 6
 """
 
 RECONSTRUCTIONS = """
