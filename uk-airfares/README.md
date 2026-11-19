@@ -1304,6 +1304,101 @@ pipeline works before `SCORED`.
 
 ---
 
+## Nowcast: RPI fares and other travel
+
+`nowcast.py` forecasts the month-on-month change in CHBR (RPI fares and other
+travel) for the next six months, and writes `reports/nowcast.md` and
+`reports/data/nowcast.json`. The monthly digest runs it on the export it has
+just written.
+
+**Why it is code.** These forecasts used to be worked out in a conversation, and
+they drifted. The October 2026 figure went +0.1% → −1.5% → +0.9% → −1.9% in one
+day, each time on a new argument that hadn't been tested first. October printed
+**+1.6%**. The method is now fixed in code, every part is backtested, and
+changing it means changing the file with the backtest in the diff.
+
+```
+python -m ukairfares.nowcast                            # reads reports/data/analytics.json
+python -m ukairfares.nowcast --known CZFN:2026-10=1.6   # a print not yet in the data
+python -m ukairfares.nowcast --index-day 2026-11=17     # an index-day scenario
+python -m ukairfares.nowcast --mm23 rows.json           # mm23 rows when the export lacks them
+```
+
+### The method
+
+1. **Forecast air fares first, then translate.** Within each year the fares
+   group moves almost exactly with CPI air fares (R² 0.97–0.99). But the slope
+   has risen from 0.44–0.47 (2017, 2022, 2023) to **0.54** (2024, 2025, 2026).
+   Copying past RPI moves therefore under-forecasts any month whose comparison
+   years are old: December by 3.9pp a year on average. The air route is: median
+   CPI air move over the comparison years × this year's January–September
+   sensitivity + the median non-air part over the last three years.
+2. **Comparison years follow the calendar.** By default these are the last three
+   years. December uses the last three with the same Christmas alignment.
+   January uses the last three that followed a December of the same alignment.
+   March and April use the last five with the same Easter timing. 2020 and 2021
+   are never used.
+3. **Each month uses whichever route its own backtest preferred.** The air
+   route wins in nine months of twelve, including every month November–April.
+   Copying RPI moves wins narrowly in May, July and October.
+4. **Known policy changes are explicit** (`POLICY`), each with its reason and
+   source: the £2 bus fare cap from 1 January 2027 (−1.3pp in January); and
+   March 2027 rail fares, still undecided (−0.2pp, the midpoint of a freeze and
+   an RPI-linked rise).
+5. **Scraping adjusts the forecast and is scored for it.** It uses every cell
+   the panel priced on *both* index days of a step, at the exact ONS departure
+   dates (see [the 12 September date switch](#group-by-departure-date-too-the-12-september-step-was-a-date-switch)).
+   The scraped move is compared with that cell's seasonal norm from ONS's
+   sub-indices, weighted by basket share, translated at this year's
+   sensitivity, and added at a reliability of **0.5**. That is a stated prior,
+   used until six months are scored; after that the record sets it. Long-haul
+   uses the price-blind cheapest fare, because its rule-selected fare is
+   10–28× noisier. January is never scraped against a norm: the sub-indices
+   restart at 100 each January.
+
+### December, and why the index day matters most there
+
+ONS price a *return* (European +2 weeks, long-haul +3). So the index day
+decides whether the trip spans Christmas. Since 2015, CPI air fares rose
+**46–61%** in Decembers whose European return fell after Christmas Day, and
+**16–40%** in the others. ONS themselves put December 2024's small rise down to
+returns on Christmas Eve and New Year's Eve.
+
+Every index day ONS have stated is the **Tuesday falling on the 9th–15th**:
+15 Dec 2020, 13 Dec 2022, 14 Jul 2026, and (from their return-date statements)
+10 Dec 2024 and 9 Dec 2025. December 2020 matters most: the 2nd Tuesday was the
+8th, and ONS used the 15th. December 2026 is the same case, so the nowcast
+prices **15 December**. `CONFIRMED_INDEX_DAYS` holds the stated dates, and a
+test asserts the rule reproduces every one. The calendar that drove collection
+had assumed 8 December.
+
+Conditioning December on alignment, then translating through air fares, cut
+the December backtest error from 8.1pp to **3.3pp**.
+
+### Its record
+
+The first scored month is October 2026. The statistical forecast was +0.9%,
+and with scraping it was +1.3%, against a print of **+1.6%**. One month is not
+a record, and the reliability stays at the prior until there are six.
+
+### Known limits
+
+- **November's index day is unconfirmed until 16 December.** The rule says
+  10 November. If it was the 17th, November moves from −9.4% to −10.3% and the
+  3-month December cells become measurable (+0.6pp on December).
+- **The 3-month window's European/long-haul split is assumed.** It uses the
+  1-month ratio, because ONS publish no 3-month split. The window totals
+  (1m 0.337, 3m 0.449, 6m 0.215) come from a regression and are unverified.
+- **The September→October reversion is not in the module.** On the copy route
+  it cut October's backtest error from 1.80 to 1.36pp. In its first live use,
+  October 2026, it missed by 3.5pp. Re-test it on the air route before October
+  2027.
+- **The bus cap's size is an estimate.** It is about −7% on the bus index, from
+  the January 2023 and January 2025 precedents. Coverage of the cap is
+  secondary: gov.uk was not reachable from here.
+
+---
+
 ## Invariants
 
 - **Query `current_scrapes`, audit `airfare_scrapes`.** A date can carry several
@@ -1359,7 +1454,10 @@ uk-airfares/
 │   ├── 005_add_candidate_filter.sql   Migration: selection-pool diagnostics
 │   └── 006_current_scrapes_view.sql   Latest coherent vintage per date
 ├── reports/                           Monthly digests (committed by Actions)
-│   └── data/analytics.json            Analytics export (committed by Actions)
+│   ├── nowcast.md                     RPI fares forecast, six months ahead
+│   └── data/
+│       ├── analytics.json             Analytics export (committed by Actions)
+│       └── nowcast.json               The same forecast, machine-readable
 ├── src/ukairfares/
 │   ├── onscal.py       Index-day calendar arithmetic — the core of the thing
 │   ├── panel.py        Route panel + ONS weight loading
@@ -1379,8 +1477,9 @@ uk-airfares/
 │   ├── validate.py     MAE/bias scoring (Task 6)
 │   ├── digest.py       Monthly report — also what keeps the schedules alive
 │   ├── export.py       Analytics JSON — how data leaves BigQuery
+│   ├── nowcast.py      RPI fares forecast: backtested, policy-adjusted, scraping-scored
 │   └── providers/      base.py · serpapi.py · travelpayouts.py · mock.py
-└── tests/              494 tests, no network required
+└── tests/              543 tests, no network required
 ```
 
 ## Non-goals

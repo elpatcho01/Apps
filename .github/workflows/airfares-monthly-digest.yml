@@ -157,6 +157,32 @@ jobs:
           PYTHONPATH: src
         run: python -m ukairfares.export
 
+      # The forecast, from code rather than from a conversation.
+      #
+      # RPI fares forecasts used to be worked out by hand in a chat, and they
+      # drifted: October 2026's moved four times in one day, each time on a new
+      # argument nobody had tested. nowcast.py fixes the method, backtests every
+      # part of it from 2010, and scores the scraping against each print. It
+      # reads only the export just written, so it needs no credential, and it
+      # writes under reports/ so the commit below records each month's forecast
+      # before its print arrives.
+      - name: Nowcast RPI fares
+        id: nowcast
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          {
+            echo "### RPI fares nowcast"
+            echo ""
+            python -m ukairfares.nowcast \
+              --out-md reports/nowcast.md --out-json reports/data/nowcast.json --print \
+              || echo "nowcast failed; see the step log"
+          # tee, not >>: the run summary is a web page this conversation cannot
+          # read and GitHub does not expose over the API. The log carries the
+          # same text.
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       # Departure banks, measured rather than guessed.
       #
       # The ONS rule is only a rule if aircraft depart near the target time.
