@@ -1364,27 +1364,42 @@ decides whether the trip spans Christmas. Since 2015, CPI air fares rose
 **16–40%** in the others. ONS themselves put December 2024's small rise down to
 returns on Christmas Eve and New Year's Eve.
 
-Every index day ONS have stated is the **Tuesday falling on the 9th–15th**:
-15 Dec 2020, 13 Dec 2022, 14 Jul 2026, and (from their return-date statements)
-10 Dec 2024 and 9 Dec 2025. December 2020 matters most: the 2nd Tuesday was the
-8th, and ONS used the 15th. December 2026 is the same case, so the nowcast
-prices **15 December**. `CONFIRMED_INDEX_DAYS` holds the stated dates, and a
-test asserts the rule reproduces every one. The calendar that drove collection
-had assumed 8 December.
+Every index day ONS have stated is the **2nd Tuesday, except in December when
+the 2nd Tuesday falls on the 8th**, where they move to the 15th:
+
+| Month | 2nd Tuesday | ONS used |
+|---|---|---|
+| Dec 2015 | 8th | **15th** |
+| Dec 2020 | 8th | **15th** |
+| Nov 2022 | 8th | 8th |
+| Dec 2022 | 13th | 13th |
+| Dec 2024 | 10th | 10th (from ONS's return-date statement) |
+| Dec 2025 | 9th | 9th (likewise) |
+| Jul 2026 | 14th | 14th |
+
+November 2022 is why the exception is December's alone: the first version of
+this module used "the Tuesday on the 9th–15th", which fits every December but
+puts November 2022 on the 15th. December 2026 is the exception case again, so
+the nowcast prices **15 December**. `CONFIRMED_INDEX_DAYS` holds the stated
+dates, and a test asserts the rule reproduces every one. The calendar that
+drove collection had assumed 8 December.
 
 Conditioning December on alignment, then translating through air fares, cut
 the December backtest error from 8.1pp to **3.3pp**.
 
 ### Its record
 
-The first scored month is October 2026. The statistical forecast was +0.9%,
-and with scraping it was +1.3%, against a print of **+1.6%**. One month is not
-a record, and the reliability stays at the prior until there are six.
+None yet. October 2026 looked scoreable under the first index-day rule, which put
+September on the 15th. Under the corrected rule September was the 8th, which the
+panel never priced: collection started on 17 August, and those days priced the
+15th. A score against the wrong base date would have flattered the scraping.
+November 2026, scored when its print lands on 16 December, will be the first.
 
 ### Known limits
 
 - **November's index day is unconfirmed until 16 December.** The rule says
-  10 November. If it was the 17th, November moves from −9.4% to −10.3% and the
+  10 November, the 2nd Tuesday, and every stated non-December date is a 2nd
+  Tuesday. If it was the 17th, November moves from −9.4% to −10.3% and the
   3-month December cells become measurable (+0.6pp on December).
 - **The 3-month window's European/long-haul split is assumed.** It uses the
   1-month ratio, because ONS publish no 3-month split. The window totals

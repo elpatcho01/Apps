@@ -1117,15 +1117,6 @@
     }
   ],
   "reliability": 0.5,
-  "reliability_basis": "prior (1 of 6 months scored)",
-  "scores": [
-    {
-      "actual": 1.6,
-      "baseline": 0.9,
-      "coverage": 0.337,
-      "month": 10,
-      "scrape_rpi_pp": 0.7653,
-      "year": 2026
-    }
-  ]
+  "reliability_basis": "prior (0 of 6 months scored)",
+  "scores": []
 }

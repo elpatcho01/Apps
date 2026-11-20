@@ -59,11 +59,23 @@ class TestIndexDay:
         for (y, m), d in n.CONFIRMED_INDEX_DAYS.items():
             assert n.rule_index_day(y, m) == d, (y, m)
 
-    def test_it_is_always_the_tuesday_on_the_9th_to_15th(self):
+    def test_it_is_the_2nd_tuesday_except_an_early_december(self):
         for y in range(2000, 2031):
             for m in range(1, 13):
                 d = n.rule_index_day(y, m)
-                assert d.weekday() == 1 and 9 <= d.day <= 15
+                assert d.weekday() == 1
+                if m == 12:
+                    assert 9 <= d.day <= 15
+                else:
+                    assert 8 <= d.day <= 14
+
+    def test_november_keeps_the_8th_where_december_does_not(self):
+        """November 2022 used the 8th; December 2015 and 2020 moved to the 15th."""
+        assert n.index_day(2022, 11) == dt.date(2022, 11, 8)
+        assert n.index_day(2015, 12) == dt.date(2015, 12, 15)
+
+    def test_november_2026_is_the_10th(self):
+        assert n.index_day(2026, 11) == dt.date(2026, 11, 10)
 
     def test_december_2026_is_the_15th_like_december_2020(self):
         """The 2nd Tuesday is the 8th in both years; ONS used the 15th in 2020."""
@@ -226,10 +238,10 @@ def _sub(step_pct, month=10, years=range(2007, 2026)):
 
 class TestSignal:
     def test_scraped_move_against_the_cells_norm(self):
-        """Sep 15 departures from August, Oct 13 from 8-11 September."""
-        rows = ([_row(f"2026-08-{d}", "european", 1, 100) for d in (17, 18, 19)]
-                + [_row(f"2026-09-{d:02d}", "european", 1, 120) for d in (8, 9, 10, 11)])
-        sig = n.scrape_signal(rows, _sub(10.0), 2026, 10)
+        """Oct 13 departures from 8-11 September, Nov 10 from 8-13 October."""
+        rows = ([_row(f"2026-09-{d:02d}", "european", 1, 100) for d in (8, 9, 10, 11)]
+                + [_row(f"2026-10-{d:02d}", "european", 1, 120) for d in (8, 9, 10)])
+        sig = n.scrape_signal(rows, _sub(10.0, month=11), 2026, 11)
         (cell,) = sig.cells
         assert cell.scraped_pct == pytest.approx(20.0)
         assert cell.surprise == pytest.approx(10.0)
@@ -242,6 +254,12 @@ class TestSignal:
 
     def test_one_side_missing_is_no_signal(self):
         rows = [_row(f"2026-09-{d:02d}", "european", 1, 120) for d in (8, 9, 10, 11)]
+        assert n.scrape_signal(rows, _sub(10.0, month=11), 2026, 11).cells == ()
+
+    def test_a_step_whose_base_was_never_priced_is_no_signal(self):
+        """September 2026's index day is the 8th; August only priced the 15th."""
+        rows = ([_row(f"2026-08-{d}", "european", 1, 100) for d in (17, 18, 19)]
+                + [_row(f"2026-09-{d:02d}", "european", 1, 120) for d in (8, 9, 10, 11)])
         assert n.scrape_signal(rows, _sub(10.0), 2026, 10).cells == ()
 
 

@@ -45,8 +45,6 @@ Inputs: export generated 2026-11-02T16:46:36.289998+00:00; panel to 2026-10-26; 
 
 ## Scraping record
 
-Reliability applied: **0.50** — prior (1 of 6 months scored).
+Reliability applied: **0.50** — prior (0 of 6 months scored).
 
-| Month | Actual | Statistical | With scraping | Basket seen |
-|---|---|---|---|---|
-| Oct 2026 | +1.6% | +0.9% | +1.3% | 34% |
+No published month yet has scraped prices on both of its index days.

@@ -41,11 +41,12 @@ THE METHOD, AND WHY EACH PART IS THERE
 THE INDEX DAY
 
 ONS do not announce it in advance. Every date they have stated, and every date
-implied by what they have said about return flights, is the Tuesday that falls
-on the 9th-15th of the month (`index_day`). In December that is the 2nd Tuesday,
-except when the 2nd Tuesday is the 8th: December 2020 used the 15th. December
-2026 is that case again. `CONFIRMED_INDEX_DAYS` holds the stated dates, and a
-test asserts the rule reproduces every one of them.
+implied by what they have said about return flights, is the 2nd Tuesday -- except
+in December when the 2nd Tuesday is the 8th: December 2015 and December 2020 both
+moved to the 15th. November 2022 shows the exception is December's, not the 8th's:
+its 2nd Tuesday was also the 8th and ONS kept it. December 2026 is the exception
+case again. `CONFIRMED_INDEX_DAYS` holds the stated dates, and a test asserts the
+rule (`rule_index_day`) reproduces every one of them.
 """
 
 from __future__ import annotations
@@ -77,8 +78,13 @@ COVID_YEARS = frozenset({2020, 2021})
 
 #: Index days ONS have stated, or that follow exactly from what they stated.
 CONFIRMED_INDEX_DAYS: dict[YM, dt.date] = {
+    # December 2015 bulletin: data "collected on and around 15 December 2015".
+    (2015, 12): dt.date(2015, 12, 15),
     # December 2020 bulletin: "Index date for December: 15 December 2020".
     (2020, 12): dt.date(2020, 12, 15),
+    # November 2022 bulletin: "Index date for November: 8 November 2022" -- the
+    # 2nd Tuesday kept although it fell on the 8th.
+    (2022, 11): dt.date(2022, 11, 8),
     # December 2022 bulletin: "Index date for December: 13 December 2022".
     (2022, 12): dt.date(2022, 12, 13),
     # ONS, December 2025 release: in December 2024 "the return date for the
@@ -155,9 +161,17 @@ POLICY: tuple[Adjustment, ...] = (
 
 # --- Calendar ----------------------------------------------------------------
 def rule_index_day(year: int, month: int) -> dt.date:
-    """The Tuesday falling on the 9th-15th: every date ONS have stated fits it."""
-    ninth = dt.date(year, month, 9)
-    return ninth + dt.timedelta(days=(1 - ninth.weekday()) % 7)
+    """The 2nd Tuesday; in December, the 3rd if the 2nd falls on the 8th.
+
+    Every date ONS have stated fits this. The first version of this module used
+    "the Tuesday falling on the 9th-15th", which fits every December but
+    mis-dates November 2022 (the 15th, where ONS used the 8th).
+    """
+    first = dt.date(year, month, 1)
+    second = first + dt.timedelta(days=(1 - first.weekday()) % 7 + 7)
+    if month == 12 and second.day == 8:
+        return second + dt.timedelta(days=7)
+    return second
 
 
 def index_day(year: int, month: int,
