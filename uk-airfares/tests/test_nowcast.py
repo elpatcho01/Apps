@@ -59,23 +59,36 @@ class TestIndexDay:
         for (y, m), d in n.CONFIRMED_INDEX_DAYS.items():
             assert n.rule_index_day(y, m) == d, (y, m)
 
-    def test_it_is_the_2nd_tuesday_except_an_early_december(self):
+    def test_the_release_comes_36_days_later_wherever_both_are_known(self):
+        """The link that lets an announced release date fix the index day."""
+        both = set(n.CONFIRMED_INDEX_DAYS) & set(n.RELEASE_DATES)
+        assert len(both) >= 6
+        off = {ym: (n.RELEASE_DATES[ym] - n.CONFIRMED_INDEX_DAYS[ym]).days for ym in both}
+        assert {ym for ym, d in off.items() if d != 36} == {(2025, 12)}
+
+    def test_a_stated_day_beats_the_release_arithmetic(self):
+        """December 2025 was released 43 days on; its index day was the 9th."""
+        assert n.index_day(2025, 12) == dt.date(2025, 12, 9)
+
+    def test_the_fallback_is_a_tuesday_on_the_9th_to_15th_except_november(self):
         for y in range(2000, 2031):
             for m in range(1, 13):
                 d = n.rule_index_day(y, m)
                 assert d.weekday() == 1
-                if m == 12:
-                    assert 9 <= d.day <= 15
-                else:
-                    assert 8 <= d.day <= 14
+                assert (8 if m == 11 else 9) <= d.day <= (14 if m == 11 else 15)
 
-    def test_november_keeps_the_8th_where_december_does_not(self):
-        """November 2022 used the 8th; December 2015 and 2020 moved to the 15th."""
-        assert n.index_day(2022, 11) == dt.date(2022, 11, 8)
+    def test_moving_off_the_8th_and_the_one_time_it_did_not(self):
         assert n.index_day(2015, 12) == dt.date(2015, 12, 15)
+        assert n.index_day(2020, 12) == dt.date(2020, 12, 15)
+        assert n.index_day(2026, 9) == dt.date(2026, 9, 15)
+        assert n.index_day(2022, 11) == dt.date(2022, 11, 8)
 
-    def test_november_2026_is_the_10th(self):
-        assert n.index_day(2026, 11) == dt.date(2026, 11, 10)
+    def test_november_and_december_2026_follow_their_announced_releases(self):
+        """16 December 2026 and 20 January 2027, from ONS's release calendar."""
+        assert n.release_index_day(2026, 11) == dt.date(2026, 11, 10)
+        assert n.release_index_day(2026, 12) == dt.date(2026, 12, 15)
+        assert n.index_day(2026, 11) == n.rule_index_day(2026, 11)
+        assert n.index_day(2026, 12) == n.rule_index_day(2026, 12)
 
     def test_december_2026_is_the_15th_like_december_2020(self):
         """The 2nd Tuesday is the 8th in both years; ONS used the 15th in 2020."""
@@ -257,10 +270,12 @@ class TestSignal:
         assert n.scrape_signal(rows, _sub(10.0, month=11), 2026, 11).cells == ()
 
     def test_a_step_whose_base_was_never_priced_is_no_signal(self):
-        """September 2026's index day is the 8th; August only priced the 15th."""
+        """Override September to the 8th: August only priced the 15th."""
         rows = ([_row(f"2026-08-{d}", "european", 1, 100) for d in (17, 18, 19)]
                 + [_row(f"2026-09-{d:02d}", "european", 1, 120) for d in (8, 9, 10, 11)])
-        assert n.scrape_signal(rows, _sub(10.0), 2026, 10).cells == ()
+        o = {(2026, 9): dt.date(2026, 9, 8)}
+        assert n.scrape_signal(rows, _sub(10.0), 2026, 10, o).cells == ()
+        assert n.scrape_signal(rows, _sub(10.0), 2026, 10).cells != ()
 
 
 class TestReliability:

@@ -40,13 +40,21 @@ THE METHOD, AND WHY EACH PART IS THERE
 
 THE INDEX DAY
 
-ONS do not announce it in advance. Every date they have stated, and every date
-implied by what they have said about return flights, is the 2nd Tuesday -- except
-in December when the 2nd Tuesday is the 8th: December 2015 and December 2020 both
-moved to the 15th. November 2022 shows the exception is December's, not the 8th's:
-its 2nd Tuesday was also the 8th and ONS kept it. December 2026 is the exception
-case again. `CONFIRMED_INDEX_DAYS` holds the stated dates, and a test asserts the
-rule (`rule_index_day`) reproduces every one of them.
+ONS do not announce the index day in advance, but they do announce the release
+date, months ahead, and the release is the Wednesday five weeks after the index
+day (36 days) in every confirmed case but one. So `index_day` takes, in order:
+
+1. a date ONS have stated (`CONFIRMED_INDEX_DAYS`, read from bulletins);
+2. the announced release date minus 36 days (`RELEASE_DATES`);
+3. a fallback rule for months not yet scheduled: the Tuesday falling on the
+   9th-15th, except November, which keeps its 2nd Tuesday.
+
+The fallback fits every stated date. When the 2nd Tuesday is the 8th, ONS moved
+to the 15th in December 2015, December 2020 and September 2026. They kept the
+8th once, in November 2022, when the 15th would have put the release on 21
+December. The one release that broke the 36 days, December 2025 (index day the
+9th, released 21 January: 43 days), kept an index day already inside the
+9th-15th. Tests assert all three sources agree wherever more than one exists.
 """
 
 from __future__ import annotations
@@ -94,7 +102,27 @@ CONFIRMED_INDEX_DAYS: dict[YM, dt.date] = {
     (2025, 12): dt.date(2025, 12, 9),
     # July 2026 bulletin: "collected on or around 14 July 2026".
     (2026, 7): dt.date(2026, 7, 14),
+    # September 2026 bulletin, read by the reconcile run of 21 October: "collected
+    # on or around 15 September 2026" -- the 2nd Tuesday was the 8th.
+    (2026, 9): dt.date(2026, 9, 15),
+    # October 2026 bulletin, reconcile run of 18 November: "13 October 2026".
+    (2026, 10): dt.date(2026, 10, 13),
 }
+
+#: CPI release dates by data month. Future entries are ONS's announced, confirmed
+#: dates; past ones exist so a test can check the 36-day link against stated days.
+RELEASE_DATES: dict[YM, dt.date] = {
+    (2020, 12): dt.date(2021, 1, 20),
+    (2022, 11): dt.date(2022, 12, 14),
+    (2022, 12): dt.date(2023, 1, 18),
+    (2024, 12): dt.date(2025, 1, 15),
+    (2025, 12): dt.date(2026, 1, 21),   # the 43-day exception; stated day wins
+    (2026, 9): dt.date(2026, 10, 21),
+    (2026, 10): dt.date(2026, 11, 18),
+    (2026, 11): dt.date(2026, 12, 16),  # ONS release calendar, confirmed
+    (2026, 12): dt.date(2027, 1, 20),   # ONS release calendar, confirmed
+}
+RELEASE_GAP = dt.timedelta(days=36)
 
 FIRST_BACKTEST_YEAR = 2010
 FIRST_DATA_YEAR = 2002     # air fares were collected quarterly before 2001
@@ -161,24 +189,26 @@ POLICY: tuple[Adjustment, ...] = (
 
 # --- Calendar ----------------------------------------------------------------
 def rule_index_day(year: int, month: int) -> dt.date:
-    """The 2nd Tuesday; in December, the 3rd if the 2nd falls on the 8th.
-
-    Every date ONS have stated fits this. The first version of this module used
-    "the Tuesday falling on the 9th-15th", which fits every December but
-    mis-dates November 2022 (the 15th, where ONS used the 8th).
-    """
+    """Fallback: the Tuesday on the 9th-15th; November keeps its 2nd Tuesday."""
     first = dt.date(year, month, 1)
     second = first + dt.timedelta(days=(1 - first.weekday()) % 7 + 7)
-    if month == 12 and second.day == 8:
+    if second.day == 8 and month != 11:
         return second + dt.timedelta(days=7)
     return second
+
+
+def release_index_day(year: int, month: int) -> dt.date | None:
+    release = RELEASE_DATES.get((year, month))
+    return release - RELEASE_GAP if release else None
 
 
 def index_day(year: int, month: int,
               overrides: Mapping[YM, dt.date] | None = None) -> dt.date:
     if overrides and (year, month) in overrides:
         return overrides[(year, month)]
-    return CONFIRMED_INDEX_DAYS.get((year, month)) or rule_index_day(year, month)
+    return (CONFIRMED_INDEX_DAYS.get((year, month))
+            or release_index_day(year, month)
+            or rule_index_day(year, month))
 
 
 def late_christmas(year: int, overrides: Mapping[YM, dt.date] | None = None) -> bool:

@@ -1364,43 +1364,62 @@ decides whether the trip spans Christmas. Since 2015, CPI air fares rose
 **16–40%** in the others. ONS themselves put December 2024's small rise down to
 returns on Christmas Eve and New Year's Eve.
 
-Every index day ONS have stated is the **2nd Tuesday, except in December when
-the 2nd Tuesday falls on the 8th**, where they move to the 15th:
+**ONS announce the release date months ahead, and the release is the Wednesday
+five weeks (36 days) after the index day.** So the nowcast takes the index day
+from, in order: a date ONS have stated (`CONFIRMED_INDEX_DAYS`, read from
+bulletins by the reconcile run); the announced release date minus 36 days
+(`RELEASE_DATES`); and, for months not yet scheduled, a fallback rule (the
+Tuesday on the 9th–15th, except November, which keeps its 2nd Tuesday).
 
-| Month | 2nd Tuesday | ONS used |
-|---|---|---|
-| Dec 2015 | 8th | **15th** |
-| Dec 2020 | 8th | **15th** |
-| Nov 2022 | 8th | 8th |
-| Dec 2022 | 13th | 13th |
-| Dec 2024 | 10th | 10th (from ONS's return-date statement) |
-| Dec 2025 | 9th | 9th (likewise) |
-| Jul 2026 | 14th | 14th |
+| Month | 2nd Tuesday | ONS used | Released | Gap |
+|---|---|---|---|---|
+| Dec 2015 | 8th | **15th** | Tue 19 Jan 2016 | 35 (Tuesday releases then) |
+| Dec 2020 | 8th | **15th** | 20 Jan 2021 | 36 |
+| Nov 2022 | 8th | 8th | 14 Dec 2022 | 36 |
+| Dec 2022 | 13th | 13th | 18 Jan 2023 | 36 |
+| Dec 2024 | 10th | 10th (from ONS's return-date statement) | 15 Jan 2025 | 36 |
+| Dec 2025 | 9th | 9th (likewise) | 21 Jan 2026 | **43** |
+| Jul 2026 | 14th | 14th | 19 Aug 2026 | 36 |
+| Sep 2026 | 8th | **15th** | 21 Oct 2026 | 36 |
+| Oct 2026 | 13th | 13th | 18 Nov 2026 | 36 |
+| **Nov 2026** | 10th | **10th** (release − 36) | 16 Dec 2026 | |
+| **Dec 2026** | 8th | **15th** (release − 36) | 20 Jan 2027 | |
 
-November 2022 is why the exception is December's alone: the first version of
-this module used "the Tuesday on the 9th–15th", which fits every December but
-puts November 2022 on the 15th. December 2026 is the exception case again, so
-the nowcast prices **15 December**. `CONFIRMED_INDEX_DAYS` holds the stated
-dates, and a test asserts the rule reproduces every one. The calendar that
-drove collection had assumed 8 December.
+When the 2nd Tuesday is the 8th, ONS moved to the 15th three times (December
+2015, December 2020, September 2026). They kept the 8th once: November 2022,
+where the 15th would have meant a release on 21 December. December 2025 is the
+one release that broke the 36 days; its index day was already inside the
+9th–15th, so the stated day wins there. Tests assert that the three sources
+agree wherever more than one exists. December 2026 is the move-off-the-8th case,
+and its confirmed 20 January release fits the 15th, so the nowcast prices
+**15 December**. The calendar that drove collection had assumed 8 December.
+
+This history has its own trap. For a day, this module used "the 2nd Tuesday,
+except an early December", built from too few cases. It put September 2026 on
+the 8th, which the bulletin contradicts.
 
 Conditioning December on alignment, then translating through air fares, cut
 the December backtest error from 8.1pp to **3.3pp**.
 
 ### Its record
 
-None yet. October 2026 looked scoreable under the first index-day rule, which put
-September on the 15th. Under the corrected rule September was the 8th, which the
-panel never priced: collection started on 17 August, and those days priced the
-15th. A score against the wrong base date would have flattered the scraping.
-November 2026, scored when its print lands on 16 December, will be the first.
+One month: October 2026, on the stated index days (15 September → 13 October).
+The statistical forecast was +0.9%; with scraping it was +1.3%; the print was
+**+1.6%**. One month is not a record, and the reliability stays at the prior
+until there are six. November is scored on 16 December.
 
 ### Known limits
 
-- **November's index day is unconfirmed until 16 December.** The rule says
-  10 November, the 2nd Tuesday, and every stated non-December date is a 2nd
-  Tuesday. If it was the 17th, November moves from −9.4% to −10.3% and the
-  3-month December cells become measurable (+0.6pp on December).
+- **November and December come from release arithmetic, not a statement.**
+  ONS confirm each index day with its print. A 43-day gap like December 2025's
+  would put November on the 3rd (a 1st Tuesday, which ONS never use) and
+  December on the 8th. If December were the 8th, December would be about +6.7%,
+  not +28.8%.
+- **January–April 2027 use the fallback rule until ONS schedule those
+  releases.** The 2026 release dates for February, March and June, taken at
+  36 days, imply 3rd-Tuesday index days (16–17th) that the fallback would not
+  pick. They are unconfirmed, but they leave March 2027 open: 9 or 16 March,
+  either side of a 28 March Easter.
 - **The 3-month window's European/long-haul split is assumed.** It uses the
   1-month ratio, because ONS publish no 3-month split. The window totals
   (1m 0.337, 3m 0.449, 6m 0.215) come from a regression and are unverified.
